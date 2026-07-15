@@ -1,0 +1,88 @@
+# ===== Build files =====
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+*.out
+
+# ===== Dependency files =====
+*.d
+
+# ===== Precompiled headers =====
+*.gch
+*.pch
+
+# ===== Static libraries =====
+*.lai
+*.la
+
+# ===== Debug files =====
+*.dSYM/
+*.pdb
+*.ilk
+*.map
+
+# ===== Build directories =====
+build/
+bin/
+out/
+dist/
+
+# ===== CMake =====
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+cmake-build-*/
+
+# ===== IDE files =====
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.vcxproj.user
+
+# VS Code
+.vscode/
+
+# CLion
+.idea/
+
+# Code::Blocks
+*.cbp
+*.depend
+*.layout
+
+# ===== GCC / Clang =====
+*.gcda
+*.gcno
+*.gcov
+
+# ===== Logs =====
+*.log
+
+# ===== Temporary files =====
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# ===== Environment files =====
+.env
+
+# ===== OS generated files =====
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
