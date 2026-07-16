@@ -24,6 +24,7 @@ struct RunTimeArg
 struct RunTimeData
 {
     vec<RunTimeArg> Args;
+    string source;
     struct {
         bool debugMode=false;
     } flags;

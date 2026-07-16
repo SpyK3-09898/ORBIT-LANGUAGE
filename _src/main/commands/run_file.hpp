@@ -25,14 +25,14 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
 
     fs::path Path(filePath);
 
-    if (Path.extension() != ".ORBIT")
+    if (Path.extension() is_not ".ORBIT")
         throw runt_err(
             "Invalid Extension: " +
             Path.extension().string() +
             " Expected '.ORBIT'"
         );
 
-    if (fs::file_size(Path) == 0)
+    if (fs::file_size(Path) is 0)
         throw runt_err("Empty File Recived");
     if (Data.flags.debugMode)
         PrintInLn("[DRIVER] ENDOF TASK: Build ORBIT. .. ...");
@@ -40,7 +40,7 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
     fstream file(Path);
     Lexer L;
 
-    LexResult LRes = L.InitL(file);
+    LexResult LRes = L.InitL(file, Data);
 
     return 0;
 }

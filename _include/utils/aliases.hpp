@@ -10,13 +10,18 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <variant>
 #include <cstdint>
 #include <memory>
 
+#define is ==
+#define is_not !=
+
 // BASICS
 using string=std::string;
+using str_view=std::string_view;
 using runt_err=std::runtime_error;
 
 using i64=std::int64_t;
