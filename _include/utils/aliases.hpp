@@ -64,12 +64,7 @@ void PrintLn(Args&&... args)
 template<typename... Args>
 void PrintIn(Args&&... args)
 {
-    constexpr std::size_t CLEAR_SIZE = 256;
-
-    std::cout << '\r'
-              << std::string(CLEAR_SIZE, ' ')
-              << '\r';
-
+    std::cout << "\r\033[2K";
     (std::cout << ... << args);
     std::cout.flush();
 }

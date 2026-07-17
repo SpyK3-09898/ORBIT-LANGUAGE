@@ -96,7 +96,8 @@ int main(int argc, char* argv[])
                         && holds_alt_value<bool>(Arg.value, true)
                     ) Data.flags.generateLog=true;
                 }
-                RunOrbit(argv[2], Data);
+                    Data.LogDir = fs::absolute(argv[0]).parent_path().parent_path() / "_tests/logs";
+                    RunOrbit(argv[2], Data);
             }
         } else {
             throw runt_err("Invalid command: "+Entry);

@@ -6,9 +6,12 @@
 // INCLUDE HEADERS 'N DEPENDENCES
 #include "utils/aliases.hpp"
 #include "../../core/RunTimeData.hpp"
+#include "../../../_include/tools/console.hpp"
 
 #include "../../core/lexer/lexer.hpp"
 
+#include <thread>
+#include <chrono>
 #include <fstream>
 #include <filesystem>
 using fstream=std::fstream;
@@ -32,15 +35,19 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
             " Expected '.ORBIT'"
         );
 
+    fstream file(Path);
     if (fs::file_size(Path) is 0)
         throw runt_err("Empty File Recived");
-    if (Data.flags.debugMode)
-        PrintInLn("[DRIVER] ENDOF TASK: Build ORBIT. .. ...");
-    
-    fstream file(Path);
-    Lexer L;
 
+    Lexer L;
     LexResult LRes = L.InitL(file, Data);
+    if (Data.flags.debugMode)
+    { 
+        PrintInLn("[DRIVER] ENDOF TASK: Build ORBIT. .. ..."); 
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        PrintIn(""); PrintIn("");
+    }
+    OrbitLog::SyntaxLog::ThrowLog(Data);
 
     return 0;
 }

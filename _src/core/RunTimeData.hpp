@@ -8,6 +8,7 @@
 
 // INCLUDE HEADERS 'N DEPENDENCES | INCLUDE HEADERS E DEPENDENCIAS
 #include "utils/aliases.hpp"
+#include <filesystem>
 
 // DATA
 
@@ -25,6 +26,7 @@ struct RunTimeData
 {
     vec<RunTimeArg> Args;
     string source;
+    std::filesystem::path LogDir;
     struct {
         bool debugMode=false;
         bool generateLog=false;

@@ -20,10 +20,13 @@ namespace fs=std::filesystem;
 
 // =========== CORE ========== //
 
+// Skip the Current Line for Debug
 void Lexer::SkipLine(LexState& State, RunTimeData& Data)
 {
-    while (LexUtils::Peek(State, Data) is_not '\n')
-        LexUtils::Advance(State, Data);
+    char N = LexUtils::Peek(State, Data);
+    while (N is_not '\n' or N == EOF_CHAR)
+        { LexUtils::Advance(State, Data); N = LexUtils::Peek(State, Data); }
+    State.currPos.indent = 0;
 }
 
 // Make a Token and PushBack | Cria um Novo Token e Empilha
@@ -301,9 +304,9 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
         if (id.size() > 15)
             id.resize(15);
 
-        fileName = "__" + id + "__";
+        fileName = "__" + id + "__.txt";
     }
-    fs::path dir = "../../../_tests/log/";
+    fs::path dir = Data.LogDir;
     if (!fs::exists(dir))
         fs::create_directories(dir);
 
@@ -311,7 +314,8 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
     fstream file(p, std::ios::out | std::ios::trunc); 
         
     string text = 
-        "\n // ========== LEXER ============ // \n"
+        "\n// ========== LEXER ============ // \n\n"
+        "TOKEN COUNT: " + std::to_string(Res.Tokens.size())+"\n"
         "TOKENS: \n";
     int i=0;
     for (Token& Tok : Res.Tokens)
@@ -322,7 +326,8 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
             "Lexeme: "+Tok.Lexeme(Data)+"\n"
             "Pos(line/index): "+std::to_string(Tok.pos.line)+";"+std::to_string(Tok.pos.collumn)+"\n\n";
     }
-    text += " // ============ ENDOF: LEXER =========== // ";
+    text += "\n// ============ ENDOF: LEXER =========== // ";
+    file << text;
 }
 
 // =========== ENTRY-POINT | PONTO DE ENTRADA ========== //
@@ -337,6 +342,7 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data)
     LexState NewState;
     Res = NewRes;
     State = NewState;
+
     Data.source = string(
         std::istreambuf_iterator<char>(file),
         std::istreambuf_iterator<char>()
@@ -363,6 +369,7 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data)
                 {
                     LexUtils::Advance(State, Data);
                     MakeToken(Res, State, Data, TokenType::RANGE);
+                    continue;
                 }
         // DEF CHARS
         if (IS_ALPHA(C))
@@ -380,7 +387,7 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data)
                 OrbitLog::SyntaxLog::SyntaxError(
                     "Lexing", 
                     "Unknow <CHAR>",
-                    "Char not Supported or Invalid in Context",
+                    "Char not Supported or Invalid in Context. Ignoring",
                     "Change to a Valid Char",
                     State.currPos.line,
                     State.currPos.collumn
@@ -389,7 +396,7 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data)
                     OrbitLog::SyntaxLog::ThrowLog(Data);
                 MakeToken(Res, State, Data, TokenType::UNKNOWN);
                 SkipLine(State, Data);
-                
+                continue;
         }
     }
 

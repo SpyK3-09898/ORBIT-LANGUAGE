@@ -65,7 +65,8 @@ namespace OrbitLog {
             STYLES::UNDERLINE,
             "ERROR",
             STYLES::RESET,
-            "]",
+            COLORS::RED,
+            "] ",
             origin,
             ": ",
             STYLES::ITALIC,
@@ -86,12 +87,13 @@ namespace OrbitLog {
     inline void Warn(string origin, string mess)
     {
         PrintLn(
-            COLORS::YELLOW,
+            COLORS::BRIGHT_YELLOW,
             "[", 
             STYLES::UNDERLINE,
             "WARN",
             STYLES::RESET,
-            "]",
+            COLORS::BRIGHT_YELLOW,
+            "] ",
             origin,
             ": ",
             STYLES::ITALIC,
@@ -123,7 +125,10 @@ namespace OrbitLog {
                 if (obj.type is_not LogTypes::WARN) 
                     continue;
                 if (Data.flags.debugMode)
-                    Error(obj.origin, obj.mess, false);
+                    {
+                        PrintInLn(""); PrintInLn("");
+                        Error(obj.origin, obj.mess, false); 
+                    }
                 else Error(obj.origin, obj.mess, true);
                 
             }
@@ -133,7 +138,11 @@ namespace OrbitLog {
             {
                 if (obj.type is_not LogTypes::ERROR) 
                     continue;
-                Warn(obj.origin, obj.mess);
+                if (Data.flags.debugMode)
+                {
+                    PrintInLn(""); PrintInLn("");
+                    Warn(obj.origin, obj.mess);
+                }
             }
         }
 
