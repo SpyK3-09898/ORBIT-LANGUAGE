@@ -27,6 +27,7 @@ struct RunTimeData
     string source;
     struct {
         bool debugMode=false;
+        bool generateLog=false;
     } flags;
 };
 

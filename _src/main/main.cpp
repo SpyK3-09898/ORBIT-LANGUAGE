@@ -90,10 +90,11 @@ int main(int argc, char* argv[])
                     if (
                         Arg.name == "DebugMode" 
                         && holds_alt_value<bool>(Arg.value, true)
-                    )
-                    {
-                        Data.flags.debugMode = true;
-                    }
+                    ) Data.flags.debugMode = true;
+                    if (
+                        Arg.name == "GenerateLog" 
+                        && holds_alt_value<bool>(Arg.value, true)
+                    ) Data.flags.generateLog=true;
                 }
                 RunOrbit(argv[2], Data);
             }

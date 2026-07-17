@@ -15,30 +15,37 @@
 #include <fstream>
 using fstream=std::fstream;
 
-// =========== DEFINITIONS | DEFINIÇOES =========== //
+// =========== DEFINITIONS | DEFINIÇOES. =========== //
 
+// CONSTANT EXPRESSIONS | EXPRESSOES CONSTANTES
 inline constexpr char EOF_CHAR = '\0';
 
+// RETURN IF IS NUMBER | RETORNA SE E NUMERO
 inline bool IS_DIGIT(char C)
 {
     return C >= '0' && C <= '9';
 }
-
+// RETURN IF IS A NORMAL LETTER | RETORNA SE E UMA LETRA NORMAL
 inline bool IS_ALPHA(char C)
 {
     return (C >= 'a' && C <= 'z') ||
            (C >= 'A' && C <= 'Z') ||
            C == '_';
 }
-
+// RETURN IF IS A NUMBER CONSTRUCTION CHAR | RETORNA S E UM CARACTERE DE CONSTRUÇÃO DE NUMEROS
 inline bool IS_NUM(char C)
 {
-    return IS_DIGIT(C) || C == '.';
+    return IS_DIGIT(C) || C == '.' || C == 'e' || C == '\'';
 }
-
+// RETURN IF IS ALPHA OR NUM IN SAME TIME | RETORNA SE E ALFA E NUMERO AO MESMO TEMPO
 inline bool IS_ALPHANUM(char C)
 {
     return IS_ALPHA(C) || IS_DIGIT(C);
+}
+
+inline bool IS_STRING(char C)
+{
+    return (C is '\'' or C is '"');
 }
 
 // =========== CORE =========== //
@@ -110,10 +117,11 @@ enum class TokenType: uint8_t
     SEMI_COLON,
 
     // SPECIALS
-    PLACE_HOLDER,
+    NEW_LINE,
     PRAGMA,
     SEMI_PRAGMA,
-    NEW_LINE,
+    PLACE_HOLDER,
+    UNKNOWN,
     ENTRY_POINT,
     _EOF
 };
@@ -121,6 +129,7 @@ enum class TokenType: uint8_t
 // POSITION OF TOKENS | POSIÇÃO DOS TOKENS.
 struct TokenPos
 {
+    int indent;
     ui32 start;
     ui32 len;
 
@@ -128,7 +137,7 @@ struct TokenPos
     ui32 collumn;
 };
 
-// BASE TOKEN | TOKEN BASE
+// BASE TOKEN | TOKEN BASE.
 struct Token 
 {
     TokenType Type;
@@ -146,21 +155,31 @@ struct Token
 
 struct LexState
 {
-    TokenPos currPos;
+    TokenPos currPos; // Current Position of Lexer | Posição Atual dos Tokens.
 };
 
 struct LexResult
 {
-    
+    vec<Token> Tokens; // Main TOken Stack | Pilha De Tokens Principal.
 };
 
-// MAIN CLASS | CLASSE PRINCIPAL
+// MAIN CLASS | CLASSE PRINCIPAL.
 class Lexer
 {
 
 public:
 
     LexResult InitL(fstream& file, RunTimeData& Data);
+    static void SkipLine(LexState& State, RunTimeData& Data);
+
+    // UTILS SCANNERS | SCANNERS UTILITARIOS
+    class Scanners
+    {
+    public:
+        void ReadNumber(Lexer& Lexer, RunTimeData& Data, LexState& State, char C);
+        void ReadString(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N);
+    };
+    Scanners Scanners;
 private:
 
     // UTILS OF LEXER | UTILIDADES DO LEXER
