@@ -32,14 +32,18 @@ void Lexer::SkipLine(LexState& State, RunTimeData& Data)
 }
 
 // Make a Token and PushBack | Cria um Novo Token e Empilha
-void MakeToken(LexResult& Res, LexState& State, RunTimeData& Data, TokenType Type)
+void MakeToken(LexResult& Res, LexState& State, RunTimeData& Data, TokenType Type, Arena& Memory)
 {
-    Token Tok(Type, State.currPos);
-    Res.Tokens.push_back(std::move(Tok));
+    Token* Tok = Memory.New<Token>(
+        Type,
+        State.currPos
+    );
+
+    Res.Tokens.push_back(Tok);
 }
 
 // SCANNER TO READ A NUMBER | SCANNER PARA LER UM NUMERO
-void Lexer::Scanners::ReadNumber(Lexer& Lexer, RunTimeData& Data, LexState& State, char C)
+void Lexer::Scanners::ReadNumber(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, Arena& Memory)
 {
     bool hasDot = false;
     bool hasE = false;
@@ -179,12 +183,13 @@ void Lexer::Scanners::ReadNumber(Lexer& Lexer, RunTimeData& Data, LexState& Stat
         Lexer.Res,
         State,
         Data,
-        hasDot or hasE ? TokenType::FLOAT : TokenType::INTEGER
+        hasDot or hasE ? TokenType::FLOAT : TokenType::INTEGER,
+        Memory
     );
 }
 
 // SCANNER TO READ A STRING | SCANNER PARA LER UMA STRING
-void Lexer::Scanners::ReadString(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N) {
+void Lexer::Scanners::ReadString(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N, Arena& Memory) {
     enum class StringType
     {
         SINGLE_QUOTE,
@@ -273,11 +278,11 @@ void Lexer::Scanners::ReadString(Lexer& Lexer, RunTimeData& Data, LexState& Stat
         LexUtils::Advance(State, Data);
     }
 
-    MakeToken(Lexer.Res, State, Data, TokenType::STRING);
+    MakeToken(Lexer.Res, State, Data, TokenType::STRING, Memory);
 }
 
 // SCANNER TO READ A COMMENT | SCANNER PARA LER UM COMENTÁRIO
-void Lexer::Scanners::ReadComment(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N)
+void Lexer::Scanners::ReadComment(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N, Arena& Memory)
 {
     enum class CommentType
     {
@@ -402,13 +407,13 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
         "TOKEN COUNT: " + std::to_string(Res.Tokens.size())+"\n"
         "TOKENS: \n\n";
     int i=0;
-    for (Token& Tok : Res.Tokens)
+    for (Token* Tok : Res.Tokens)
     {
         text +=
             "Token"+std::to_string(i)+": "
-            "TypeId: "+std::to_string(static_cast<int>(Tok.Type))+"\n"
-            "Lexeme: "+Tok.Lexeme(Data)+"\n"
-            "Pos(line/index): "+std::to_string(Tok.pos.line)+";"+std::to_string(Tok.pos.collumn)+"\n\n";
+            "TypeId: "+std::to_string(static_cast<int>(Tok->Type))+"\n"
+            "Lexeme: "+Tok->Lexeme(Data)+"\n"
+            "Pos(line/index): "+std::to_string(Tok->pos.line)+";"+std::to_string(Tok->pos.collumn)+"\n\n";
     }
     text += "\n// ============ ENDOF: LEXER =========== // ";
     file << text;
@@ -416,7 +421,7 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
 
 // =========== ENTRY-POINT | PONTO DE ENTRADA ========== //
 // Entry Point OF Lex Program | Ponto de Partida Do Programa 
-LexResult Lexer::InitL(fstream& file, RunTimeData& Data)
+LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
 {
     // INIT | INICIO
     if (Data.flags.debugMode)
@@ -445,7 +450,7 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data)
         if (C is '\n')
         {
             State.currPos.indent = 0;
-            MakeToken(Res, State, Data, TokenType::NEW_LINE);
+            MakeToken(Res, State, Data, TokenType::NEW_LINE, Memory);
             continue;
         }
         else if (C is '\t') {
@@ -455,7 +460,7 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data)
             if (N == '.')
                 {
                     LexUtils::Advance(State, Data);
-                    MakeToken(Res, State, Data, TokenType::RANGE);
+                    MakeToken(Res, State, Data, TokenType::RANGE, Memory);
                     continue;
                 }
         // DEF CHARS
@@ -469,12 +474,12 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data)
                 State.currPos.len++;
             }
 
-            MakeToken(Res, State, Data, TokenType::IDENTIFIER);
+            MakeToken(Res, State, Data, TokenType::IDENTIFIER, Memory);
             continue;
-        } else if (IS_DIGIT(C)) Scanners.ReadNumber(*this, Data, State, C);
-        else if (IS_STRING(C)) Scanners.ReadString(*this, Data, State, C, N);
+        } else if (IS_DIGIT(C)) Scanners.ReadNumber(*this, Data, State, C, Memory);
+        else if (IS_STRING(C)) Scanners.ReadString(*this, Data, State, C, N, Memory);
         else if (IS_COMMENT(C) and (IS_COMMENT(N) or N == '*'))
-            Scanners.ReadComment(*this, Data, State, C, N);
+            Scanners.ReadComment(*this, Data, State, C, N, Memory);
         else if (C == ' ')
             continue;
         else
@@ -485,59 +490,84 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data)
             case '=':
                 if (N == '=')
                     { 
-                        MakeToken(Res, State, Data, TokenType::EQEQ);
+                        MakeToken(Res, State, Data, TokenType::EQEQ, Memory);
                         LexUtils::Advance(State, Data);
                     }
-                else MakeToken(Res, State, Data, TokenType::EQUAL);
+                else MakeToken(Res, State, Data, TokenType::EQUAL, Memory);
                 continue;
             case '+':
                 if (N == '=')
                     { 
-                        MakeToken(Res, State, Data, TokenType::EQPL);
+                        MakeToken(Res, State, Data, TokenType::EQPL, Memory);
                         LexUtils::Advance(State, Data);
                     }
-                else MakeToken(Res, State, Data, TokenType::PLUS);
+                else MakeToken(Res, State, Data, TokenType::PLUS, Memory);
                 continue;
 
             case '-':
                 if (N == '=')
                     { 
-                        MakeToken(Res, State, Data, TokenType::EQMIN);
+                        MakeToken(Res, State, Data, TokenType::EQMIN, Memory);
                         LexUtils::Advance(State, Data);
                     }
-                else MakeToken(Res, State, Data, TokenType::MINUS);
+                else MakeToken(Res, State, Data, TokenType::MINUS, Memory);
                 continue;
 
             case '*':
                 if (N == '=')
                     {
-                        MakeToken(Res, State, Data, TokenType::EQSTAR);
+                        MakeToken(Res, State, Data, TokenType::EQSTAR, Memory);
                         LexUtils::Advance(State, Data);
                     }
                 else if (N == '*')
                     {
-                        MakeToken(Res, State, Data, TokenType::POT);
+                        MakeToken(Res, State, Data, TokenType::POT, Memory);
                         LexUtils::Advance(State, Data);
                     }
-                else MakeToken(Res, State, Data, TokenType::EQSTAR);
+                else MakeToken(Res, State, Data, TokenType::EQSTAR, Memory);
                 continue;
 
             case '/':
                 if (N == '=')
                     { 
-                        MakeToken(Res, State, Data, TokenType::EQMIN);
+                        MakeToken(Res, State, Data, TokenType::EQMIN, Memory);
                         LexUtils::Advance(State, Data);
                     }
-                else MakeToken(Res, State, Data, TokenType::MINUS);
+                else MakeToken(Res, State, Data, TokenType::MINUS, Memory);
                 continue;
             case '%':
                 if (N == '=')
                     { 
-                        MakeToken(Res, State, Data, TokenType::MOD);
+                        MakeToken(Res, State, Data, TokenType::MOD, Memory);
                         LexUtils::Advance(State, Data);
                     }
-                else MakeToken(Res, State, Data, TokenType::EQMOD);
+                else MakeToken(Res, State, Data, TokenType::EQMOD, Memory);
                 continue;
+            
+            case '(':
+                MakeToken(Res, State, Data, TokenType::LPARENT, Memory);      
+                continue;
+
+            case '[':
+                MakeToken(Res, State, Data, TokenType::LBRACKET, Memory);      
+                continue;            
+
+            case '{':
+                MakeToken(Res, State, Data, TokenType::LBRACE, Memory);      
+                continue;
+                
+            case '}':
+                MakeToken(Res, State, Data, TokenType::RBRACE, Memory);      
+                continue; 
+
+            case ']':
+                MakeToken(Res, State, Data, TokenType::RBRACKET, Memory);      
+                continue; 
+
+            case ')':
+                MakeToken(Res, State, Data, TokenType::RPARENT, Memory);      
+                continue; 
+
             
             default:
 
@@ -551,7 +581,7 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data)
                 );
                 if (!Data.flags.debugMode)
                     OrbitLog::SyntaxLog::ThrowLog(Data);
-                MakeToken(Res, State, Data, TokenType::UNKNOWN);
+                MakeToken(Res, State, Data, TokenType::UNKNOWN, Memory);
                 SkipLine(State, Data);
                 continue;
         }

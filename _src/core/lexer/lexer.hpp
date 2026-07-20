@@ -166,7 +166,7 @@ struct LexState
 
 struct LexResult
 {
-    vec<Token> Tokens; // Main TOken Stack | Pilha De Tokens Principal.
+    vec<Token*> Tokens; // Main TOken Stack | Pilha De Tokens Principal.
 };
 
 // MAIN CLASS | CLASSE PRINCIPAL.
@@ -175,16 +175,16 @@ class Lexer
 
 public:
 
-    LexResult InitL(fstream& file, RunTimeData& Data);
+    LexResult InitL(fstream& file, RunTimeData& Data, Arena& Memory);
     static void SkipLine(LexState& State, RunTimeData& Data);
 
     // UTILS SCANNERS | SCANNERS UTILITARIOS
     class Scanners
     {
     public:
-        void ReadNumber(Lexer& Lexer, RunTimeData& Data, LexState& State, char C);
-        void ReadString(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N);
-        void ReadComment(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N);
+        void ReadNumber(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, Arena& memory);
+        void ReadString(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N, Arena& memory);
+        void ReadComment(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N, Arena& memory);
     };
     Scanners Scanners;
 private:

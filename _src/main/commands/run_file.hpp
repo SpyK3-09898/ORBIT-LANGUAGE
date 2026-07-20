@@ -39,8 +39,10 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
     if (fs::file_size(Path) is 0)
         throw runt_err("Empty File Recived");
 
+    Arena Memory;
+
     Lexer L;
-    LexResult LRes = L.InitL(file, Data);
+    LexResult LRes = L.InitL(file, Data, Memory);
     if (Data.flags.debugMode)
     { 
         PrintInLn("[DRIVER] ENDOF TASK: Build ORBIT. .. ..."); 
