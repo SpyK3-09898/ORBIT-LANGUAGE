@@ -8,8 +8,9 @@
 #include "../../core/RunTimeData.hpp"
 #include "../../../_include/tools/console.hpp"
 
-#include "../../core/lexer/lexer.hpp"
+#include "../../core/FrontEnd/lexer/lexer.hpp"
 
+#include <string>
 #include <thread>
 #include <chrono>
 #include <fstream>
@@ -44,11 +45,31 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
     Lexer L;
     LexResult LRes = L.InitL(file, Data, Memory);
     if (Data.flags.debugMode)
-    { 
+    {
         PrintInLn("[DRIVER] ENDOF TASK: Build ORBIT. .. ..."); 
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        PrintInLn("");
+        PrintOut("");
     }
+    // GENERATE MEMORY LOG | GERA LOG DE MEMORIA
+    if (Data.flags.generateLog)
+    {
+        fstream log_file(
+        Data.LogDir,
+        std::ios::out | std::ios::app
+        );
+        string text =
+            "\n\n// ============ MEMORY & DATA =========== //"
+            "\n\nLIMIT: "+std::to_string(Memory.ReservedMemory())
+            +"\nUSED: "+std::to_string(Memory.UsedMemory())
+            +"\nAVALIABLE: "+std::to_string(Memory.ReservedMemory() - Memory.UsedMemory())
+            +"\nSPACES/BLOCKS USED ACCOUNT: "+std::to_string(Memory.BlockCount())
+            +"\n\nFinishing Arena. .. ..."
+            "\n\n"
+            "\\ ============ ENDOF: 'ARENA' ==========\n\n";
+        log_file << text;
+    }
+
+    Memory.Finalize();
     OrbitLog::SyntaxLog::ThrowLog(Data);
 
     return 0;

@@ -8,7 +8,7 @@
 
 #include "utils/aliases.hpp" // HEADERS
 #include "tools/console.hpp"
-#include "../RunTimeData.hpp"
+#include "../../RunTimeData.hpp"
 
 #include <cstddef> // LIBRARIES | BIBLIOTECAS
 #include <cstdint> 
@@ -390,6 +390,7 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
         fs::create_directories(dir);
 
     fs::path p = dir / fileName;
+    Data.LogDir = p;
     fstream file(p, std::ios::out | std::ios::trunc); 
     if (not file.is_open())
         { 
@@ -414,6 +415,7 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
             "TypeId: "+std::to_string(static_cast<int>(Tok->Type))+"\n"
             "Lexeme: "+Tok->Lexeme(Data)+"\n"
             "Pos(line/index): "+std::to_string(Tok->pos.line)+";"+std::to_string(Tok->pos.collumn)+"\n\n";
+        i++;
     }
     text += "\n// ============ ENDOF: LEXER =========== // ";
     file << text;
@@ -447,7 +449,15 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
         char N = LexUtils::Peek(State, Data);
 
         // SPECIAL CHARACTERS | CARACTERES ESPECIAIS.
-        if (C is '\n')
+        if (C == '\\')
+        {
+            if (N == '\n')
+            {
+                LexUtils::Advance(State, Data);
+                continue;
+            }
+        }
+        else if (C is '\n')
         {
             State.currPos.indent = 0;
             MakeToken(Res, State, Data, TokenType::NEW_LINE, Memory);
@@ -524,24 +534,24 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
                         MakeToken(Res, State, Data, TokenType::POT, Memory);
                         LexUtils::Advance(State, Data);
                     }
-                else MakeToken(Res, State, Data, TokenType::EQSTAR, Memory);
+                else MakeToken(Res, State, Data, TokenType::STAR, Memory);
                 continue;
 
             case '/':
                 if (N == '=')
                     { 
-                        MakeToken(Res, State, Data, TokenType::EQMIN, Memory);
+                        MakeToken(Res, State, Data, TokenType::EQBAR, Memory);
                         LexUtils::Advance(State, Data);
                     }
-                else MakeToken(Res, State, Data, TokenType::MINUS, Memory);
+                else MakeToken(Res, State, Data, TokenType::BAR, Memory);
                 continue;
             case '%':
                 if (N == '=')
                     { 
-                        MakeToken(Res, State, Data, TokenType::MOD, Memory);
+                        MakeToken(Res, State, Data, TokenType::EQMOD, Memory);
                         LexUtils::Advance(State, Data);
                     }
-                else MakeToken(Res, State, Data, TokenType::EQMOD, Memory);
+                else MakeToken(Res, State, Data, TokenType::MOD, Memory);
                 continue;
             
             case '(':

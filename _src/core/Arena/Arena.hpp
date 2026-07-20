@@ -37,9 +37,10 @@ class Arena
 
     private:
 
-    // Default Block Size | Tamanho Padrao Do Bloco
-    size_t DefBlockSize;
-
+    size_t DefBlockSize; // Default Block Size | Tamanho Padrao Do Bloco
+    size_t MaxSize; // Maximum Arena Size | Tamanho Maximo Da Arena
+    size_t Reserved; // Current Reserved Memory | Memoria Reservada Atual
+    size_t Blocks; // Block Count | Quantidade De Blocos
 
     // First Allocated Block | Primeiro Bloco Alocado
     ArenaBlock* FirstBlock;

@@ -12,7 +12,6 @@
 
 #include <cstddef>
 #include <filesystem>
-#include <vcruntime_typeinfo.h>
 
 // DATA
 

@@ -3,7 +3,7 @@
 // Global Aliases | Aliases Globais
 // Developed By: SpyK3(2026) | License: GitHub(MIT).
 
-// PRAGMATIC IFNOS | INFORMAÇEOS PRAGMATICAS
+// PRAGMATIC INFOS | INFORMAÇOES PRAGMATICAS
 #pragma once
 
 // INCLUDE HEADERS 'N DEPENDENCES
@@ -13,12 +13,21 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <unordered_map>
 #include <variant>
 #include <cstdint>
 #include <memory>
 
 #define is ==
 #define is_not !=
+
+// ENUMS
+
+enum ORBIT_ERRORS_CODE
+{
+    MEMORY_ERROR = 1001,
+    LOG_ERROR = 795  
+};
 
 // BASICS
 using string=std::string;
@@ -39,6 +48,8 @@ using ui8=std::uint8_t;
 // TEMPLATES
 template<typename T>
 using vec=std::vector<T>;
+template<typename Key, typename Value>
+using unord_map= std::unordered_map<Key, Value>;
 template<typename T>
 using uniq_ptr=std::unique_ptr<T>;
 template<typename... T>

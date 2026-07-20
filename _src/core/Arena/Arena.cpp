@@ -5,10 +5,12 @@
 
 // INCLUDE HEADERS 'N DEPENDENCES
 #include "Arena.hpp" // HEADER FILE
+#include "tools/console.hpp"
 
 #include <cstdlib> // LIBRARIES | BIBLIOTECAS
 #include <algorithm>
 #include <new>
+#include <string>
 
 
 // =========== CREATE BLOCK =========== //
@@ -59,7 +61,20 @@ byte* Arena::AlignForward(byte* Address, size_t Alignment)
 // Initialize Arena | Inicializa Arena
 Arena::Arena(size_t Size)
 {
-    DefBlockSize = Size;
+    MaxSize = Size;
+
+
+    // Each Block Uses 1/16 Of Total Memory
+    // Cada Bloco Usa 1/16 Da Memoria Total
+    DefBlockSize = MaxSize / 16;
+
+
+    if (DefBlockSize == 0)
+        DefBlockSize = MaxSize;
+
+
+    Reserved = 0;
+    Blocks = 0;
 
 
     FirstBlock = NewBlock(
@@ -68,6 +83,10 @@ Arena::Arena(size_t Size)
 
 
     CurrBlock = FirstBlock;
+
+
+    Reserved += DefBlockSize;
+    Blocks++;
 }
 
 
@@ -102,6 +121,23 @@ void* Arena::Alloc(size_t Size, size_t Alignment)
             );
 
 
+        if (Reserved + BlockSize > MaxSize)
+        {
+            size_t Overflow =
+                (Reserved + BlockSize) - MaxSize;
+
+            OrbitLog::Error(
+                "Arena.cpp", 
+                "Arena 'OutOfRange', Memory limit Exceeded(Bad Alloc): Limit: "+
+                std::to_string(MaxSize)
+                +" | Used: "+std::to_string(Reserved)
+                +" | OverFlow: "=std::to_string(Overflow),
+                true,
+                MEMORY_ERROR
+            );
+        }
+
+
         ArenaBlock* New =
             NewBlock(
                 BlockSize
@@ -111,6 +147,10 @@ void* Arena::Alloc(size_t Size, size_t Alignment)
         CurrBlock->Next = New;
 
         CurrBlock = New;
+
+
+        Reserved += BlockSize;
+        Blocks++;
 
 
         Ptr =
@@ -133,10 +173,11 @@ void* Arena::Alloc(size_t Size, size_t Alignment)
 // Free All Memory | Libera Toda Memoria
 void Arena::Finalize()
 {
+    // TAKE FIRST BLOCK | PEGA O 1 BLOCO
     ArenaBlock* Block = FirstBlock;
 
-
-    while (Block)
+    // FINALIZE BLOCKS | FINALIZA OS BLOCOS
+    while (Block) // WHILE NEXT BLOCK NOT IS NULL | ENQUANTO EXISTIR PROXIMO BLOCO.
     {
         ArenaBlock* Next =
             Block->Next;
@@ -150,10 +191,11 @@ void Arena::Finalize()
         Block = Next;
     }
 
-
+    // FINALIZE DATA
     FirstBlock = nullptr;
-
     CurrBlock = nullptr;
+    Reserved = 0;
+    Blocks = 0;
 }
 
 

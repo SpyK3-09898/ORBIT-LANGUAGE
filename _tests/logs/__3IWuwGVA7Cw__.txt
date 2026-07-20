@@ -1,0 +1,54 @@
+
+// ========== LEXER ============ // 
+
+TOKEN COUNT: 9
+TOKENS: 
+
+Token0: TypeId: 47
+Lexeme: 
+Pos(line/index): 1;0
+
+Token1: TypeId: 47
+Lexeme: 
+Pos(line/index): 2;0
+
+Token2: TypeId: 6
+Lexeme: ola
+Pos(line/index): 2;13
+
+Token3: TypeId: 47
+Lexeme: 
+Pos(line/index): 3;0
+
+Token4: TypeId: 6
+Lexeme: var
+Pos(line/index): 3;3
+
+Token5: TypeId: 6
+Lexeme: x
+Pos(line/index): 3;5
+
+Token6: TypeId: 0
+Lexeme: 10
+Pos(line/index): 3;8
+
+Token7: TypeId: 47
+Lexeme: 
+Pos(line/index): 4;0
+
+Token8: TypeId: 47
+Lexeme: 
+Pos(line/index): 7;0
+
+
+// ============ ENDOF: LEXER =========== // // ============ MEMORY & DATA =========== //
+
+LIMIT: 65536
+USED: 216
+AVALIABLE: 65320
+SPACES/BLOCKS USED ACCOUNT: 1
+
+Finishing Arena. .. ...
+
+\ ============ ENDOF: 'ARENA' ==========
+

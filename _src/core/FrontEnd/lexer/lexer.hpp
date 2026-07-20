@@ -8,7 +8,7 @@
 
 // INCLUDE HEADERS 'N DEPENDENCES
 #include "utils/aliases.hpp"
-#include "../RunTimeData.hpp"
+#include "../../RunTimeData.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -89,6 +89,7 @@ enum class TokenType: uint8_t
     EQPL,
     EQMIN,
     EQSTAR,
+    EQBAR,
     EQSL,
     EQPWR,
     EQMOD,
