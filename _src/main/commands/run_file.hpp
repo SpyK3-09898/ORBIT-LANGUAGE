@@ -45,7 +45,7 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
     { 
         PrintInLn("[DRIVER] ENDOF TASK: Build ORBIT. .. ..."); 
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        PrintIn(""); PrintIn("");
+        PrintInLn("");
     }
     OrbitLog::SyntaxLog::ThrowLog(Data);
 

@@ -99,6 +99,10 @@ int main(int argc, char* argv[])
                     Data.LogDir = fs::absolute(argv[0]).parent_path().parent_path() / "_tests/logs";
                     RunOrbit(argv[2], Data);
             }
+        } else if (Entry == "--version") {
+
+            fs::path p(argv[0]); p = p.parent_path().parent_path();
+            PrintLn("ORBIT - version: ", p.filename());
         } else {
             throw runt_err("Invalid command: "+Entry);
         }

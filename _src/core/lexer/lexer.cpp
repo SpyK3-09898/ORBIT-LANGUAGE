@@ -10,10 +10,12 @@
 #include "tools/console.hpp"
 #include "../RunTimeData.hpp"
 
-#include <cstddef>
-#include <cstdint> // LIBRARIES | BIBLIOTECAS
-#include <fstream>
+#include <cstddef> // LIBRARIES | BIBLIOTECAS
+#include <cstdint> 
+#include <cerrno>
+#include <cstring>
 #include <string>
+#include <fstream>
 #include <filesystem>
 using fstream=std::fstream;
 namespace fs=std::filesystem;
@@ -42,7 +44,7 @@ void Lexer::Scanners::ReadNumber(Lexer& Lexer, RunTimeData& Data, LexState& Stat
     bool hasDot = false;
     bool hasE = false;
 
-    State.currPos.len = 0;
+    State.currPos.len = 1;
 
     while (true)
     {
@@ -182,8 +184,7 @@ void Lexer::Scanners::ReadNumber(Lexer& Lexer, RunTimeData& Data, LexState& Stat
 }
 
 // SCANNER TO READ A STRING | SCANNER PARA LER UMA STRING
-void Lexer::Scanners::ReadString(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N)
-{
+void Lexer::Scanners::ReadString(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N) {
     enum class StringType
     {
         SINGLE_QUOTE,
@@ -193,7 +194,7 @@ void Lexer::Scanners::ReadString(Lexer& Lexer, RunTimeData& Data, LexState& Stat
 
     StringType SType;
 
-    State.currPos.len = 0;
+    State.currPos.len = 1;
 
     if (C is '\'')
         SType = StringType::SINGLE_QUOTE;
@@ -275,6 +276,79 @@ void Lexer::Scanners::ReadString(Lexer& Lexer, RunTimeData& Data, LexState& Stat
     MakeToken(Lexer.Res, State, Data, TokenType::STRING);
 }
 
+// SCANNER TO READ A COMMENT | SCANNER PARA LER UM COMENTÁRIO
+void Lexer::Scanners::ReadComment(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N)
+{
+    enum class CommentType
+    {
+        INLINE,
+        MULTI_LINE
+    };
+
+    CommentType CType;
+
+    if (C is '\\')
+    {
+        if (N is '*')
+        {
+            CType = CommentType::MULTI_LINE;
+            LexUtils::Advance(State, Data);
+        }
+        else
+            CType = CommentType::INLINE;
+    }
+
+    LexUtils::Advance(State, Data);
+
+    while (true)
+    {
+        C = LexUtils::Peek(State, Data);
+        N = LexUtils::PeekNext(State, Data, 1);
+
+        if (C is EOF_CHAR)
+        {
+            if (CType is CommentType::MULTI_LINE)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Lexing",
+                    "Unterminated <COMMENT>",
+                    "Expected Closing Delimiter Before <EOF>",
+                    "Close The Comment",
+                    State.currPos.line,
+                    State.currPos.collumn
+                );
+            }
+
+            return;
+        }
+
+
+        if (CType is CommentType::INLINE)
+        {
+            if (C is '\n')
+                return;
+
+            if (C is '\\' and LexUtils::Peek(State, Data) is '\\')
+            {
+                LexUtils::Advance(State, Data);
+                LexUtils::Advance(State, Data);
+                return;
+            }
+        }
+        else
+        {
+            if (C is '*' and N is '\\')
+            {
+                LexUtils::Advance(State, Data);
+                LexUtils::Advance(State, Data);
+                return;
+            }
+        }
+
+        LexUtils::Advance(State, Data);
+    }
+}
+
 // GENERATE LOG OF LEXER | GERA LOG DO LEXER
 void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
 {
@@ -312,11 +386,21 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
 
     fs::path p = dir / fileName;
     fstream file(p, std::ios::out | std::ios::trunc); 
-        
+    if (not file.is_open())
+        { 
+            PrintOut("");
+            OrbitLog::Error(
+                "Lexer.cpp",
+                "Cannot Open File! Why: "+string(std::strerror(errno)), 
+                true,
+                errno
+            ); 
+        }
+
     string text = 
         "\n// ========== LEXER ============ // \n\n"
         "TOKEN COUNT: " + std::to_string(Res.Tokens.size())+"\n"
-        "TOKENS: \n";
+        "TOKENS: \n\n";
     int i=0;
     for (Token& Tok : Res.Tokens)
     {
@@ -351,6 +435,9 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data)
     // MAIN LOOP | LOOP PRINCIPAL
     while (LexUtils::Peek(State, Data) != EOF_CHAR)
     {
+        State.currPos.start = State.index;
+        State.currPos.len = 0;
+
         char C = LexUtils::Advance(State, Data);
         char N = LexUtils::Peek(State, Data);
 
@@ -374,16 +461,86 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data)
         // DEF CHARS
         if (IS_ALPHA(C))
         {
+            State.currPos.len++;
+
             while (IS_ALPHANUM(LexUtils::Peek(State, Data)))
-            { LexUtils::Advance(State, Data); State.currPos.start++; }
+            { 
+                LexUtils::Advance(State, Data); 
+                State.currPos.len++;
+            }
+
             MakeToken(Res, State, Data, TokenType::IDENTIFIER);
+            continue;
         } else if (IS_DIGIT(C)) Scanners.ReadNumber(*this, Data, State, C);
         else if (IS_STRING(C)) Scanners.ReadString(*this, Data, State, C, N);
+        else if (IS_COMMENT(C) and (IS_COMMENT(N) or N == '*'))
+            Scanners.ReadComment(*this, Data, State, C, N);
+        else if (C == ' ')
+            continue;
+        else
 
         // OPERATORS | OPERADORES
         switch (C) {
-        
+            
+            case '=':
+                if (N == '=')
+                    { 
+                        MakeToken(Res, State, Data, TokenType::EQEQ);
+                        LexUtils::Advance(State, Data);
+                    }
+                else MakeToken(Res, State, Data, TokenType::EQUAL);
+                continue;
+            case '+':
+                if (N == '=')
+                    { 
+                        MakeToken(Res, State, Data, TokenType::EQPL);
+                        LexUtils::Advance(State, Data);
+                    }
+                else MakeToken(Res, State, Data, TokenType::PLUS);
+                continue;
+
+            case '-':
+                if (N == '=')
+                    { 
+                        MakeToken(Res, State, Data, TokenType::EQMIN);
+                        LexUtils::Advance(State, Data);
+                    }
+                else MakeToken(Res, State, Data, TokenType::MINUS);
+                continue;
+
+            case '*':
+                if (N == '=')
+                    {
+                        MakeToken(Res, State, Data, TokenType::EQSTAR);
+                        LexUtils::Advance(State, Data);
+                    }
+                else if (N == '*')
+                    {
+                        MakeToken(Res, State, Data, TokenType::POT);
+                        LexUtils::Advance(State, Data);
+                    }
+                else MakeToken(Res, State, Data, TokenType::EQSTAR);
+                continue;
+
+            case '/':
+                if (N == '=')
+                    { 
+                        MakeToken(Res, State, Data, TokenType::EQMIN);
+                        LexUtils::Advance(State, Data);
+                    }
+                else MakeToken(Res, State, Data, TokenType::MINUS);
+                continue;
+            case '%':
+                if (N == '=')
+                    { 
+                        MakeToken(Res, State, Data, TokenType::MOD);
+                        LexUtils::Advance(State, Data);
+                    }
+                else MakeToken(Res, State, Data, TokenType::EQMOD);
+                continue;
+            
             default:
+
                 OrbitLog::SyntaxLog::SyntaxError(
                     "Lexing", 
                     "Unknow <CHAR>",
@@ -406,3 +563,5 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data)
         GenerateLexerLog(Res , Data);
     return std::move(Res);
 }
+
+// EOF

@@ -57,7 +57,7 @@ namespace OrbitLog {
         constexpr const char* RESET_STRIKE       = "\033[29m";
     }
 
-    inline void Error(string origin, string mess, bool finalize=false)
+    inline void Error(string origin, string mess, bool finalize=false, int error_code=1)
     {
         PrintLn(
             COLORS::RED,
@@ -78,7 +78,8 @@ namespace OrbitLog {
         {    
             Print(
                 COLORS::GRAY,
-                "|_ Program Exit Whit Exit Code '1'. .. ..."
+                "|_ Program Exit Whit Exit Code '"+std::to_string(error_code)+"'. .. ...",
+                COLORS::RESET
             );
             exit(1);
         } 
@@ -104,86 +105,99 @@ namespace OrbitLog {
     }
 
     namespace SyntaxLog {
-    
+        
         enum class LogTypes
         {
             ERROR,
             WARN
         };
-        struct LogObj {
 
+        struct LogObj
+        {
             LogTypes type;
             string origin;
             string mess;
-        }; inline vec<LogObj> Logs;
+        };
+
+        inline vec<LogObj> Logs;
 
         inline void ThrowLog(RunTimeData& Data)
         {
             // ERROR
+            bool first_error=true;
             for (LogObj obj : Logs)
             {
-                if (obj.type is_not LogTypes::WARN) 
+                if (obj.type is_not LogTypes::ERROR)
                     continue;
+
                 if (Data.flags.debugMode)
-                    {
-                        PrintInLn(""); PrintInLn("");
-                        Error(obj.origin, obj.mess, false); 
-                    }
-                else Error(obj.origin, obj.mess, true);
-                
+                {
+                    if (first_error)
+                        PrintOut("");
+                    Error(obj.origin, obj.mess, false);
+                }
+                else
+                {
+                    Error(obj.origin, obj.mess, true);
+                }
+                first_error=false;
             }
 
             // WARNS
+            bool first_warn=true;
             for (LogObj obj : Logs)
             {
-                if (obj.type is_not LogTypes::ERROR) 
+                if (obj.type is_not LogTypes::WARN)
                     continue;
+
                 if (Data.flags.debugMode)
                 {
-                    PrintInLn(""); PrintInLn("");
+                    if (first_warn)
+                        PrintOut("");
                     Warn(obj.origin, obj.mess);
                 }
+                first_warn=false;
             }
         }
 
         inline void SyntaxError(
-            string origin, 
-            string mess, 
-            string why, 
+            string origin,
+            string mess,
+            string why,
             string sol,
-            int line=-1,
-            int index=-1
+            int line = -1,
+            int index = -1
         )
-        { 
-            mess =+ 
-            " | WHY: "
-            +why
-            +" | SOL: "
-            +sol
-            +" | SOL(line, index): "
-            +std::to_string(line)+";"+std::to_string(index); 
+        {
+            mess +=
+                " | WHY: "
+                + why
+                + " | SOL: "
+                + sol
+                + " | POS(line, index): "
+                + std::to_string(line) + ";" + std::to_string(index);
 
-            Logs.emplace_back(LogTypes::ERROR, origin, mess); 
+            Logs.emplace_back(LogTypes::ERROR, origin, mess);
         }
 
         inline void SyntaxWarn(
-            string origin, 
-            string mess, 
-            string why, 
+            string origin,
+            string mess,
+            string why,
             string sol,
-            int line=-1,
-            int index=-1
+            int line = -1,
+            int index = -1
         )
-        { 
-            mess =+ 
-            " | WHY: "
-            +why
-            +" | SOL: "
-            +sol
-            +" | SOL(line, index): "
-            +std::to_string(line)+";"+std::to_string(index); 
+        {
+            mess +=
+                " | WHY: "
+                + why
+                + " | SOL: "
+                + sol
+                + " | POS(line, index): "
+                + std::to_string(line) + ";" + std::to_string(index);
 
-            Logs.emplace_back(LogTypes::WARN, origin, mess); 
+            Logs.emplace_back(LogTypes::WARN, origin, mess);
         }
     }
 }

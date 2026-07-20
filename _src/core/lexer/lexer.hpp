@@ -47,6 +47,10 @@ inline bool IS_STRING(char C)
 {
     return (C is '\'' or C is '"');
 }
+inline bool IS_COMMENT(char C)
+{
+    return (C == '\\');
+}
 
 // =========== CORE =========== //
 
@@ -79,6 +83,7 @@ enum class TokenType: uint8_t
     PIPE,
     POWER,
     MOD,
+    POT,
     HOLE,
 
     EQPL,
@@ -156,6 +161,7 @@ struct Token
 struct LexState
 {
     TokenPos currPos; // Current Position of Lexer | Posição Atual dos Tokens.
+    ui32 index = 0; // Current Global Position Of Lexer | Posição Atual Global dos Tokens
 };
 
 struct LexResult
@@ -178,6 +184,7 @@ public:
     public:
         void ReadNumber(Lexer& Lexer, RunTimeData& Data, LexState& State, char C);
         void ReadString(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N);
+        void ReadComment(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N);
     };
     Scanners Scanners;
 private:
@@ -188,10 +195,10 @@ private:
         // RETURN NEXT CHAR AND CONSUMES | RETORNA O PROXIMO CHAR E CONSOME
         static inline char Advance(LexState& State, RunTimeData& Data)
         {
-            if (State.currPos.start >= Data.source.size())
+            if (State.index >= Data.source.size())
                 return EOF_CHAR;
 
-            char C = Data.source[State.currPos.start];
+            char C = Data.source[State.index];
 
             if (C is '\n')
             {
@@ -202,28 +209,27 @@ private:
             {
                 State.currPos.collumn++;
             }
-
-            State.currPos.start++;
-
+            
+            State.index++;
             return C;
         }
 
         // RETURN NEXT CHAR AND NOT CONSUMES | RETORNA O PROXIMO CHAR E NAO CONSUME
         static inline char Peek(LexState& State, RunTimeData& Data)
         {
-            if (State.currPos.start >= Data.source.size())
+            if (State.index >= Data.source.size())
                 return EOF_CHAR;
 
-            return Data.source[State.currPos.start];
+            return Data.source[State.index];
         }
 
         // RETURN NEXT CHAR WHIT OFFSET | RETORNA O PROXIMO CHAR COM OFFSET
         static inline char PeekNext(LexState& State, RunTimeData& Data, size_t offset = 0)
         {
-            if (State.currPos.start + offset >= Data.source.size())
+            if (State.index + offset >= Data.source.size())
                 return EOF_CHAR;
 
-            return Data.source[State.currPos.start + offset];
+            return Data.source[State.index + offset];
         }
     };
 
@@ -231,3 +237,5 @@ private:
     LexResult Res;
     LexState State;  
 };
+
+// EOF

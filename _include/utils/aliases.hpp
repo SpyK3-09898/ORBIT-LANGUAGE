@@ -7,6 +7,7 @@
 #pragma once
 
 // INCLUDE HEADERS 'N DEPENDENCES
+#include <cstddef>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -23,6 +24,7 @@
 using string=std::string;
 using str_view=std::string_view;
 using runt_err=std::runtime_error;
+using byte=std::byte;
 
 using i64=std::int64_t;
 using i32=std::int32_t;
