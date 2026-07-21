@@ -63,7 +63,8 @@ enum class TokenType: uint8_t
     INTEGER,
     FLOAT,
     STRING,
-    BOOL,
+    TRUE,
+    FALSE,
     NONE,
     _NULL,
     
@@ -108,6 +109,7 @@ enum class TokenType: uint8_t
     DOT,
     COMMA,
     RANGE,
+    AMPERSAND,
 
     // BLOCKS
     LPARENT,
@@ -127,6 +129,7 @@ enum class TokenType: uint8_t
     PRAGMA,
     SEMI_PRAGMA,
     PLACE_HOLDER,
+    MODIFIER,
     UNKNOWN,
     ENTRY_POINT,
     _EOF

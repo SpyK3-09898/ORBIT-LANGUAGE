@@ -3,12 +3,16 @@
 // Entry-Point OrbitCore PipeLine | Ponto de Entrada do PipeLine Do Core da Orbit
 // Developed By: SpyK3(2026) | License: GitHub(MIT).
 
+// PRAGMATIC INFO'S | INFORMAÇOES PRAGMATICAS
+#pragma once
+
 // INCLUDE HEADERS 'N DEPENDENCES
 #include "utils/aliases.hpp"
 #include "../../core/RunTimeData.hpp"
 #include "../../../_include/tools/console.hpp"
 
 #include "../../core/FrontEnd/lexer/lexer.hpp"
+#include "../../core/FrontEnd/tokenizer/tokenizer.hpp"
 
 #include <string>
 #include <thread>
@@ -43,7 +47,10 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
     Arena Memory;
 
     Lexer L;
+    Tokenizer T;
     LexResult LRes = L.InitL(file, Data, Memory);
+    LRes = T.InitT(LRes, Data, Memory);
+    
     if (Data.flags.debugMode)
     {
         PrintInLn("[DRIVER] ENDOF TASK: Build ORBIT. .. ..."); 
@@ -58,7 +65,7 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
         std::ios::out | std::ios::app
         );
         string text =
-            "\n\n// ============ MEMORY & DATA =========== //"
+            "\n// ============ MEMORY & DATA =========== //"
             "\n\nLIMIT: "+std::to_string(Memory.ReservedMemory())
             +"\nUSED: "+std::to_string(Memory.UsedMemory())
             +"\nAVALIABLE: "+std::to_string(Memory.ReservedMemory() - Memory.UsedMemory())

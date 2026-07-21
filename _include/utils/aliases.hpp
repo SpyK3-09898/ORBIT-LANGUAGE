@@ -12,6 +12,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 #include <unordered_map>
 #include <variant>
@@ -52,6 +53,8 @@ template<typename Key, typename Value>
 using unord_map= std::unordered_map<Key, Value>;
 template<typename T>
 using uniq_ptr=std::unique_ptr<T>;
+template<typename T1, typename T2>
+using pair=std::pair<T1, T2>;
 template<typename... T>
 using variant=std::variant<T...>;
 
@@ -125,6 +128,18 @@ inline bool holds_alt_value(const Variant& variant, const U& value)
         return *ptr == value;
 
     return false;
+}
+
+template<typename Container, typename T>
+constexpr bool contains_at(const Container& container, const T& value)
+{
+    return std::find(container.begin(), container.end(), value) != container.end();
+}
+
+template<typename T, typename... Args>
+constexpr auto make_uniq(Args&&... args)
+{
+    return std::make_unique<T>(std::forward<Args>(args)...);
 }
 
 // EOF

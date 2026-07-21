@@ -4,7 +4,7 @@
 // Developed By: SpyK3(2026) | License: GitHub(MIT).
 
 // INCLUDE HEADERS 'N DEPENDENCES
-#include "lexer.hpp" // HEADER FILE
+#include "lexer.hpp" // HEADER FILE | CABEÇALHO
 
 #include "utils/aliases.hpp" // HEADERS
 #include "tools/console.hpp"
@@ -26,7 +26,7 @@ namespace fs=std::filesystem;
 void Lexer::SkipLine(LexState& State, RunTimeData& Data)
 {
     char N = LexUtils::Peek(State, Data);
-    while (N is_not '\n' or N == EOF_CHAR)
+    while (N is_not '\n' and N is EOF_CHAR)
         { LexUtils::Advance(State, Data); N = LexUtils::Peek(State, Data); }
     State.currPos.indent = 0;
 }
@@ -439,6 +439,9 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
         std::istreambuf_iterator<char>()
     );
 
+    // ENTRY-POINT TOKEN | TOKEN DE 'ENTRY_POINT'
+    MakeToken(Res, State, Data, TokenType::ENTRY_POINT, Memory);
+
     // MAIN LOOP | LOOP PRINCIPAL
     while (LexUtils::Peek(State, Data) != EOF_CHAR)
     {
@@ -497,6 +500,10 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
         // OPERATORS | OPERADORES
         switch (C) {
             
+            case ';':
+                MakeToken(Res, State, Data, TokenType::SEMI_COLON, Memory);
+                continue;
+
             case '=':
                 if (N == '=')
                     { 
@@ -553,7 +560,27 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
                     }
                 else MakeToken(Res, State, Data, TokenType::MOD, Memory);
                 continue;
-            
+            case '&':
+                if (N == '&')
+                    MakeToken(Res, State, Data, TokenType::AND, Memory);
+                else
+                    MakeToken(Res, State, Data, TokenType::AMPERSAND, Memory);
+                continue;
+                
+            case '|':
+                if (N == '|')
+                    MakeToken(Res, State, Data, TokenType::OR, Memory);
+                else
+                    MakeToken(Res, State, Data, TokenType::PIPE, Memory);
+                continue;
+
+            case '!':
+                if (N == '=')
+                    MakeToken(Res, State, Data, TokenType::NOT_EQUAL, Memory);
+                else
+                    MakeToken(Res, State, Data, TokenType::NOT, Memory);
+ 
+
             case '(':
                 MakeToken(Res, State, Data, TokenType::LPARENT, Memory);      
                 continue;
@@ -596,7 +623,10 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
                 continue;
         }
     }
+    // EOF-TOKEN | TOKEN DE FIM-DE-ARQUIVO
+    MakeToken(Res, State, Data, TokenType::_EOF, Memory);
 
+    // FINALIZE | FINALIZAÇÃO
     if (Data.flags.debugMode)
         PrintIn("ENDOF TASK: LEXING. .. ...");
     if (Data.flags.generateLog)

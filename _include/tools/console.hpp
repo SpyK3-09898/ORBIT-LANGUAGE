@@ -104,12 +104,32 @@ namespace OrbitLog {
         );
     }
 
+    inline void Type(string origin, string mess)
+    {
+        PrintLn(
+            COLORS::WHITE,
+            "[", 
+            STYLES::UNDERLINE,
+            "TYPE",
+            STYLES::RESET,
+            COLORS::WHITE,
+            "] ",
+            origin,
+            ": ",
+            STYLES::ITALIC,
+            mess,
+            STYLES::RESET,
+            COLORS::RESET
+        );
+    }
+
     namespace SyntaxLog {
         
         enum class LogTypes
         {
             ERROR,
-            WARN
+            WARN,
+            TYPE
         };
 
         struct LogObj
@@ -158,6 +178,15 @@ namespace OrbitLog {
                 }
                 first_warn=false;
             }
+
+            // TYPES
+            if (Data.flags.debugMode)
+                for (LogObj Obj : Logs)
+                {
+                    if (Obj.type != LogTypes::TYPE) continue;
+
+                    Type(Obj.origin, Obj.mess);
+                }
         }
 
         inline void SyntaxError(
@@ -198,6 +227,25 @@ namespace OrbitLog {
                 + std::to_string(line) + ";" + std::to_string(index);
 
             Logs.emplace_back(LogTypes::WARN, origin, mess);
+        }
+
+        inline void SyntaxType(
+            string origin,
+            string mess,
+            string why,
+            string sol,
+            int line = -1,
+            int index = -1
+        )
+        {            
+            mess +=
+                " | WHY: "
+                + why
+                + " | SOL: "
+                + sol
+                + " | POS(line, index): "
+                + std::to_string(line) + ";" + std::to_string(index);
+            Logs.emplace_back(LogTypes::TYPE, origin, mess);
         }
     }
 }

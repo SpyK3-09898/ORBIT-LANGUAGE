@@ -17,13 +17,15 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ORBIT_CORE module sources
 set(ORBIT_CORE
     _src/core/FrontEnd/lexer/lexer.cpp
+    _src/core/FrontEnd/tokenizer/tokenizer.cpp
+    _src/core/FrontEnd/parser/parser.cpp
+    _src/core/FrontEnd/parser/ParserModules/Expressions/expression.cpp
     _src/core/Arena/Arena.cpp
 )
 
 # __ORBIT module sources
 set(_ORBIT
     _src/main/main.cpp
-    _src/core/template.cpp
 )
 
 # Create final executable
