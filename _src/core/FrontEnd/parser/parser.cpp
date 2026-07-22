@@ -9,6 +9,8 @@
 
 #include "../lexer/lexer.hpp"
 
+#include "ParserModules/Expressions/expression.hpp"
+
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../../RunTimeData.hpp"
@@ -96,11 +98,35 @@ InstVec SeparateInstructions(LexResult& LRes, RunTimeData& Data)
 ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
 {
     ParseResult Res;
+    ParseState State;
+    
+    // CREATE INIT POS | CRIA POS INICIAL
+    State.Pos = NodePos{
+        0, 
+        0, 
+        0,
+        0, 
+        0
+    };
+
+    // CREATE ENTRY-POINT | CRIA UM PONTO-DE-ENTRADA
+    ProgramNode* Program = Memory.New<ProgramNode>(
+        State.Pos
+    );
+    Program->Node = make_uniq<BodyNode>(State.Pos);
+    Res.AST = Program;
+    State.CurrBody = Program->Node.get();
+
+    ExpressionParser ExprParser;
 
     InstVec Instructions = SeparateInstructions(LRes, Data);
-    for (Instruction Inst : Instructions)
+    for (Instruction Inst : Instructions) // PARSE ALL INSTRUCTIONS | PARSEIA TODAS AS INTRUÇOES
     {
-
+        uniq_ptr<ASTNode> Node; // CREATE BASE NODE
+        Node = 
+            ExprParser.
+            ParseExpression(Inst, State, Res, Data, Memory);
+        State.CurrBody->Data.push_back(std::move(Node));
     }
 
     return Res;

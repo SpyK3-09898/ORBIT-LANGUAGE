@@ -20,14 +20,30 @@ struct Instruction
     vec<Token*> Modifiers;
     vec<Token*> Tokens;
 };
-
 using InstVec = vec<Instruction>;
+
 // ======= NODES ======= //
 
 // Typeof Nodes | Tipo dos Nos(Obvio).
-enum class NodeType: uint8_t
+enum class NodeType : uint8_t
 {
-    BODY
+    // PROGRAM
+    PROGRAM,
+    BODY,
+
+    // EXPRESSIONS
+    LITERAL,
+    IDENTIFIER,
+
+    UNARY,
+    BINARY,
+    ASSIGNMENT,
+
+    MEMBER_ACCESS,
+    INDEX_ACCESS,
+    CALL,
+
+    RANGE
 };
 
 // Pos of Nodes | Posição dos Nodes
@@ -59,11 +75,140 @@ struct ASTNode
 struct BodyNode : ASTNode
 {
     // DATA
-    vec<ASTNode> Data;
+    vec<uniq_ptr<ASTNode>> Data{};
 
     // CONSTRUCTOR | CONSTRUTOR
     BodyNode(NodePos P)
         : ASTNode(NodeType::BODY, P) {};
+};
+
+// ENTRY-POINT NODE | NO DE PONTO-DE-ENTRADA
+struct ProgramNode : ASTNode
+{
+    // DATA
+    uniq_ptr<BodyNode> Node;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    ProgramNode(NodePos P)
+        : ASTNode(NodeType::PROGRAM, P),
+          Node(make_uniq<BodyNode>(P))
+    {};
+};
+
+// EXPRESSIONS //
+
+// Value of Literals | Valor dos Literais
+using LiteralValue = variant<
+    i64,
+    float,
+    string,
+    bool,
+    std::nullptr_t
+>;
+
+// Base Expression Node | Node Base de Expressão
+struct ExpressionNode : ASTNode
+{
+    // CONSTRUCTOR | CONSTRUTOR
+    ExpressionNode(NodeType T, NodePos P)
+        : ASTNode(T, P) {};
+};
+
+struct LiteralNode : ExpressionNode
+{
+    // DATA
+    LiteralValue Value;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    LiteralNode(NodePos P)
+        : ExpressionNode(NodeType::LITERAL, P) {};
+};
+
+// IDENTIFIER | Identificador
+struct IdentifierNode : ExpressionNode
+{
+    // DATA
+    Token* Identifier;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    IdentifierNode(NodePos P)
+        : ExpressionNode(NodeType::IDENTIFIER, P) {};
+};
+
+// UNARY EXPRESSION | Expressão Unária
+struct UnaryNode : ExpressionNode
+{
+    // DATA
+    Token* Operator;
+    ExpressionNode* Operand;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    UnaryNode(NodePos P)
+        : ExpressionNode(NodeType::UNARY, P) {};
+};
+
+// BINARY EXPRESSION | Expressão Binária
+struct BinaryNode : ExpressionNode
+{
+    // DATA
+    Token* Operator;
+
+    ExpressionNode* Left;
+    ExpressionNode* Right;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    BinaryNode(NodePos P)
+        : ExpressionNode(NodeType::BINARY, P) {};
+};
+
+// ASSIGNMENT EXPRESSION | Expressão de Atribuição
+struct AssignmentNode : ExpressionNode
+{
+    // DATA
+    Token* Operator;
+
+    ExpressionNode* Left;
+    ExpressionNode* Right;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    AssignmentNode(NodePos P)
+        : ExpressionNode(NodeType::ASSIGNMENT, P) {};
+};
+
+// MEMBER ACCESS | Acesso de Membro
+struct MemberAccessNode : ExpressionNode
+{
+    // DATA
+    ExpressionNode* Object;
+    Token* Member;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    MemberAccessNode(NodePos P)
+        : ExpressionNode(NodeType::MEMBER_ACCESS, P) {};
+};
+
+// INDEX ACCESS | Acesso por Índice
+struct IndexAccessNode : ExpressionNode
+{
+    // DATA
+    ExpressionNode* Object;
+    ExpressionNode* Index;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    IndexAccessNode(NodePos P)
+        : ExpressionNode(NodeType::INDEX_ACCESS, P) {};
+};
+
+// RANGE EXPRESSION | Expressão de Intervalo
+struct RangeNode : ExpressionNode
+{
+    // DATA
+    ExpressionNode* Begin;
+    ExpressionNode* End;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    RangeNode(NodePos P)
+        : ExpressionNode(NodeType::RANGE, P) {};
 };
 
 // ======= AST ======= //
@@ -79,7 +224,7 @@ struct ParseState
 // Result Of Parser | Resultado do Parser
 struct ParseResult
 {
-    uniq_ptr<ASTNode> AST;
+    ASTNode* AST;
 };
 
 // ========== NAMESPACES ========= //
@@ -101,7 +246,7 @@ namespace ParserUtils {
             if (Data.flags.debugMode)
                 OrbitLog::SyntaxLog::ThrowLog(Data);
         } else {
-            State.Bodys.push_back(make_uniq<BodyNode>(Node));
+            State.Bodys.push_back(make_uniq<BodyNode>(Node.pos));
             State.CurrBody = State.Bodys.back().get();
         }
     }
