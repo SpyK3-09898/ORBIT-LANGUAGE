@@ -62,7 +62,7 @@ class ExpressionParser
 
         // ENTRY-POINT
 
-        uniq_ptr<ExpressionNode> ParseExpression(
+        ExpressionNode* ParseExpression(
             Instruction& Inst,
             ParseState& State,
             ParseResult& Res,

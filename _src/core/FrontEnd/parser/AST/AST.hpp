@@ -12,13 +12,37 @@
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../../../RunTimeData.hpp"
+#include <cstdint>
+#include <utility>
 
 // ======= INSTRUCTIOSN ======= //
 
+// None Value/Null Value | Valor Nulo e Noni
+struct NoneLitVal{};
+struct NullLitVal{};
+
+// Instructions Rep | Representação de Instruções.
 struct Instruction
 {
     vec<Token*> Modifiers;
     vec<Token*> Tokens;
+
+    struct 
+    { int modCurr=0; int curr=0; } pos;
+    Token* Advance() // Advance to the Next Token | Avança para o Proximo Token.
+    {
+        if (pos.curr >= Tokens.size()-1)
+            return nullptr;
+
+        return Tokens[pos.curr++];
+    }
+    Token* Peek() // Check The Next Token And Not Consumes | Olha o Proximo Token e Não Consome.
+    {
+        if (pos.curr >= Tokens.size())
+            return nullptr;
+
+        return Tokens[pos.curr];
+    }
 };
 using InstVec = vec<Instruction>;
 
@@ -30,6 +54,10 @@ enum class NodeType : uint8_t
     // PROGRAM
     PROGRAM,
     BODY,
+    ERROR,
+
+    // DECLARATIONS
+    VAR_DECL,
 
     // EXPRESSIONS
     LITERAL,
@@ -44,6 +72,23 @@ enum class NodeType : uint8_t
     CALL,
 
     RANGE
+};
+
+enum class MutableTypes : uint8_t
+{
+    MUT,
+    CONST,
+    UNK
+};
+
+enum class LiteralTypes: uint8_t
+{
+    INT,
+    FLOAT,
+    STRING,
+    BOOL,
+    NONE,
+    _NULL
 };
 
 // Pos of Nodes | Posição dos Nodes
@@ -69,13 +114,25 @@ struct ASTNode
         : pos(P), Type(T) {};
 };
 
-// PROGRAM
+// UTIL
+inline NodePos MakePosFromToken(Token* Tok)
+{  
+    return NodePos{
+        Tok->pos.indent,
+        Tok->pos.start,
+        Tok->pos.len,
+        Tok->pos.line,
+        Tok->pos.collumn
+    };
+}
+
+// ======= PROGRAM ====== //
 
 // Stack of Nodes | Pilha de Nodes
 struct BodyNode : ASTNode
 {
     // DATA
-    vec<uniq_ptr<ASTNode>> Data{};
+    vec<ASTNode*> Data{};
 
     // CONSTRUCTOR | CONSTRUTOR
     BodyNode(NodePos P)
@@ -86,16 +143,16 @@ struct BodyNode : ASTNode
 struct ProgramNode : ASTNode
 {
     // DATA
-    uniq_ptr<BodyNode> Node;
+    BodyNode* Node;
 
     // CONSTRUCTOR | CONSTRUTOR
-    ProgramNode(NodePos P)
+    ProgramNode(NodePos P, Arena& Memory)
         : ASTNode(NodeType::PROGRAM, P),
-          Node(make_uniq<BodyNode>(P))
+          Node(Memory.New<BodyNode>(P))
     {};
 };
 
-// EXPRESSIONS //
+// ======= EXPRESSIONS ======= //
 
 // Value of Literals | Valor dos Literais
 using LiteralValue = variant<
@@ -103,7 +160,9 @@ using LiteralValue = variant<
     float,
     string,
     bool,
-    std::nullptr_t
+    NoneLitVal,
+    NullLitVal,
+    nullptr_t
 >;
 
 // Base Expression Node | Node Base de Expressão
@@ -211,6 +270,38 @@ struct RangeNode : ExpressionNode
         : ExpressionNode(NodeType::RANGE, P) {};
 };
 
+// ======= DECLARATION ======== //
+
+// Base Decl Node | No de Decl Base
+struct DeclarationNode : ASTNode
+{
+    // CONSTRUCTOR | COSBNTRUTOR 
+    DeclarationNode(NodeType T, NodePos P)
+        : ASTNode(T, P) {};
+};
+
+// Var Decl | Declaração de Variaveis
+struct VarDeclNode : DeclarationNode
+{
+    // DATA
+    str_view Name;
+    LiteralTypes InferType;
+    MutableTypes MutType;
+    ExpressionNode* Val;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    VarDeclNode(NodePos P)
+        : DeclarationNode(NodeType::VAR_DECL, P) {}
+};
+
+// ERRORS | ERROS
+struct ErrorDeclNode : DeclarationNode
+{
+    // CONSTRUCTOR | CONSTRUTOR
+    ErrorDeclNode(Token* T)
+        : DeclarationNode(NodeType::ERROR, MakePosFromToken(T)) {};
+};
+
 // ======= AST ======= //
 
 // Curr State of Parser | Estado Atual do Parser
@@ -260,9 +351,16 @@ namespace ParserUtils {
     }
 
     // Update State Position | Atualiza a Pos do Node
-    inline void UpdateStatePos(ASTNode& Node, ParseState& State)
+    inline void UpdateStatePos(variant<Token*, ASTNode*> Val, ParseState& State)
     {
-        State.Pos = Node.pos;
+        if (std::holds_alternative<ASTNode*>(Val))
+        {
+            State.Pos = std::get<ASTNode*>(Val)->pos;
+        }
+        else
+        {
+            State.Pos = MakePosFromToken(std::get<Token*>(Val));
+        }
     }
 
     // Create A New Node | Cria Um Node.
@@ -273,5 +371,48 @@ namespace ParserUtils {
         State.CurrBody->Data.push_back(Node);
 
         return Node;
+    }
+
+    namespace Comm {
+        
+        // Return the Typeof Explicit Type Assign
+        // Retorna o Tipo dos Tipos Explicitamente Infernidos
+        inline pair<LiteralTypes, int> InferType(vec<Token*>& Tokens, RunTimeData& Data)
+        {
+            pair<LiteralTypes, int> DEF_RET = {LiteralTypes::_NULL, 2};
+            if (Tokens.size() == 0)
+                return DEF_RET;
+            if (Tokens[1]->Type is TokenType::COLON)
+            {
+                if (Tokens.size() == 1) 
+                    return {LiteralTypes::_NULL, 1};
+                else
+                    if (Tokens[2]->Type is_not TokenType::LIT_TYPE)
+                    {
+                        OrbitLog::SyntaxLog::SyntaxError(
+                            "Parsing",
+                            "<LIT_TYPE> Expected After ':'",
+                            "Expected <LIT_TYPE> Afte ': ' But Found: "+Tokens[2]->GetType(),
+                            "Complete the Statement or Delete ';'",
+                            Tokens[2]->pos.line,
+                            Tokens[2]->pos.collumn
+                        );
+                        if (!Data.flags.debugMode)
+                        {
+                            OrbitLog::SyntaxLog::ThrowLog(Data);
+                            return DEF_RET;
+                        }
+                        string Lex = Tokens[2]->Lexeme(Data);
+                        if (Lex is "Int") return {LiteralTypes::INT, 2};
+                        else if (Lex is "Float") return {LiteralTypes::FLOAT, 2};
+                        else if (Lex is "Bool") return {LiteralTypes::BOOL, 2};
+                        else if (Lex is "String") return {LiteralTypes::STRING, 2};
+                        else if (Lex is "None") return {LiteralTypes::NONE, 2};
+                        else if (Lex is "Null") return {LiteralTypes::_NULL, 2};  
+                    }
+            } else
+                return DEF_RET;
+            return DEF_RET;
+        }
     }
 }

@@ -9,11 +9,13 @@
 
 #include "../lexer/lexer.hpp"
 
+#include "ParserModules/Declaration/declaration.hpp"
 #include "ParserModules/Expressions/expression.hpp"
 
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../../RunTimeData.hpp"
+#include <cstddef>
 
 // ======== CORE ======== //
 
@@ -118,14 +120,22 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
     State.CurrBody = Program->Node.get();
 
     ExpressionParser ExprParser;
+    DeclarationParser DeclParser;
 
     InstVec Instructions = SeparateInstructions(LRes, Data);
     for (Instruction Inst : Instructions) // PARSE ALL INSTRUCTIONS | PARSEIA TODAS AS INTRUÇOES
     {
-        uniq_ptr<ASTNode> Node; // CREATE BASE NODE
-        Node = 
-            ExprParser.
-            ParseExpression(Inst, State, Res, Data, Memory);
+        ASTNode* Node; // CREATE BASE NODE
+        Node = DeclParser.ParseDeclaration(
+            Inst,
+            State,
+            Res,
+            Data,
+            Memory);
+        if (Node == nullptr)
+            Node = 
+                ExprParser.
+                    ParseExpression(Inst, State, Res, Data, Memory);
         State.CurrBody->Data.push_back(std::move(Node));
     }
 

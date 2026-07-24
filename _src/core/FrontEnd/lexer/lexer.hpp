@@ -71,6 +71,7 @@ enum class TokenType: uint8_t
     // NORMALS
     IDENTIFIER,
     KEYWORD,
+    LIT_TYPE,
 
     // SIGNALS
 
@@ -157,6 +158,86 @@ struct Token
     string Lexeme(const RunTimeData& Data) const
     {
         return Data.source.substr(pos.start, pos.len);
+    }
+    string GetType()
+    {
+        switch (Type)
+        {
+            // LITERAIS
+            case TokenType::INTEGER:      return "<INTEGER>";
+            case TokenType::FLOAT:        return "<FLOAT>";
+            case TokenType::STRING:       return "<STRING>";
+            case TokenType::TRUE:         return "<TRUE>";
+            case TokenType::FALSE:        return "<FALSE>";
+            case TokenType::NONE:         return "<NONE>";
+            case TokenType::_NULL:        return "<NULL>";
+
+            // NORMALS
+            case TokenType::IDENTIFIER:   return "<IDENTIFIER>";
+            case TokenType::KEYWORD:      return "<KEYWORD>";
+
+            // MATH
+            case TokenType::EQUAL:        return "<EQUAL>";
+            case TokenType::PLUS:         return "<PLUS>";
+            case TokenType::MINUS:        return "<MINUS>";
+            case TokenType::STAR:         return "<STAR>";
+            case TokenType::SLASH:        return "<SLASH>";
+            case TokenType::BAR:          return "<BAR>";
+            case TokenType::PIPE:         return "<PIPE>";
+            case TokenType::POWER:        return "<POWER>";
+            case TokenType::MOD:          return "<MOD>";
+            case TokenType::POT:          return "<POT>";
+            case TokenType::HOLE:         return "<HOLE>";
+
+            case TokenType::EQPL:         return "<EQPL>";
+            case TokenType::EQMIN:        return "<EQMIN>";
+            case TokenType::EQSTAR:       return "<EQSTAR>";
+            case TokenType::EQBAR:        return "<EQBAR>";
+            case TokenType::EQSL:         return "<EQSL>";
+            case TokenType::EQPWR:        return "<EQPWR>";
+            case TokenType::EQMOD:        return "<EQMOD>";
+
+            case TokenType::EQEQ:         return "<EQEQ>";
+            case TokenType::NOT_EQUAL:    return "<NOT_EQUAL>";
+            case TokenType::LESS:         return "<LESS>";
+            case TokenType::GREATER:      return "<GREATER>";
+            case TokenType::LESSEQ:       return "<LESS_EQUAL>";
+            case TokenType::GREATEQ:      return "<GREATER_EQUAL>";
+
+            case TokenType::AND:          return "<AND>";
+            case TokenType::NOT:          return "<NOT>";
+            case TokenType::OR:           return "<OR>";
+
+            case TokenType::DOT:          return "<DOT>";
+            case TokenType::COMMA:        return "<COMMA>";
+            case TokenType::RANGE:        return "<RANGE>";
+            case TokenType::AMPERSAND:    return "<AMPERSAND>";
+
+            // BLOCKS
+            case TokenType::LPARENT:      return "<LEFT_PARENT>";
+            case TokenType::LBRACE:       return "<LEFT_BRACE>";
+            case TokenType::LBRACKET:     return "<LEFT_BRACKET>";
+            case TokenType::RBRACKET:     return "<RIGHT_BRACKET>";
+            case TokenType::RBRACE:       return "<RIGHT_BRACE>";
+            case TokenType::RPARENT:      return "<RIGHT_PARENT>";
+
+            case TokenType::INCR:         return "<INCREMENT>";
+            case TokenType::DECR:         return "<DECREMENT>";
+            case TokenType::COLON:        return "<COLON>";
+            case TokenType::SEMI_COLON:   return "<SEMI_COLON>";
+
+            // SPECIALS
+            case TokenType::NEW_LINE:     return "<NEW_LINE>";
+            case TokenType::PRAGMA:       return "<PRAGMA>";
+            case TokenType::SEMI_PRAGMA:  return "<SEMI_PRAGMA>";
+            case TokenType::PLACE_HOLDER: return "<PLACE_HOLDER>";
+            case TokenType::MODIFIER:     return "<MODIFIER>";
+            case TokenType::UNKNOWN:      return "<UNKNOWN>";
+            case TokenType::ENTRY_POINT:  return "<ENTRY_POINT>";
+            case TokenType::_EOF:         return "<EOF>";
+        }
+
+        return "<UNKNOWN>";
     }
 };
 

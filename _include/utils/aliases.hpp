@@ -33,6 +33,7 @@ enum ORBIT_ERRORS_CODE
 // BASICS
 using string=std::string;
 using str_view=std::string_view;
+using mono_state=std::monostate;
 using runt_err=std::runtime_error;
 using byte=std::byte;
 

@@ -555,7 +555,7 @@ ExpressionNode* ExpressionParser::Led(
 
 // ========== ENTRY-POINT | PONTO DE ENTRADA ========== //
 // Parse Expression Entry Point | Ponto de Entrada do Parser de Expressões
-ExpressionNode* ExpressionParser::ParseExpression(
+ASTNode* ExpressionParser::ParseExpression(
     Instruction& Inst,
     ParseState& State,
     ParseResult& Res,

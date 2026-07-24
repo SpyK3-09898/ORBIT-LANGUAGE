@@ -39,6 +39,10 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
     {
         "const"
     };
+    vec<string> LitTypes
+    {
+        "Int", "Float", "Bool", "String", "Null", "None"
+    };
     unord_map<string, TokenType> Others
     {
         {"true", TokenType::TRUE}, {"True", TokenType::TRUE},
@@ -56,6 +60,8 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
                 { LastType = Tok->Type; Tok->Type = TokenType::KEYWORD; changed=true; }
             else if (contains_at(Modifiers, Lexeme))
                 { LastType = Tok->Type; Tok->Type = TokenType::MODIFIER; changed=true; }
+            else if (contains_at(LitTypes, Lexeme))
+                { LastType = Tok->Type; Tok->Type = TokenType::LIT_TYPE; }
             auto It = Others.find(Lexeme);
             if (It != Others.end())
                 { LastType = Tok->Type; Tok->Type = It->second; changed=true; }
