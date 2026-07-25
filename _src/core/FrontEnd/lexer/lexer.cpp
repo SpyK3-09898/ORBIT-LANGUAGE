@@ -26,7 +26,7 @@ namespace fs=std::filesystem;
 void Lexer::SkipLine(LexState& State, RunTimeData& Data)
 {
     char N = LexUtils::Peek(State, Data);
-    while (N is_not '\n' and N is EOF_CHAR)
+    while (N is_not '\n' and N is_not EOF_CHAR)
         { LexUtils::Advance(State, Data); N = LexUtils::Peek(State, Data); }
     State.currPos.indent = 0;
 }
@@ -443,8 +443,10 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
     MakeToken(Res, State, Data, TokenType::ENTRY_POINT, Memory);
 
     // MAIN LOOP | LOOP PRINCIPAL
+    size_t LastIndex = State.index;
     while (LexUtils::Peek(State, Data) != EOF_CHAR)
     {
+        LastIndex = State.index;
         State.currPos.start = State.index;
         State.currPos.len = 0;
 
@@ -562,15 +564,19 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
                 continue;
             case '&':
                 if (N == '&')
+                {
+                    LexUtils::Advance(State, Data);
                     MakeToken(Res, State, Data, TokenType::AND, Memory);
-                else
+                } else
                     MakeToken(Res, State, Data, TokenType::AMPERSAND, Memory);
                 continue;
                 
             case '|':
                 if (N == '|')
+                {
+                    LexUtils::Advance(State, Data);
                     MakeToken(Res, State, Data, TokenType::OR, Memory);
-                else
+                } else
                     MakeToken(Res, State, Data, TokenType::PIPE, Memory);
                 continue;
 
@@ -579,7 +585,7 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
                     MakeToken(Res, State, Data, TokenType::NOT_EQUAL, Memory);
                 else
                     MakeToken(Res, State, Data, TokenType::NOT, Memory);
- 
+                continue;
 
             case '(':
                 MakeToken(Res, State, Data, TokenType::LPARENT, Memory);      
@@ -621,6 +627,8 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
                 MakeToken(Res, State, Data, TokenType::UNKNOWN, Memory);
                 SkipLine(State, Data);
                 continue;
+            if (LastIndex == State.index)
+                OrbitLog::Error("lexer.cpp", "Infinite loop Detected! In Index: "+std::to_string(LastIndex), true, 1);
         }
     }
     // EOF-TOKEN | TOKEN DE FIM-DE-ARQUIVO

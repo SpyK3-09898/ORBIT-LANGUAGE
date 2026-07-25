@@ -56,7 +56,8 @@ InstVec SeparateInstructions(LexResult& LRes, RunTimeData& Data)
                 !CurrInst.Modifiers.empty()
             )
             {
-                Instructions.push_back(CurrInst);
+                if (CurrInst.Tokens.size() != 0)
+                    Instructions.push_back(CurrInst);
                 CurrInst = {};
             }
 
@@ -113,15 +114,17 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
 
     // CREATE ENTRY-POINT | CRIA UM PONTO-DE-ENTRADA
     ProgramNode* Program = Memory.New<ProgramNode>(
-        State.Pos
+        State.Pos,
+        Memory
     );
-    Program->Node = make_uniq<BodyNode>(State.Pos);
     Res.AST = Program;
-    State.CurrBody = Program->Node.get();
+    State.CurrBody = Program->Node;
 
+    // Prev Init Parser Modules | Inicia os Modulos do Parser Previamente.
     ExpressionParser ExprParser;
     DeclarationParser DeclParser;
 
+    // Take Instructions and Run Then | Pega as Instrução e Percorre/Gera Nodes e Erros
     InstVec Instructions = SeparateInstructions(LRes, Data);
     for (Instruction Inst : Instructions) // PARSE ALL INSTRUCTIONS | PARSEIA TODAS AS INTRUÇOES
     {

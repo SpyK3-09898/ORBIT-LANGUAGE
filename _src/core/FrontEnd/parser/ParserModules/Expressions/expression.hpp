@@ -15,54 +15,39 @@
 
 // ======= STATE ======= //
 
-// Current State of Expression Parser | Estado Atual do Parser de Expressões
-struct ExprParserState
-{
-    Instruction* Inst = nullptr;
-    ui32 Curr = 0;
-};
-
 // MAIN CLASS | CLASSE PRINCIPAL
 class ExpressionParser
 {
     private:
 
-        // CORE
-
-        Token* Peek(ExprParserState& EState);
-        Token* Advance(ExprParserState& EState, ParseState& State);
-        bool Match(TokenType Type, ExprParserState& EState, ParseState& State);
-
         // EXPRESSIONS
 
-        ExpressionNode* Nud(
-            ExprParserState& EState,
+        static ExpressionNode* Nud(
+            Instruction& Inst,
             ParseState& State,
             ParseResult& Res,
             RunTimeData& Data,
             Arena& Memory
         );
 
-        ExpressionNode* Led(
-            ExpressionNode* Left,
-            Token* Operator,
-            int RightBindingPower,
-            ExprParserState& EState,
+        static ExpressionNode* Led(
+            ExpressionNode* L,
+            Token* OperatorToken,
+            Instruction& Inst,
             ParseState& State,
             ParseResult& Res,
             RunTimeData& Data,
-            Arena& Memory
+            Arena& Memory,
+            int RightBindingPower
         );
 
     public:
 
         // CORE
-
-        pair<int, int> BindingPower(TokenType Type);
+        static pair<int, int> BindingPower(TokenType Type);
 
         // ENTRY-POINT
-
-        ExpressionNode* ParseExpression(
+        static ExpressionNode* ParseExpression(
             Instruction& Inst,
             ParseState& State,
             ParseResult& Res,

@@ -29,20 +29,20 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
         Print("[DRIVER] STARTING TASK: Build Orbit");
 
     if (!fs::exists(filePath))
-        throw runt_err("Invalid Path: " + filePath);
+        throw runt_err("\nInvalid Path: " + filePath);
 
     fs::path Path(filePath);
 
     if (Path.extension() is_not ".ORBIT")
         throw runt_err(
-            "Invalid Extension: " +
+            "\nInvalid Extension: " +
             Path.extension().string() +
             " Expected '.ORBIT'"
         );
 
     fstream file(Path);
     if (fs::file_size(Path) is 0)
-        throw runt_err("Empty File Recived");
+        throw runt_err("\nEmpty File Recived");
 
     Arena Memory;
 

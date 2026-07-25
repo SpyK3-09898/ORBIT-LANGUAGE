@@ -10,69 +10,48 @@
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../../../../RunTimeData.hpp"
+#include <string>
+
+// ======= UTILS ======= //
+
+namespace ExprUtils {
+
+    // Return Op From Token | Retorna o Operador do Token.
+    Operator GetOperator(TokenType Type)
+    {
+        switch(Type)
+        {
+            case TokenType::PLUS:
+                return Operator::ADD;
+
+            case TokenType::MINUS:
+                return Operator::SUB;
+
+            case TokenType::STAR:
+                return Operator::MUL;
+
+            case TokenType::SLASH:
+                return Operator::DIV;
+
+            case TokenType::EQEQ:
+                return Operator::EQUAL;
+
+            case TokenType::NOT_EQUAL:
+                return Operator::NOT_EQUAL;
+
+            default:
+                return Operator::NONE;
+        }
+    }
+}
 
 // ======= CORE ======= //
 
-// Peek Current Token | Espia o Token Atual
-Token* ExpressionParser::Peek(ExprParserState& EState)
-{
-    if (
-        EState.Inst == nullptr or
-        EState.Curr >= EState.Inst->Tokens.size()
-    )
-        return nullptr;
-
-    return EState.Inst->Tokens[EState.Curr];
-}
-
-// Advance Current Token | Avança o Token Atual
-Token* ExpressionParser::Advance(
-    ExprParserState& EState,
-    ParseState& State
-)
-{
-    Token* Tok = Peek(EState);
-
-    if (Tok == nullptr)
-        return nullptr;
-
-    State.Pos.indent = Tok->pos.indent;
-    State.Pos.start = Tok->pos.start;
-    State.Pos.len = Tok->pos.len;
-    State.Pos.line = Tok->pos.line;
-    State.Pos.collumn = Tok->pos.collumn;
-
-    ++EState.Curr;
-
-    return Tok;
-}
-
-// Match Current Token | Verifica e Avança o Token Atual
-bool ExpressionParser::Match(
-    TokenType Type,
-    ExprParserState& EState,
-    ParseState& State
-)
-{
-    Token* Tok = Peek(EState);
-
-    if (Tok == nullptr)
-        return false;
-
-    if (Tok->Type is_not Type)
-        return false;
-
-    Advance(EState, State);
-
-    return true;
-}
-
-// Precedence | Precedencia
+// Return Bind Power for the Token | Retorna o Poder de Mesclagen do Token.
 pair<int, int> ExpressionParser::BindingPower(TokenType Type)
 {
     switch (Type)
     {
-        // Assignment (Right Associative)
         case TokenType::EQUAL:
         case TokenType::EQPL:
         case TokenType::EQMIN:
@@ -81,481 +60,237 @@ pair<int, int> ExpressionParser::BindingPower(TokenType Type)
         case TokenType::EQSL:
         case TokenType::EQPWR:
         case TokenType::EQMOD:
-            return {10, 9};
+            return {10, 10};
 
-        // Logical
         case TokenType::OR:
             return {20, 21};
 
         case TokenType::AND:
             return {30, 31};
 
-        // Equality
         case TokenType::EQEQ:
         case TokenType::NOT_EQUAL:
             return {40, 41};
 
-        // Comparison
         case TokenType::LESS:
         case TokenType::GREATER:
         case TokenType::LESSEQ:
         case TokenType::GREATEQ:
             return {50, 51};
 
-        // Range
-        case TokenType::RANGE:
-            return {60, 61};
-
-        // Addition
         case TokenType::PLUS:
         case TokenType::MINUS:
-            return {70, 71};
+            return {60, 61};
 
-        // Multiplication
         case TokenType::STAR:
         case TokenType::SLASH:
         case TokenType::MOD:
-            return {80, 81};
+            return {70, 71};
 
-        // Power (Right Associative)
         case TokenType::POWER:
         case TokenType::POT:
-            return {90, 89};
+            return {80, 80};
 
-        // Access / Call / Index
         case TokenType::DOT:
         case TokenType::LPARENT:
         case TokenType::LBRACKET:
-        case TokenType::INCR:
-        case TokenType::DECR:
-            return {100, 101};
+            return {90, 91};
 
         default:
-            return {0, 0};
+            return {-1, -1};
     }
 }
 
-// Read Operand | Le um Operando
+// Nud Denot | Denotação Nula
 ExpressionNode* ExpressionParser::Nud(
-    ExprParserState& EState,
+    Instruction& Inst,
     ParseState& State,
     ParseResult& Res,
     RunTimeData& Data,
     Arena& Memory
 )
 {
-    Token* Tok = Advance(EState, State);
-
-    if (Tok == nullptr)
+    // Take Current Token
+    // Pega o Token Atual
+    Token* Entry = Inst.Advance();
+    if (!Entry)
     {
         OrbitLog::SyntaxLog::SyntaxError(
             "Parsing",
-            "Expected <EXPRESSION>",
-            "Expression Cannot be Empty",
+            "Invalid <EXPRESSION>",
+            "Expected Expression",
             "Add a Valid Expression",
             State.Pos.line,
             State.Pos.collumn
         );
-
-        return nullptr;
+        if (!Data.flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(Data);
+        return ParserUtils::
+        MakeNode<ErrorExprNode>(NodeType::ERROR, State, Res, Memory);
     }
 
-    switch (Tok->Type)
-    {
-        // LITERALS | LITERAIS
-
+    // RUN TYPES | PERCORRE O TIPO.
+    switch (Entry->Type) {
+        
+        // ===== LITERALS | LITERAIS ===== //
         case TokenType::INTEGER:
+        {
+            LiteralNode* Node =
+                ParserUtils::MakeNode<LiteralNode>
+                    (NodeType::LITERAL, State, Res, Memory);
+            Node->Value = std::stoi(Entry->Lexeme(Data));
+            return Node;
+        } 
         case TokenType::FLOAT:
+        {
+            LiteralNode* Node =
+                ParserUtils::MakeNode<LiteralNode>
+                    (NodeType::LITERAL, State, Res, Memory);
+            Node->Value = std::stof(Entry->Lexeme(Data));
+            return Node;
+        }
         case TokenType::STRING:
+        {
+            LiteralNode* Node =
+                ParserUtils::MakeNode<LiteralNode>
+                    (NodeType::LITERAL, State, Res, Memory);
+            Node->Value = Data.source.substr(Entry->pos.start, Entry->pos.len);
+            return Node;
+        }
         case TokenType::TRUE:
+        {
+             LiteralNode* Node =
+                ParserUtils::MakeNode<LiteralNode>
+                    (NodeType::LITERAL, State, Res, Memory);
+            Node->Value = true;
+            return Node;           
+        }
         case TokenType::FALSE:
+        {
+                        LiteralNode* Node =
+                ParserUtils::MakeNode<LiteralNode>
+                    (NodeType::LITERAL, State, Res, Memory);
+            Node->Value = false;
+            return Node;
+        }
         case TokenType::NONE:
+        {
+            LiteralNode* Node =
+                ParserUtils::MakeNode<LiteralNode>
+                    (NodeType::LITERAL, State, Res, Memory);
+            Node->Value = NoneLitVal{};
+            return Node;
+        }
         case TokenType::_NULL:
         {
             LiteralNode* Node =
-                Memory.New<LiteralNode>(State.Pos);
-
-            switch (Tok->Type)
-            {
-                case TokenType::INTEGER:
-                    Node->Value = std::stoll(Tok->Lexeme(Data));
-                    break;
-
-                case TokenType::FLOAT:
-                    Node->Value = std::stof(Tok->Lexeme(Data));
-                    break;
-
-                case TokenType::STRING:
-                    Node->Value = Tok->Lexeme(Data);
-                    break;
-
-                case TokenType::TRUE:
-                    Node->Value = true;
-                    break;
-
-                case TokenType::FALSE:
-                    Node->Value = false;
-                    break;
-
-                case TokenType::NONE:
-                case TokenType::_NULL:
-                    Node->Value = nullptr;
-                    break;
-
-                default:
-                    break;
-            }
-
+                ParserUtils::MakeNode<LiteralNode>
+                    (NodeType::LITERAL, State, Res, Memory);
+            Node->Value = NullLitVal{};
             return Node;
         }
 
-        // IDENTIFIER | IDENTIFICADOR
-
+        // ===== IDENTIFIERS ===== //
         case TokenType::IDENTIFIER:
         {
-            IdentifierNode* Node =
-                Memory.New<IdentifierNode>(State.Pos);
-
-            Node->Identifier = Tok;
-
+            IdentifierNode* Node = 
+                ParserUtils::MakeNode<IdentifierNode>
+                    (NodeType::IDENTIFIER, State, Res, Memory);
+            Node->Name = str_view(
+                Data.source.data() + Entry->pos.start,
+                Entry->pos.len
+            );
             return Node;
         }
 
-        // PREFIX OPERATORS | OPERADORES PREFIXOS
-
-        case TokenType::PLUS:
-        case TokenType::MINUS:
-        case TokenType::NOT:
-        case TokenType::INCR:
-        case TokenType::DECR:
-        {
-            UnaryNode* Node =
-                Memory.New<UnaryNode>(State.Pos);
-
-            Node->Operator = Tok;
-
-            Node->Operand =
-                ParseExpression(
-                    *EState.Inst,
-                    State,
-                    Res,
-                    Data,
-                    Memory,
-                    95
-                );
-
-            if (Node->Operand == nullptr)
-            {
-                OrbitLog::SyntaxLog::SyntaxError(
-                    "Parsing",
-                    "Expected <OPERAND>",
-                    "Unary Operator Requires an Operand",
-                    "Add a Valid Expression After Operator",
-                    Tok->pos.line,
-                    Tok->pos.collumn
-                );
-
-                if (!Data.flags.debugMode)
-                    OrbitLog::SyntaxLog::ThrowLog(Data);
-            }
-
-            return Node;
-        }
-
-        // GROUP EXPRESSION | EXPRESSÃO AGRUPADA
-
-        case TokenType::LPARENT:
-        {
-            ExpressionNode* Node =
-                ParseExpression(
-                    *EState.Inst,
-                    State,
-                    Res,
-                    Data,
-                    Memory
-                );
-
-            if (
-                Match(
-                    TokenType::RPARENT,
-                    EState,
-                    State
-                ) is false
-            )
-            {
-                OrbitLog::SyntaxLog::SyntaxError(
-                    "Parsing",
-                    "Expected <RPARENT>",
-                    "Parenthesized Expression was Never Closed",
-                    "Add Closing <RPARENT>",
-                    Tok->pos.line,
-                    Tok->pos.collumn
-                );
-
-                if (!Data.flags.debugMode)
-                    OrbitLog::SyntaxLog::ThrowLog(Data);
-            }
-
-            return Node;
-        }
-
+        // ===== DEF ===== //
         default:
-        {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",
-                "Unexpected <TOKEN>",
-                "<TOKEN> Cannot Start an <EXPRESSION>",
-                "Replace With a Valid Operand",
-                Tok->pos.line,
-                Tok->pos.collumn
+                "Invalid <EXPRESSION>",
+                "Expected Init of Expression",
+                "Add a Valid <NUMBER> or <IDENTIFIER> Before Operator",
+                State.Pos.line,
+                State.Pos.collumn
             );
-
             if (!Data.flags.debugMode)
                 OrbitLog::SyntaxLog::ThrowLog(Data);
-
-            return nullptr;
-        }
+            return ParserUtils::
+            MakeNode<ErrorExprNode>(NodeType::ERROR, State, Res, Memory);
     }
-}
 
-// Write Operand | Escreve um Operando
+    return nullptr;
+}
+// Led Denot | Denotação Esquerda
 ExpressionNode* ExpressionParser::Led(
-    ExpressionNode* Left,
-    Token* Operator,
-    int RightBindingPower,
-    ExprParserState& EState,
+    ExpressionNode* L,
+    Token* OperatorToken,
+    Instruction& Inst,
     ParseState& State,
     ParseResult& Res,
     RunTimeData& Data,
-    Arena& Memory
+    Arena& Memory,
+    int RightBindingPower
 )
 {
-    switch (Operator->Type)
+    // Take the Curr Token and Op | Pega o Token Atual e o Operador.
+    Operator Op = ExprUtils::GetOperator(OperatorToken->Type);
+    if (Op == Operator::NONE)
     {
-        // ASSIGNMENT | ATRIBUIÇÃO
-
-        case TokenType::EQUAL:
-        case TokenType::EQPL:
-        case TokenType::EQMIN:
-        case TokenType::EQSTAR:
-        case TokenType::EQBAR:
-        case TokenType::EQSL:
-        case TokenType::EQPWR:
-        case TokenType::EQMOD:
-        {
-            AssignmentNode* Node =
-                Memory.New<AssignmentNode>(State.Pos);
-
-            Node->Operator = Operator;
-            Node->Left = Left;
-
-            Node->Right =
-                ParseExpression(
-                    *EState.Inst,
-                    State,
-                    Res,
-                    Data,
-                    Memory,
-                    RightBindingPower
-                );
-
-            if (Node->Right == nullptr)
-            {
-                OrbitLog::SyntaxLog::SyntaxError(
-                    "Parsing",
-                    "Expected <EXPRESSION>",
-                    "Assignment Requires a Right Expression",
-                    "Add a Valid Expression After Operator",
-                    Operator->pos.line,
-                    Operator->pos.collumn
-                );
-
-                if (!Data.flags.debugMode)
-                    OrbitLog::SyntaxLog::ThrowLog(Data);
-            }
-
-            return Node;
-        }
-
-
-        // BINARY OPERATORS | OPERADORES BINÁRIOS
-
-        case TokenType::PLUS:
-        case TokenType::MINUS:
-        case TokenType::STAR:
-        case TokenType::SLASH:
-        case TokenType::MOD:
-
-        case TokenType::POWER:
-        case TokenType::POT:
-
-        case TokenType::EQEQ:
-        case TokenType::NOT_EQUAL:
-
-        case TokenType::LESS:
-        case TokenType::GREATER:
-        case TokenType::LESSEQ:
-        case TokenType::GREATEQ:
-
-        case TokenType::AND:
-        case TokenType::OR:
-
-        case TokenType::RANGE:
-        {
-            BinaryNode* Node =
-                Memory.New<BinaryNode>(State.Pos);
-
-            Node->Operator = Operator;
-            Node->Left = Left;
-
-            Node->Right =
-                ParseExpression(
-                    *EState.Inst,
-                    State,
-                    Res,
-                    Data,
-                    Memory,
-                    RightBindingPower
-                );
-
-            if (Node->Right == nullptr)
-            {
-                OrbitLog::SyntaxLog::SyntaxError(
-                    "Parsing",
-                    "Expected <OPERAND>",
-                    "Binary Operator Requires a Right Operand",
-                    "Add a Valid Expression After Operator",
-                    Operator->pos.line,
-                    Operator->pos.collumn
-                );
-
-                if (!Data.flags.debugMode)
-                    OrbitLog::SyntaxLog::ThrowLog(Data);
-            }
-
-            return Node;
-        }
-
-
-        // MEMBER ACCESS | ACESSO DE MEMBRO
-
-        case TokenType::DOT:
-        {
-            Token* Member = Advance(
-                EState,
-                State
-            );
-
-            if (
-                Member == nullptr or
-                Member->Type is_not TokenType::IDENTIFIER
-            )
-            {
-                OrbitLog::SyntaxLog::SyntaxError(
-                    "Parsing",
-                    "Expected <IDENTIFIER>",
-                    "Member Access Requires an Identifier",
-                    "Add a Valid Identifier After <DOT>",
-                    Operator->pos.line,
-                    Operator->pos.collumn
-                );
-
-                if (!Data.flags.debugMode)
-                    OrbitLog::SyntaxLog::ThrowLog(Data);
-
-                return nullptr;
-            }
-
-            MemberAccessNode* Node =
-                Memory.New<MemberAccessNode>(State.Pos);
-
-            Node->Object = Left;
-            Node->Member = Member;
-
-            return Node;
-        }
-
-
-        // INDEX ACCESS | ACESSO POR ÍNDICE
-
-        case TokenType::LBRACKET:
-        {
-            IndexAccessNode* Node =
-                Memory.New<IndexAccessNode>(State.Pos);
-
-            Node->Object = Left;
-
-            Node->Index =
-                ParseExpression(
-                    *EState.Inst,
-                    State,
-                    Res,
-                    Data,
-                    Memory
-                );
-
-            if (
-                Match(
-                    TokenType::RBRACKET,
-                    EState,
-                    State
-                ) is false
-            )
-            {
-                OrbitLog::SyntaxLog::SyntaxError(
-                    "Parsing",
-                    "Expected <RBRACKET>",
-                    "Index Access was Never Closed",
-                    "Add Closing <RBRACKET>",
-                    Operator->pos.line,
-                    Operator->pos.collumn
-                );
-
-                if (!Data.flags.debugMode)
-                    OrbitLog::SyntaxLog::ThrowLog(Data);
-            }
-
-            return Node;
-        }
-
-
-        // POSTFIX OPERATORS | OPERADORES PÓS-FIXOS
-
-        case TokenType::INCR:
-        case TokenType::DECR:
-        {
-            UnaryNode* Node =
-                Memory.New<UnaryNode>(State.Pos);
-
-            Node->Operator = Operator;
-            Node->Operand = Left;
-
-            return Node;
-        }
-
-
-        default:
-        {
-            OrbitLog::SyntaxLog::SyntaxError(
-                "Parsing",
-                "Unexpected <OPERATOR>",
-                "Operator is Invalid in Current Expression Context",
-                "Remove or Replace the Operator",
-                Operator->pos.line,
-                Operator->pos.collumn
-            );
-
-            if (!Data.flags.debugMode)
-                OrbitLog::SyntaxLog::ThrowLog(Data);
-
-            return Left;
-        }
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Parsing",
+            "Invalid <OPERATOR>",
+            "Expected A Valid <OPERATOR>",
+            "Add a Valid <OPERATOR>",
+            State.Pos.line,
+            State.Pos.collumn
+        );
+        if (!Data.flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(Data);
+        return ParserUtils::
+        MakeNode<ErrorExprNode>(NodeType::ERROR, State, Res, Memory);
     }
+    ExpressionNode* R = ParseExpression(
+        Inst,
+        State,
+        Res,
+        Data,
+        Memory,
+        RightBindingPower
+    );
+    if (!R)
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Parsing",
+            "Invalid <EXPRESSION>",
+            "Expected <EXPRESSION> After <OPERATOR>",
+            "Add a Valid Expression After <OPERATOR>",
+            State.Pos.line,
+            State.Pos.collumn
+        );
+        if (!Data.flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(Data);
+        return ParserUtils::
+        MakeNode<ErrorExprNode>(NodeType::ERROR, State, Res, Memory);
+    }
+
+    BinaryNode* Node =
+        ParserUtils::MakeNode<BinaryNode>(
+            NodeType::BINARY,
+            State,
+            Res,
+            Memory
+        );
+    Node->L = L;
+    Node->R = R;
+    Node->Op = Op;
+
+    return std::move(Node);
 }
 
-// ========== ENTRY-POINT | PONTO DE ENTRADA ========== //
-// Parse Expression Entry Point | Ponto de Entrada do Parser de Expressões
-ASTNode* ExpressionParser::ParseExpression(
+// ======= ENTRY-POINT ======= //
+
+ExpressionNode* ExpressionParser::ParseExpression(
     Instruction& Inst,
     ParseState& State,
     ParseResult& Res,
@@ -564,67 +299,49 @@ ASTNode* ExpressionParser::ParseExpression(
     int MinBindingPower
 )
 {
-    ExprParserState EState;
+    ExpressionNode* L = ExpressionParser::Nud(
+        Inst,
+        State,
+        Res,
+        Data,
+        Memory
+    );
+    if (!L)
+        return nullptr;
 
-    EState.Inst = &Inst;
-    EState.Curr = 0;
+    
+    int i=0;
+    while (true)
+    {
+        if (i > Inst.Tokens.size()+5)
+        {
+            OrbitLog::Error("expression.cpp", "Infinite Loop Detected(Ind out_of_range of Expression) in Expression: "+std::to_string(i), true);
+        }
+        // Take Operator | Pega o Operador.
+        Token* OpToken = Inst.Peek();
+        if (!OpToken)
+            break;
+        auto [LP, RP] = 
+            BindingPower(OpToken->Type);
+        if (LP < MinBindingPower)
+            break;
 
+        // CONSUMES OPERATOR | CONSOME O OPERADOR.
+        Inst.Advance();
 
-    ExpressionNode* Left =
-        Nud(
-            EState,
+        L = Led(
+            L,
+            OpToken,
+            Inst,
             State,
             Res,
             Data,
-            Memory
+            Memory,
+            RP
         );
-
-
-    if (Left == nullptr)
-        return nullptr;
-
-
-    while (true)
-    {
-        Token* Tok = Peek(EState);
-
-        if (Tok == nullptr)
-            break;
-
-
-        auto [LeftBindingPower, RightBindingPower] =
-            BindingPower(Tok->Type);
-
-
-        if (LeftBindingPower <= MinBindingPower)
-            break;
-
-
-        Advance(
-            EState,
-            State
-        );
-
-
-        Left =
-            Led(
-                Left,
-                Tok,
-                RightBindingPower,
-                EState,
-                State,
-                Res,
-                Data,
-                Memory
-            );
-
-
-        if (Left == nullptr)
-            return nullptr;
+        if (!L)
+            return nullptr;   
     }
-
-
-    return Left;
+    return nullptr;
 }
-
 // _EOF

@@ -48,6 +48,8 @@ using InstVec = vec<Instruction>;
 
 // ======= NODES ======= //
 
+// ENUMS.
+
 // Typeof Nodes | Tipo dos Nos(Obvio).
 enum class NodeType : uint8_t
 {
@@ -90,6 +92,43 @@ enum class LiteralTypes: uint8_t
     NONE,
     _NULL
 };
+
+enum class Operator: uint8_t
+{
+    // ARITMETIC | ARITMETICOS.
+    ADD,
+    SUB,
+    MUL,
+    DIV,
+    MOD,
+    POWER,
+
+    // COMP | COMPARAÇOES.
+    EQUAL,
+    NOT_EQUAL,
+    LESS,
+    GREATER,
+    LESS_EQUAL,
+    GREATER_EQUAL,
+
+    // LOGICAL | LOGICOS.
+    AND,
+    OR,
+    NOT,
+
+    // ASSIGN | ASSIGNAÇÃO.
+    ASSIGN,
+    ADD_ASSIGN,
+    SUB_ASSIGN,
+    MUL_ASSIGN,
+    DIV_ASSIGN,
+    MOD_ASSIGN,
+
+    NONE
+};
+
+// STRUCTS.
+
 
 // Pos of Nodes | Posição dos Nodes
 struct NodePos
@@ -158,7 +197,7 @@ struct ProgramNode : ASTNode
 using LiteralValue = variant<
     i64,
     float,
-    string,
+    str_view,
     bool,
     NoneLitVal,
     NullLitVal,
@@ -187,7 +226,7 @@ struct LiteralNode : ExpressionNode
 struct IdentifierNode : ExpressionNode
 {
     // DATA
-    Token* Identifier;
+    str_view Name;
 
     // CONSTRUCTOR | CONSTRUTOR
     IdentifierNode(NodePos P)
@@ -210,10 +249,10 @@ struct UnaryNode : ExpressionNode
 struct BinaryNode : ExpressionNode
 {
     // DATA
-    Token* Operator;
+    Operator Op;
 
-    ExpressionNode* Left;
-    ExpressionNode* Right;
+    ExpressionNode* L;
+    ExpressionNode* R;
 
     // CONSTRUCTOR | CONSTRUTOR
     BinaryNode(NodePos P)
@@ -268,6 +307,15 @@ struct RangeNode : ExpressionNode
     // CONSTRUCTOR | CONSTRUTOR
     RangeNode(NodePos P)
         : ExpressionNode(NodeType::RANGE, P) {};
+};
+
+
+// ERRORS | ERROS
+struct ErrorExprNode : ExpressionNode
+{
+    // CONSTRUCTOR | CONSTRUTOR
+    ErrorExprNode(Token* T)
+        : ExpressionNode(NodeType::ERROR, MakePosFromToken(T)) {};
 };
 
 // ======= DECLARATION ======== //
@@ -364,12 +412,11 @@ namespace ParserUtils {
     }
 
     // Create A New Node | Cria Um Node.
-    template<typename T>
-    inline T* MakeNode(NodeType Type, ParseState& State, ParseResult& Res, Arena& Memory)
+    template<typename T, typename... Args>
+    inline T* MakeNode(ParseState& State, ParseResult& Res, Arena& Memory, Args&&... ArgsList)
     {
-        T* Node = Memory.New<T>(Type, State.Pos);
+        T* Node = Memory.New<T>(std::forward<Args>(ArgsList)...);
         State.CurrBody->Data.push_back(Node);
-
         return Node;
     }
 
