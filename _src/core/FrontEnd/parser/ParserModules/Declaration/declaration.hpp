@@ -9,6 +9,8 @@
 // INCLUDE HEADERS 'N DEPENDENCES
 #include "../../AST/AST.hpp"
 
+#include "../Expressions/expression.hpp"
+
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../../../../RunTimeData.hpp"
@@ -19,12 +21,15 @@ class DeclarationParser
     
     public:
 
-        DeclarationNode* ParseDeclaration(            
+        DeclarationNode* ParseDeclaration(
             Instruction& Inst,
             ParseState& State,
             ParseResult& Res,
             RunTimeData& Data,
+            ExpressionParser& ExprParser,
             Arena& Memory
         );
     private:
 };
+
+// EOF

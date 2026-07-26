@@ -36,6 +36,7 @@ using str_view=std::string_view;
 using mono_state=std::monostate;
 using runt_err=std::runtime_error;
 using byte=std::byte;
+using std::nullptr_t;
 
 using i64=std::int64_t;
 using i32=std::int32_t;

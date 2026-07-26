@@ -123,6 +123,7 @@ enum class Operator: uint8_t
     MUL_ASSIGN,
     DIV_ASSIGN,
     MOD_ASSIGN,
+    POWER_ASSIGN,
 
     NONE
 };
@@ -314,10 +315,9 @@ struct RangeNode : ExpressionNode
 struct ErrorExprNode : ExpressionNode
 {
     // CONSTRUCTOR | CONSTRUTOR
-    ErrorExprNode(Token* T)
-        : ExpressionNode(NodeType::ERROR, MakePosFromToken(T)) {};
+    ErrorExprNode(NodePos P)
+        : ExpressionNode(NodeType::ERROR, P) {};
 };
-
 // ======= DECLARATION ======== //
 
 // Base Decl Node | No de Decl Base
@@ -346,8 +346,8 @@ struct VarDeclNode : DeclarationNode
 struct ErrorDeclNode : DeclarationNode
 {
     // CONSTRUCTOR | CONSTRUTOR
-    ErrorDeclNode(Token* T)
-        : DeclarationNode(NodeType::ERROR, MakePosFromToken(T)) {};
+    ErrorDeclNode(NodePos Pos)
+        : DeclarationNode(NodeType::ERROR, Pos) {};
 };
 
 // ======= AST ======= //
@@ -412,11 +412,13 @@ namespace ParserUtils {
     }
 
     // Create A New Node | Cria Um Node.
-    template<typename T, typename... Args>
-    inline T* MakeNode(ParseState& State, ParseResult& Res, Arena& Memory, Args&&... ArgsList)
+    // Create A New Node | Cria Um Node.
+    template<typename T>
+    inline T* MakeNode(ParseState& State, ParseResult& Res, Arena& Memory)
     {
-        T* Node = Memory.New<T>(std::forward<Args>(ArgsList)...);
+        T* Node = Memory.New<T>(State.Pos);
         State.CurrBody->Data.push_back(Node);
+
         return Node;
     }
 

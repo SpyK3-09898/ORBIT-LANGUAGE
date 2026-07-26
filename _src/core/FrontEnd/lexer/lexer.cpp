@@ -357,7 +357,7 @@ void Lexer::Scanners::ReadComment(Lexer& Lexer, RunTimeData& Data, LexState& Sta
 // GENERATE LOG OF LEXER | GERA LOG DO LEXER
 void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
 {
-    PrintIn("Starting Generate LexLog. .. ...");
+    PrintIn("INITING TASK: Starting Generate LexLog. .. ...");
 
     string fileName;
     if (true) {
@@ -419,6 +419,7 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
     }
     text += "\n// ============ ENDOF: LEXER =========== // ";
     file << text;
+    PrintIn("ENDOF TASK: Starting Generate LexLog. .. ...");
 }
 
 // =========== ENTRY-POINT | PONTO DE ENTRADA ========== //

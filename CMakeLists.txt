@@ -19,6 +19,7 @@ set(ORBIT_CORE
     _src/core/FrontEnd/lexer/lexer.cpp
     _src/core/FrontEnd/tokenizer/tokenizer.cpp
     _src/core/FrontEnd/parser/parser.cpp
+    _src/core/FrontEnd/parser/ParserModules/Declaration/declaration.cpp
     _src/core/FrontEnd/parser/ParserModules/Expressions/expression.cpp
     _src/core/Arena/Arena.cpp
 )

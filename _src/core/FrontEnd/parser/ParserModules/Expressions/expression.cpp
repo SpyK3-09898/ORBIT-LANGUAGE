@@ -1,6 +1,6 @@
 
 // ========== EXPRESSION PARSER =========== //
-// Parse Expressions And generate AST Members
+// PrattParse Expressions And generate AST Members
 // Developed By: SpyK3(2026) | License: GitHub(MIT).
 
 // INCLUDE HEADERS 'N DEPENDENCES
@@ -33,11 +33,57 @@ namespace ExprUtils {
             case TokenType::SLASH:
                 return Operator::DIV;
 
+            case TokenType::MOD:
+                return Operator::MOD;
+
+            case TokenType::POWER:
+            case TokenType::POT:
+                return Operator::POWER;
+
             case TokenType::EQEQ:
                 return Operator::EQUAL;
 
             case TokenType::NOT_EQUAL:
                 return Operator::NOT_EQUAL;
+
+            case TokenType::LESS:
+                return Operator::LESS;
+
+            case TokenType::GREATER:
+                return Operator::GREATER;
+
+            case TokenType::LESSEQ:
+                return Operator::LESS_EQUAL;
+
+            case TokenType::GREATEQ:
+                return Operator::GREATER_EQUAL;
+
+            case TokenType::AND:
+                return Operator::AND;
+
+            case TokenType::OR:
+                return Operator::OR;
+
+            case TokenType::EQUAL:
+                return Operator::ASSIGN;
+
+            case TokenType::EQPL:
+                return Operator::ADD_ASSIGN;
+
+            case TokenType::EQMIN:
+                return Operator::SUB_ASSIGN;
+
+            case TokenType::EQSTAR:
+                return Operator::MUL_ASSIGN;
+
+            case TokenType::EQSL:
+                return Operator::DIV_ASSIGN;
+
+            case TokenType::EQMOD:
+                return Operator::MOD_ASSIGN;
+
+            case TokenType::EQPWR:
+                return Operator::POWER_ASSIGN;
 
             default:
                 return Operator::NONE;
@@ -123,10 +169,11 @@ ExpressionNode* ExpressionParser::Nud(
             State.Pos.line,
             State.Pos.collumn
         );
-        if (!Data.flags.debugMode)
+        if (!Data.flags.debugMode) {
             OrbitLog::SyntaxLog::ThrowLog(Data);
-        return ParserUtils::
-        MakeNode<ErrorExprNode>(NodeType::ERROR, State, Res, Memory);
+            return ParserUtils::
+            MakeNode<ErrorExprNode>(State, Res, Memory);
+        }
     }
 
     // RUN TYPES | PERCORRE O TIPO.
@@ -137,7 +184,7 @@ ExpressionNode* ExpressionParser::Nud(
         {
             LiteralNode* Node =
                 ParserUtils::MakeNode<LiteralNode>
-                    (NodeType::LITERAL, State, Res, Memory);
+                    (State, Res, Memory);
             Node->Value = std::stoi(Entry->Lexeme(Data));
             return Node;
         } 
@@ -145,7 +192,7 @@ ExpressionNode* ExpressionParser::Nud(
         {
             LiteralNode* Node =
                 ParserUtils::MakeNode<LiteralNode>
-                    (NodeType::LITERAL, State, Res, Memory);
+                    (State, Res, Memory);
             Node->Value = std::stof(Entry->Lexeme(Data));
             return Node;
         }
@@ -153,23 +200,23 @@ ExpressionNode* ExpressionParser::Nud(
         {
             LiteralNode* Node =
                 ParserUtils::MakeNode<LiteralNode>
-                    (NodeType::LITERAL, State, Res, Memory);
+                    (State, Res, Memory);
             Node->Value = Data.source.substr(Entry->pos.start, Entry->pos.len);
             return Node;
         }
         case TokenType::TRUE:
         {
-             LiteralNode* Node =
+            LiteralNode* Node =
                 ParserUtils::MakeNode<LiteralNode>
-                    (NodeType::LITERAL, State, Res, Memory);
+                    (State, Res, Memory);
             Node->Value = true;
-            return Node;           
+            return Node;
         }
         case TokenType::FALSE:
         {
-                        LiteralNode* Node =
+            LiteralNode* Node =
                 ParserUtils::MakeNode<LiteralNode>
-                    (NodeType::LITERAL, State, Res, Memory);
+                    (State, Res, Memory);
             Node->Value = false;
             return Node;
         }
@@ -177,7 +224,7 @@ ExpressionNode* ExpressionParser::Nud(
         {
             LiteralNode* Node =
                 ParserUtils::MakeNode<LiteralNode>
-                    (NodeType::LITERAL, State, Res, Memory);
+                    (State, Res, Memory);
             Node->Value = NoneLitVal{};
             return Node;
         }
@@ -185,7 +232,7 @@ ExpressionNode* ExpressionParser::Nud(
         {
             LiteralNode* Node =
                 ParserUtils::MakeNode<LiteralNode>
-                    (NodeType::LITERAL, State, Res, Memory);
+                    (State, Res, Memory);
             Node->Value = NullLitVal{};
             return Node;
         }
@@ -195,7 +242,7 @@ ExpressionNode* ExpressionParser::Nud(
         {
             IdentifierNode* Node = 
                 ParserUtils::MakeNode<IdentifierNode>
-                    (NodeType::IDENTIFIER, State, Res, Memory);
+                    (State, Res, Memory);
             Node->Name = str_view(
                 Data.source.data() + Entry->pos.start,
                 Entry->pos.len
@@ -216,11 +263,12 @@ ExpressionNode* ExpressionParser::Nud(
             if (!Data.flags.debugMode)
                 OrbitLog::SyntaxLog::ThrowLog(Data);
             return ParserUtils::
-            MakeNode<ErrorExprNode>(NodeType::ERROR, State, Res, Memory);
+            MakeNode<ErrorExprNode>(State, Res, Memory);
     }
 
     return nullptr;
 }
+
 // Led Denot | Denotação Esquerda
 ExpressionNode* ExpressionParser::Led(
     ExpressionNode* L,
@@ -248,8 +296,9 @@ ExpressionNode* ExpressionParser::Led(
         if (!Data.flags.debugMode)
             OrbitLog::SyntaxLog::ThrowLog(Data);
         return ParserUtils::
-        MakeNode<ErrorExprNode>(NodeType::ERROR, State, Res, Memory);
+        MakeNode<ErrorExprNode>(State, Res, Memory);
     }
+
     ExpressionNode* R = ParseExpression(
         Inst,
         State,
@@ -258,6 +307,7 @@ ExpressionNode* ExpressionParser::Led(
         Memory,
         RightBindingPower
     );
+
     if (!R)
     {
         OrbitLog::SyntaxLog::SyntaxError(
@@ -271,21 +321,21 @@ ExpressionNode* ExpressionParser::Led(
         if (!Data.flags.debugMode)
             OrbitLog::SyntaxLog::ThrowLog(Data);
         return ParserUtils::
-        MakeNode<ErrorExprNode>(NodeType::ERROR, State, Res, Memory);
+        MakeNode<ErrorExprNode>(State, Res, Memory);
     }
 
     BinaryNode* Node =
         ParserUtils::MakeNode<BinaryNode>(
-            NodeType::BINARY,
             State,
             Res,
             Memory
         );
+
     Node->L = L;
     Node->R = R;
     Node->Op = Op;
 
-    return std::move(Node);
+    return Node;
 }
 
 // ======= ENTRY-POINT ======= //
@@ -340,8 +390,9 @@ ExpressionNode* ExpressionParser::ParseExpression(
             RP
         );
         if (!L)
-            return nullptr;   
+            return nullptr;
+        i++;
     }
-    return nullptr;
+    return L;
 }
 // _EOF

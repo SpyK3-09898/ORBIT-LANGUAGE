@@ -1,4 +1,3 @@
-
 // ========== DECLARATION PARSER =========== //
 // Parse Token And Generate '_AST'(Abstract Syntax Tree).
 // Developed By: SpyK3(2026) | License: GitHub(MIT).
@@ -39,21 +38,28 @@ namespace DeclUtils {
                 Entry->pos.line,
                 Entry->pos.collumn
             );
+
             if (!Data.flags.debugMode)
                 OrbitLog::SyntaxLog::ThrowLog(Data);
-            return 
-            ParserUtils::
-                MakeNode<ErrorDeclNode>(NodeType::ERROR, State, Res, Memory);
+
+            return ParserUtils::MakeNode<ErrorDeclNode>(
+                State,
+                Res,
+                Memory
+            );
         }
 
         // Init | Inicio
         Token* NameToken = Inst.Advance();
 
         ParserUtils::UpdateStatePos(NameToken, State);
+
         VarDeclNode Decl(State.Pos);
+
         for (Token* Arg : Inst.Modifiers)
         {
             string argLexeme = Arg->Lexeme(Data);
+
             if (argLexeme == "const")
                 Decl.MutType = MutableTypes::CONST;
             else
@@ -61,26 +67,28 @@ namespace DeclUtils {
                 OrbitLog::SyntaxLog::SyntaxError(
                     "Parsing",
                     "Unexpected <MODIFIER>",
-                    "This Mod: "+argLexeme+" Is Not Allowed Here",
+                    "This Mod: " + argLexeme + " Is Not Allowed Here",
                     "Remove",
                     Arg->pos.line,
                     Arg->pos.collumn
                 );
+
                 if (!Data.flags.debugMode)
+                {
                     OrbitLog::SyntaxLog::ThrowLog(Data);
-                return ParserUtils::MakeNode<ErrorDeclNode>(
-                    NodeType::ERROR, 
-                    State, 
-                    Res, 
-                    Memory
-                );
+
+                    return ParserUtils::MakeNode<ErrorDeclNode>(
+                        State,
+                        Res,
+                        Memory
+                    );
+                }
             }
         }
 
         string name = NameToken->Lexeme(Data);
         Decl.Name = name;
 
-        // Take the Value of Var | Pega o Valor da Variavel.
         Token* Next = Inst.Peek();
 
         if (Next != nullptr)
@@ -91,7 +99,7 @@ namespace DeclUtils {
 
                 Instruction NewInst{
                     {},
-                    vec(
+                    vec<Token*>(
                         Inst.Tokens.begin() + Inst.pos.curr,
                         Inst.Tokens.end()
                     ),
@@ -107,7 +115,6 @@ namespace DeclUtils {
 
             } else if (Next->Type == TokenType::COLON) {
 
-                // Infered Type | Tipo Inferido.
                 Inst.Advance();
 
                 vec<Token*> SubInfer {
@@ -115,37 +122,40 @@ namespace DeclUtils {
                     Inst.Tokens.end()
                 };
 
-                pair<LiteralTypes, int> InferedType = 
+                pair<LiteralTypes, int> InferedType =
                     ParserUtils::Comm::InferType(SubInfer, Data);
 
-                for (int i=0; i<InferedType.second; i++)
+                for (int i = 0; i < InferedType.second; i++)
                     Inst.Advance();
 
-            } else { // Case Unexpected '=' | Case Tenha Um '=' Inesperado.
+            } else {
 
                 OrbitLog::SyntaxLog::SyntaxError(
                     "Parsing",
                     "Expected '='",
-                    "'=' Expected After <VAR_DECL> But Found: "+Next->GetType(),
+                    "'=' Expected After <VAR_DECL> But Found: " + Next->GetType(),
                     "Add ';' To Separate if This is a New Inst",
                     Next->pos.line,
                     Next->pos.collumn
                 );
 
                 if (!Data.flags.debugMode)
+                {
                     OrbitLog::SyntaxLog::ThrowLog(Data);
-                                return ParserUtils::MakeNode<ErrorDeclNode>(
-                    NodeType::ERROR, 
-                    State, 
-                    Res, 
-                    Memory
-                );
+
+                    return ParserUtils::MakeNode<ErrorDeclNode>(
+                        State,
+                        Res,
+                        Memory
+                    );
+                }
             }
 
         } else {
 
-            LiteralNode* ValueNode = Memory.New<LiteralNode>
-                (LiteralNode(State.Pos));
+            LiteralNode* ValueNode = Memory.New<LiteralNode>(
+                LiteralNode(State.Pos)
+            );
 
             ValueNode->Value = NoneLitVal{};
             Decl.Val = ValueNode;
@@ -156,7 +166,7 @@ namespace DeclUtils {
 }
 
 // ======= ENTRY-POINT | PONTO-DE-ENTRADA ====== //
-DeclarationNode* ParseDeclaration(            
+DeclarationNode* DeclarationParser::ParseDeclaration(
     Instruction& Inst,
     ParseState& State,
     ParseResult& Res,
