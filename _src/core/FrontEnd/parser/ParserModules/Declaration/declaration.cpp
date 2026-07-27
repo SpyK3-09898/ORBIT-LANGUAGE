@@ -55,6 +55,7 @@ namespace DeclUtils {
         ParserUtils::UpdateStatePos(NameToken, State);
 
         VarDeclNode* Decl = ParserUtils::MakeNode<VarDeclNode>(State, Res,Memory);
+        ParserUtils::AddInst<DeclarationNode>(Decl, State, Res, Memory);
 
         for (Token* Arg : Inst.Modifiers)
         {
@@ -104,7 +105,7 @@ namespace DeclUtils {
                     ),
                 };
 
-                ExprParser.ParseExpression(
+                Decl->Val = ExprParser.ParseExpression(
                     NewInst,
                     State,
                     Res,

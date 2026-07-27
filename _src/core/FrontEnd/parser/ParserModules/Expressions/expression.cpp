@@ -254,7 +254,7 @@ ExpressionNode* ExpressionParser::Nud(
             OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",
                 "Invalid <EXPRESSION>",
-                "Expected Init of Expression, But Got:"+Entry->GetType(),
+                "Expected Init of Expression, But Got: "+Entry->GetType(),
                 "Add a Valid <NUMBER> or <IDENTIFIER> Before Operator",
                 State.Pos.line,
                 State.Pos.collumn

@@ -13,6 +13,7 @@
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../../../../RunTimeData.hpp"
+#include <filesystem>
 #include <variant>
 
 // ======== CORE ======== //
@@ -22,7 +23,7 @@
 namespace ControlUtils {
 
     // Parse If Controls | Parser Ifs
-    ControlNode* ParseIfNode(    
+    ControlNode* ParseIfNode(
         Instruction& Inst, 
         ParseState& State, 
         ParseResult& Res, 
@@ -32,12 +33,33 @@ namespace ControlUtils {
         Arena& Memory
     )
     {
+        // INIT
+        Inst.Advance();
         vec<Token*> Cond;
-        int i=1;
-        while (true) {
-            if (Inst.Tokens.size() < i)
+        while (true)
+        {
+            Token* Tok = Inst.Advance();
+
+            if (!Tok)
                 break;
-            Cond.push_back(Inst.Advance());
+
+            Cond.push_back(Tok);
+        }
+
+        // ERROR PREV | PREVENÇÃO DE ERRO.
+        if (Cond.empty())
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Expected Boolean <CONDITION>",
+                "Expected <CONDITION> After If Statement",
+                "Add a Valid Cond",
+                Inst.Tokens[0]->pos.line,
+                Inst.Tokens[0]->pos.collumn
+            );
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorStmtNode>(State, Res, Memory);
         }
         if (Cond[Cond.size()-1]->Type != TokenType::COLON)
         {
@@ -50,10 +72,16 @@ namespace ControlUtils {
                 Cond[Cond.size()-1]->pos.collumn
             );
             if (!Data.flags.debugMode)
-                OrbitLog::SyntaxLog::ThrowLog(Data);
+                OrbitLog::SyntaxLog::ThrowLog(Data); 
             return ParserUtils::MakeNode<ErrorStmtNode>(State, Res, Memory);
         }
+        Cond.pop_back();
+
+        // CREATE PREV.
         IfNode* Ctrl = ParserUtils::MakeNode<IfNode>(State, Res, Memory);
+        ParserUtils::AddInst<IfNode>(Ctrl, State, Res, Memory);
+
+        // PARSE CONDITION | FAZ O PARSER DA CONDIÇÃO.
         Instruction ICond{{}, Cond};
         Ctrl->Cond = ExprParser.ParseExpression(
             ICond, 
@@ -64,11 +92,16 @@ namespace ControlUtils {
         );
         BodyNode* Body = ParserUtils::
             MakeNode<BodyNode>(State, Res, Memory);
+        
+        // SET BODY | DEFINE BODY.    
+        Ctrl->IfBody = Body;
         Body->Father = Ctrl;
         Body->Type = BodyTypes::CONTROL_IF;
+
+        // FINALIZE | FINALIZA.
         ParserUtils::UpdateBodyStack(Body, State, Data);
         State.lastIndent = Body->pos.indent;
-
+        
         return Ctrl;
     }
 
@@ -106,7 +139,9 @@ namespace ControlUtils {
             if (Inst.Tokens.size() < i)
                 break;
             Cond.push_back(Inst.Advance());
+            i++;
         }
+        Cond.pop_back();
 
         // ERROR PREVENTION | PREVENÇÃO DE ERROS.
         if (Cond[Cond.size() - 1]->Type != TokenType::COLON)
@@ -126,6 +161,7 @@ namespace ControlUtils {
 
         // CREATE PREV.
         ElifNode* Elif = ParserUtils::MakeNode<ElifNode>(State, Res, Memory);
+        ParserUtils::AddInst<ElifNode>(Elif, State, Res, Memory);
         BodyNode* Body = ParserUtils::MakeNode<BodyNode>(State, Res, Memory);
 
         // PARSE CONDITION | FAZ O PARSER DA CONDIÇÃO.
@@ -140,7 +176,6 @@ namespace ControlUtils {
 
         // SET BODYS | SETA OS BODYS.
         Elif->Body = Body;
-        State.CurrBody->Data.pop_back();
 
         // UPDATE STACK | ATUALIZA A PILHA.
         ParserUtils::UpdateBodyStack(Body, State, Data);
@@ -188,10 +223,10 @@ namespace ControlUtils {
         // CREATE PREV.
         ElseNode* Else = ParserUtils::MakeNode<ElseNode>(State, Res, Memory);
         BodyNode* Body = ParserUtils::MakeNode<BodyNode>(State, Res, Memory);
+        ParserUtils::AddInst<ElseNode>(Else, State, Res, Memory);
 
         // SET BODYS | SETA OS BODYS.
         Else->Body = Body;
-        State.CurrBody->Data.pop_back();
 
         // UPDATE STACK | ATUALIZA A PILH.A
         ParserUtils::UpdateBodyStack(Body, State, Data);
@@ -235,3 +270,5 @@ ControlNode* ControlParser::ParseControl(
             return nullptr;
     }
 }
+
+// EOF

@@ -9,6 +9,7 @@
 
 #include "../lexer/lexer.hpp"
 
+#include "ParserModules/Control/control.hpp"
 #include "ParserModules/Declaration/declaration.hpp"
 #include "ParserModules/Expressions/expression.hpp"
 
@@ -109,6 +110,7 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
 
     switch (Node.Type) {
 
+        // PROGRAM | PROGRAMA.
         case NodeType::PROGRAM:
         {
             auto& N = static_cast<ProgramNode&>(Node);
@@ -162,6 +164,83 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
             break;
         }
 
+        // CONTROL | CONTROLE.
+        case NodeType::IF_CONTROL:
+        {
+            auto& N = static_cast<IfNode&>(Node);
+
+            file << Indent << "If\n";
+
+            if (N.Cond)
+            {
+                file << Indent << "Condition:\n";
+                DumbNode(*N.Cond, file, Data, Depth + 1);
+            }
+
+            if (N.IfBody)
+            {
+                file << Indent << "Body:\n";
+                DumbNode(*N.IfBody, file, Data, Depth + 1);
+            }
+
+            if (!N.ElifBodyStack.empty())
+            {
+                file << Indent << "Elifs: "
+                     << N.ElifBodyStack.size() << '\n';
+
+                for (auto* Elif : N.ElifBodyStack)
+                {
+                    if (Elif)
+                        DumbNode(*Elif, file, Data, Depth + 1);
+                }
+            }
+
+            if (N.ElseBody)
+            {
+                file << Indent << "Else:\n";
+                DumbNode(*N.ElseBody, file, Data, Depth + 1);
+            }
+
+            break;
+        }
+
+        case NodeType::ELIF_CONTROL:
+        {
+            auto& N = static_cast<ElifNode&>(Node);
+
+            file << Indent << "Elif\n";
+
+            if (N.Cond)
+            {
+                file << Indent << "Condition:\n";
+                DumbNode(*N.Cond, file, Data, Depth + 1);
+            }
+
+            if (N.Body)
+            {
+                file << Indent << "Body:\n";
+                DumbNode(*N.Body, file, Data, Depth + 1);
+            }
+
+            break;
+        }
+
+        case NodeType::ELSE_CONTROL:
+        {
+            auto& N = static_cast<ElseNode&>(Node);
+
+            file << Indent << "Else\n";
+
+            if (N.Body)
+            {
+                file << Indent << "Body:\n";
+                DumbNode(*N.Body, file, Data, Depth + 1);
+            }
+
+            break;
+        }
+
+        // EXPRESSIONS | EXPRESSOES.
         case NodeType::LITERAL:
         {
             auto& N = static_cast<LiteralNode&>(Node);
@@ -333,7 +412,7 @@ void GenerateParserLog(ParseResult& Res, RunTimeData& Data)
     if (Data.flags.debugMode)
         PrintIn("INITING TASK: Starting Generate ParserLog. .. ...");
 
-    fstream file(Data.LogDir, std::ios::out | std::ios::trunc);
+    fstream file(Data.LogDir, std::ios::out | std::ios::app);
 
     file << "\n// ========== PARSING ========== //\n\n";
 
@@ -380,27 +459,42 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
     // Prev Init Parser Modules | Inicia os Modulos do Parser Previamente.
     ExpressionParser ExprParser;
     DeclarationParser DeclParser;
+    ControlParser CtrlParser;
 
     // Take Instructions and Run Then | Pega as Instrução e Percorre/Gera Nodes e Erros
     int I=0;
     InstVec Instructions = SeparateInstructions(LRes, Data);
     for (Instruction Inst : Instructions) // PARSE ALL INSTRUCTIONS | PARSEIA TODAS AS INTRUÇOES
     {
+
         // PARSE TOKENS
-        ASTNode* Node; // CREATE BASE NODE
-        Node = DeclParser.ParseDeclaration(
+        ASTNode* Node = nullptr; // CREATE BASE NODE
+
+        Node = CtrlParser.ParseControl(
             Inst,
             State,
             Res,
             Data,
+            DeclParser,
             ExprParser,
             Memory
         );
+        
         if (Node == nullptr)
-            Node = 
+            Node = DeclParser.ParseDeclaration(
+                Inst,
+                State,
+                Res,
+                Data,
+                ExprParser,
+                Memory
+            );
+
+        if (Node == nullptr)
+            Node =
                 ExprParser.
                     ParseExpression(Inst, State, Res, Data, Memory);
-        
+
         // INDENT SYSTEM
         if (I + 1 < Instructions.size())
         {
@@ -415,11 +509,14 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
                 : NextInst.Modifiers[0]->pos.indent;
 
             if (
-                State.Bodys.size() > 1 &&
-                InstIndent > State.lastIndent &&
-                NextIndent <= State.lastIndent
+                State.Bodys.size() > 1  and
+                NextIndent < InstIndent and
+                State.CurrBody->Type != BodyTypes::PROGRAM
             ) ParserUtils::PopBodyStack(State, Data);
+        //
         }
+
+        I++;
     }
     if (Data.flags.generateLog)
         GenerateParserLog(Res, Data);

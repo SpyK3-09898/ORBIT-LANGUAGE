@@ -480,23 +480,9 @@ namespace ParserUtils {
     // Add A New Elem in BodyStack | Adiciona um Novo Elemento na Pilha de Bodys.
     inline void UpdateBodyStack(BodyNode* Node, ParseState& State, RunTimeData& Data)
     {
-        if (State.Bodys.size() == 1) {
-            OrbitLog::SyntaxLog::SyntaxError(
-                "Parsing",
-                "Invalid <SCOPE> Closing", 
-                "Trying to Close a <GLOBAL_SCOPE>", 
-                "Remove <END>",
-                Node->pos.line,
-                Node->pos.collumn
-            );
-
-            if (!Data.flags.debugMode)
-                OrbitLog::SyntaxLog::ThrowLog(Data);
-        } else {
-            State.Bodys.push_back(Node);
-            State.CurrBody = State.Bodys.back();
-            State.lastIndent = Node->pos.indent;
-        }
+        State.Bodys.push_back(Node);
+        State.CurrBody = State.Bodys.back();
+        State.lastIndent = Node->pos.indent;
     }
 
     // Pop The Body Stack | Retira o Ultimo Elemento da Pilha de Body.
@@ -533,14 +519,18 @@ namespace ParserUtils {
         }
     }
 
-    // Create A New Node | Cria Um Node.
+    // Add A Statement | Adiciona a Instrução.
+    template<typename T>
+    void AddInst(ASTNode* Node, ParseState& State, ParseResult& Res, Arena& Memory)
+    {
+        State.CurrBody->Data.push_back(Node);
+    }
+
     // Create A New Node | Cria Um Node.
     template<typename T>
     inline T* MakeNode(ParseState& State, ParseResult& Res, Arena& Memory)
     {
         T* Node = Memory.New<T>(State.Pos);
-        State.CurrBody->Data.push_back(Node);
-
         return Node;
     }
 
