@@ -33,5 +33,6 @@ struct RunTimeData
     struct {
         bool debugMode=false;
         bool generateLog=false;
+        bool UnicodeSupport=true;
     } flags;
 };

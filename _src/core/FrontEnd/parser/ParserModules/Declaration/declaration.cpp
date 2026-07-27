@@ -50,18 +50,18 @@ namespace DeclUtils {
         }
 
         // Init | Inicio
+        Inst.Advance();
         Token* NameToken = Inst.Advance();
-
         ParserUtils::UpdateStatePos(NameToken, State);
 
-        VarDeclNode Decl(State.Pos);
+        VarDeclNode* Decl = ParserUtils::MakeNode<VarDeclNode>(State, Res,Memory);
 
         for (Token* Arg : Inst.Modifiers)
         {
             string argLexeme = Arg->Lexeme(Data);
 
             if (argLexeme == "const")
-                Decl.MutType = MutableTypes::CONST;
+                Decl->MutType = MutableTypes::CONST;
             else
             {
                 OrbitLog::SyntaxLog::SyntaxError(
@@ -76,18 +76,17 @@ namespace DeclUtils {
                 if (!Data.flags.debugMode)
                 {
                     OrbitLog::SyntaxLog::ThrowLog(Data);
-
-                    return ParserUtils::MakeNode<ErrorDeclNode>(
-                        State,
-                        Res,
-                        Memory
-                    );
                 }
+                return ParserUtils::MakeNode<ErrorDeclNode>(
+                    State,
+                    Res,
+                    Memory
+                );
             }
         }
 
         string name = NameToken->Lexeme(Data);
-        Decl.Name = name;
+        Decl->Name = name;
 
         Token* Next = Inst.Peek();
 
@@ -142,13 +141,12 @@ namespace DeclUtils {
                 if (!Data.flags.debugMode)
                 {
                     OrbitLog::SyntaxLog::ThrowLog(Data);
-
-                    return ParserUtils::MakeNode<ErrorDeclNode>(
-                        State,
-                        Res,
-                        Memory
-                    );
                 }
+                return ParserUtils::MakeNode<ErrorDeclNode>(
+                    State,
+                    Res,
+                    Memory
+                );
             }
 
         } else {
@@ -158,10 +156,10 @@ namespace DeclUtils {
             );
 
             ValueNode->Value = NoneLitVal{};
-            Decl.Val = ValueNode;
+            Decl->Val = ValueNode;
         }
 
-        return nullptr;
+        return Decl;
     }
 }
 
@@ -175,7 +173,7 @@ DeclarationNode* DeclarationParser::ParseDeclaration(
     Arena& Memory
 )
 {
-    Token* Entry = Inst.Tokens[1];
+    Token* Entry = Inst.Tokens[0];
     string lexeme = Entry->Lexeme(Data);
     switch (Entry->Type) {
      

@@ -10,7 +10,6 @@
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../../../../RunTimeData.hpp"
-#include <string>
 
 // ======= UTILS ======= //
 
@@ -171,9 +170,9 @@ ExpressionNode* ExpressionParser::Nud(
         );
         if (!Data.flags.debugMode) {
             OrbitLog::SyntaxLog::ThrowLog(Data);
-            return ParserUtils::
-            MakeNode<ErrorExprNode>(State, Res, Memory);
         }
+        return ParserUtils::
+        MakeNode<ErrorExprNode>(State, Res, Memory);
     }
 
     // RUN TYPES | PERCORRE O TIPO.
@@ -255,7 +254,7 @@ ExpressionNode* ExpressionParser::Nud(
             OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",
                 "Invalid <EXPRESSION>",
-                "Expected Init of Expression",
+                "Expected Init of Expression, But Got:"+Entry->GetType(),
                 "Add a Valid <NUMBER> or <IDENTIFIER> Before Operator",
                 State.Pos.line,
                 State.Pos.collumn
@@ -321,7 +320,7 @@ ExpressionNode* ExpressionParser::Led(
         if (!Data.flags.debugMode)
             OrbitLog::SyntaxLog::ThrowLog(Data);
         return ParserUtils::
-        MakeNode<ErrorExprNode>(State, Res, Memory);
+            MakeNode<ErrorExprNode>(State, Res, Memory);
     }
 
     BinaryNode* Node =

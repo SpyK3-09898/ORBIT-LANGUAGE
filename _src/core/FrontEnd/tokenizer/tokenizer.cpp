@@ -33,7 +33,7 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
     }
     vec<string> KeyWords
     {
-        "var", 
+        "var", "If"
     };
     vec<string> Modifiers
     {

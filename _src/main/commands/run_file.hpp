@@ -13,18 +13,58 @@
 
 #include "../../core/FrontEnd/lexer/lexer.hpp"
 #include "../../core/FrontEnd/tokenizer/tokenizer.hpp"
+#include "../../core/FrontEnd/parser/parser.hpp"
 
 #include <string>
 #include <thread>
 #include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <filesystem>
 using fstream=std::fstream;
 namespace fs=std::filesystem;
 
+#ifdef _WIN32
+#define byte win_byte
+#include <windows.h>
+#undef byte
+#endif
+
+inline bool HasUnicodeSupport()
+{
+#ifdef _WIN32
+
+    HANDLE Handle = GetStdHandle(STD_OUTPUT_HANDLE);
+
+    if (Handle == INVALID_HANDLE_VALUE)
+        return false;
+
+    DWORD Mode;
+
+    if (!GetConsoleMode(Handle, &Mode))
+        return false;
+
+    return GetConsoleOutputCP() == CP_UTF8;
+
+#else
+
+    const char* Lang = getenv("LANG");
+
+    if (!Lang)
+        return false;
+
+    string Value = Lang;
+
+    return Value.find("UTF-8") != string::npos ||
+           Value.find("utf8") != string::npos;
+
+#endif
+}
+
 // ENTRY POINT
 inline int RunOrbit(string filePath, RunTimeData& Data)
 {
+    Data.flags.UnicodeSupport = HasUnicodeSupport();
     if (Data.flags.debugMode)
         Print("[DRIVER] STARTING TASK: Build Orbit");
 
@@ -48,9 +88,11 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
 
     Lexer L;
     Tokenizer T;
+    Parser P;
     LexResult LRes = L.InitL(file, Data, Memory);
     LRes = T.InitT(LRes, Data, Memory);
-    
+    ParseResult PRes = P.InitP(LRes, Data, Memory);
+
     if (Data.flags.debugMode)
     {
         PrintInLn("[DRIVER] ENDOF TASK: Build ORBIT. .. ..."); 

@@ -29,7 +29,9 @@ InstVec SeparateInstructions(LexResult& LRes, RunTimeData& Data)
 
     for (Token* Tok : LRes.Tokens)
     {
-        if (
+        if (Tok->Type == TokenType::ENTRY_POINT)
+            continue;
+        else if (
             Tok->Type is TokenType::SEMI_COLON
             or Tok->Type is TokenType::NEW_LINE
             or Tok->Type is TokenType::_EOF
@@ -125,9 +127,19 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
             file << Indent << "Body\n";
             file << Indent << "Children: " << N.Data.size() << '\n';
 
+            for (size_t i = 0; i < N.Data.size(); i++)
+            {
+                file << Indent
+                     << "[" << i << "] Ptr: " << N.Data[i]
+                     << " | Type: " << (int)N.Data[i]->Type
+                     << '\n';
+            }
+
             for (auto* Child : N.Data)
+            {
                 if (Child)
                     DumbNode(*Child, file, Data, Depth + 1);
+            }
 
             break;
         }
@@ -318,7 +330,8 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
 // Generate Log of Parsing Step | Gera Log da Ettapa de Parsing
 void GenerateParserLog(ParseResult& Res, RunTimeData& Data)
 {
-    PrintIn("INITING TASK: Starting Generate ParserLog. .. ...");
+    if (Data.flags.debugMode)
+        PrintIn("INITING TASK: Starting Generate ParserLog. .. ...");
 
     fstream file(Data.LogDir, std::ios::out | std::ios::trunc);
 
@@ -331,13 +344,16 @@ void GenerateParserLog(ParseResult& Res, RunTimeData& Data)
 
     file.close();
 
-    PrintIn("ENDOF TASK: Starting Generate ParserLog. .. ...");
+    if (Data.flags.debugMode)
+        PrintIn("ENDOF TASK: Starting Generate ParserLog. .. ...");
 }
 
 // ======== ENTRY-POINT ======= //
 // Entry-Point of Parse-Program | Ponto-de-Entrada no Programa de Parsing.
 ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
 {
+    if (Data.flags.debugMode)
+        PrintIn("STARTING TASK: Parsing");
     ParseResult Res;
     ParseState State;
     
@@ -355,17 +371,22 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
         State.Pos,
         Memory
     );
+    Program->Node->Type = BodyTypes::PROGRAM;
+    Program->Node->Father = Program;
     Res.AST = Program;
     State.CurrBody = Program->Node;
+    State.Bodys.push_back(Program->Node);
 
     // Prev Init Parser Modules | Inicia os Modulos do Parser Previamente.
     ExpressionParser ExprParser;
     DeclarationParser DeclParser;
 
     // Take Instructions and Run Then | Pega as Instrução e Percorre/Gera Nodes e Erros
+    int I=0;
     InstVec Instructions = SeparateInstructions(LRes, Data);
     for (Instruction Inst : Instructions) // PARSE ALL INSTRUCTIONS | PARSEIA TODAS AS INTRUÇOES
     {
+        // PARSE TOKENS
         ASTNode* Node; // CREATE BASE NODE
         Node = DeclParser.ParseDeclaration(
             Inst,
@@ -379,9 +400,31 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
             Node = 
                 ExprParser.
                     ParseExpression(Inst, State, Res, Data, Memory);
-        State.CurrBody->Data.push_back(std::move(Node));
-    }
-    GenerateParserLog(Res, Data);
+        
+        // INDENT SYSTEM
+        if (I + 1 < Instructions.size())
+        {
+            size_t InstIndent = !Inst.Tokens.empty()
+                ? Inst.Tokens[0]->pos.indent
+                : Inst.Modifiers[0]->pos.indent;
 
+            Instruction& NextInst = Instructions[I + 1];
+
+            size_t NextIndent = !NextInst.Tokens.empty()
+                ? NextInst.Tokens[0]->pos.indent
+                : NextInst.Modifiers[0]->pos.indent;
+
+            if (
+                State.Bodys.size() > 1 &&
+                InstIndent > State.lastIndent &&
+                NextIndent <= State.lastIndent
+            ) ParserUtils::PopBodyStack(State, Data);
+        }
+    }
+    if (Data.flags.generateLog)
+        GenerateParserLog(Res, Data);
+
+    if (Data.flags.debugMode)
+        PrintIn("ENDOF TASK: Parsing. .. ...");
     return Res;
 }

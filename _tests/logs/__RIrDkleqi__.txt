@@ -1,0 +1,31 @@
+
+// ========== PARSING ========== //
+
+NodeType: 0
+Pos(line/collumn): 0;0
+Program
+    NodeType: 1
+    Pos(line/collumn): 0;0
+    Children: 7
+        VarDecl:
+
+            NodeType: 4
+            Pos(line/collumn): 2;11
+            Name: 
+            Mutable: 1
+            InferType: 0
+        ...
+
+// ========== ENDOF: PARSING ========== //
+
+// ============ MEMORY & DATA =========== //
+
+LIMIT: 65536
+USED: 1128
+AVALIABLE: 64408
+SPACES/BLOCKS USED ACCOUNT: 1
+
+Finishing Arena. .. ...
+
+\ ============ ENDOF: 'ARENA' ==========
+

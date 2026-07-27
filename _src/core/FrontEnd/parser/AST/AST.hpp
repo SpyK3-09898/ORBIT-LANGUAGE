@@ -31,7 +31,7 @@ struct Instruction
     { int modCurr=0; int curr=0; } pos;
     Token* Advance() // Advance to the Next Token | Avança para o Proximo Token.
     {
-        if (pos.curr >= Tokens.size()-1)
+        if (pos.curr >= Tokens.size())
             return nullptr;
 
         return Tokens[pos.curr++];
@@ -46,6 +46,34 @@ struct Instruction
 };
 using InstVec = vec<Instruction>;
 
+// ======= PREV ======= //
+
+struct ASTNode;
+
+struct BodyNode;
+struct ProgramNode;
+
+struct ExpressionNode;
+struct LiteralNode;
+struct IdentifierNode;
+struct UnaryNode;
+struct BinaryNode;
+struct AssignmentNode;
+struct MemberAccessNode;
+struct IndexAccessNode;
+struct RangeNode;
+struct ErrorExprNode;
+
+struct DeclarationNode;
+struct VarDeclNode;
+struct ErrorDeclNode;
+
+struct ControlNode;
+struct ElseNode;
+struct ElifNode;
+struct IfNode;
+struct ErrorStmtNode;
+
 // ======= NODES ======= //
 
 // ENUMS.
@@ -57,6 +85,11 @@ enum class NodeType : uint8_t
     PROGRAM,
     BODY,
     ERROR,
+
+    // CONTROL
+    IF_CONTROL,
+    ELSE_CONTROL,
+    ELIF_CONTROL,
 
     // DECLARATIONS
     VAR_DECL,
@@ -76,6 +109,18 @@ enum class NodeType : uint8_t
     RANGE
 };
 
+// Type of Body Insts | Tipos de Instruções de Corpo.
+enum class BodyTypes
+{
+    PROGRAM,
+    CONTROL_IF,
+    FUNCTION,
+    LOOP_WHILE,
+    LOOP_FOR,
+    OTHER
+};
+
+// Mutable Values Types | Valores de Tipos Mutaveis.
 enum class MutableTypes : uint8_t
 {
     MUT,
@@ -83,6 +128,7 @@ enum class MutableTypes : uint8_t
     UNK
 };
 
+// Literal Value Types | Tipos de Valores Literais.
 enum class LiteralTypes: uint8_t
 {
     INT,
@@ -93,6 +139,7 @@ enum class LiteralTypes: uint8_t
     _NULL
 };
 
+// Math Operators | Operadores de Matematica.
 enum class Operator: uint8_t
 {
     // ARITMETIC | ARITMETICOS.
@@ -173,6 +220,8 @@ struct BodyNode : ASTNode
 {
     // DATA
     vec<ASTNode*> Data{};
+    ASTNode* Father;
+    BodyTypes Type;
 
     // CONSTRUCTOR | CONSTRUTOR
     BodyNode(NodePos P)
@@ -310,7 +359,6 @@ struct RangeNode : ExpressionNode
         : ExpressionNode(NodeType::RANGE, P) {};
 };
 
-
 // ERRORS | ERROS
 struct ErrorExprNode : ExpressionNode
 {
@@ -318,6 +366,7 @@ struct ErrorExprNode : ExpressionNode
     ErrorExprNode(NodePos P)
         : ExpressionNode(NodeType::ERROR, P) {};
 };
+
 // ======= DECLARATION ======== //
 
 // Base Decl Node | No de Decl Base
@@ -350,13 +399,71 @@ struct ErrorDeclNode : DeclarationNode
         : DeclarationNode(NodeType::ERROR, Pos) {};
 };
 
-// ======= AST ======= //
+// ======== STATEMENTS ========= //
+
+// Control Statement Base Node | No de Instrução de Controle Base.
+struct ControlNode : ASTNode
+{
+    // CONSTRUCTOR | CONSTRUTOR
+    ControlNode(NodeType T, NodePos P)
+        : ASTNode(T, P) {}
+};
+
+
+// Else Control Statement | Controle de Instrução 'Else'.
+struct ElseNode : ControlNode
+{
+    // DATA.
+    BodyNode* Body;
+
+    // CONSTRUCTOR | CONSTRUTOR.
+    ElseNode(NodePos P)
+        : ControlNode(NodeType::ELSE_CONTROL, P) {};
+};
+
+// IElif Control Statement | Controle de Instrução 'Elif'.
+struct ElifNode : ControlNode
+{
+    // DATA
+    ExpressionNode* Cond;
+    BodyNode* Body;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    ElifNode(NodePos P)
+        : ControlNode(NodeType::ELIF_CONTROL, P) {};
+};
+
+// If Control Statement | Controle de Instrução 'Ifs'.
+struct IfNode : ControlNode
+{
+    // DATA
+    ExpressionNode* Cond;
+    BodyNode* IfBody;
+    ElseNode* ElseBody;
+    vec<BodyNode*> ElifBodyStack;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    IfNode(NodePos P)
+        : ControlNode(NodeType::IF_CONTROL, P) {};
+};
+
+// Error Statements Nodes | Errors de Nos de Statement.
+struct ErrorStmtNode : ControlNode
+{
+    // CONSTRUCTOR | CONSTRUTOR
+    ErrorStmtNode(NodePos P)
+        : ControlNode(NodeType::ERROR, P) {};
+};
+
+// ======== AST ======== //
 
 // Curr State of Parser | Estado Atual do Parser
 struct ParseState
 {
+    int lastIndent=0;
+    bool SingleStatement = false;
     NodePos Pos; // Current Pos of Parser | Posição Atual do Lexer.
-    vec<uniq_ptr<BodyNode>> Bodys;
+    vec<BodyNode*> Bodys;
     BodyNode* CurrBody;
 };
 
@@ -371,7 +478,7 @@ struct ParseResult
 namespace ParserUtils {
 
     // Add A New Elem in BodyStack | Adiciona um Novo Elemento na Pilha de Bodys.
-    inline void UpdateBodyStack(BodyNode& Node, ParseState& State, RunTimeData& Data)
+    inline void UpdateBodyStack(BodyNode* Node, ParseState& State, RunTimeData& Data)
     {
         if (State.Bodys.size() == 1) {
             OrbitLog::SyntaxLog::SyntaxError(
@@ -379,23 +486,38 @@ namespace ParserUtils {
                 "Invalid <SCOPE> Closing", 
                 "Trying to Close a <GLOBAL_SCOPE>", 
                 "Remove <END>",
-                Node.pos.line,
-                Node.pos.collumn
+                Node->pos.line,
+                Node->pos.collumn
             );
-            if (Data.flags.debugMode)
+
+            if (!Data.flags.debugMode)
                 OrbitLog::SyntaxLog::ThrowLog(Data);
         } else {
-            State.Bodys.push_back(make_uniq<BodyNode>(Node.pos));
-            State.CurrBody = State.Bodys.back().get();
+            State.Bodys.push_back(Node);
+            State.CurrBody = State.Bodys.back();
+            State.lastIndent = Node->pos.indent;
         }
     }
 
     // Pop The Body Stack | Retira o Ultimo Elemento da Pilha de Body.
-    inline void PopBodyStack(ParseState& State)
+    inline void PopBodyStack(ParseState& State, RunTimeData& Data)
     {
-        State.Bodys.pop_back();
-        State.CurrBody = State.Bodys.back().get();
-
+        if (State.Bodys.size() == 1)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Pop <STACK> Fail",
+                "Attemp to Close <GLOBAL_STACK>",
+                "~",
+                State.Pos.line,
+                State.Pos.collumn
+            );
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+        } else {
+            State.Bodys.pop_back();
+            State.CurrBody = State.Bodys.back();
+        }
     }
 
     // Update State Position | Atualiza a Pos do Node

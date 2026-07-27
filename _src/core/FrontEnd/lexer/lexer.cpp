@@ -357,7 +357,8 @@ void Lexer::Scanners::ReadComment(Lexer& Lexer, RunTimeData& Data, LexState& Sta
 // GENERATE LOG OF LEXER | GERA LOG DO LEXER
 void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
 {
-    PrintIn("INITING TASK: Starting Generate LexLog. .. ...");
+    if (Data.flags.debugMode)
+        PrintIn("INITING TASK: Generate LexLog. .. ...");
 
     string fileName;
     if (true) {
@@ -419,7 +420,8 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
     }
     text += "\n// ============ ENDOF: LEXER =========== // ";
     file << text;
-    PrintIn("ENDOF TASK: Starting Generate LexLog. .. ...");
+    if (Data.flags.debugMode)
+        PrintIn("ENDOF TASK: Generate LexLog. .. ...");
 }
 
 // =========== ENTRY-POINT | PONTO DE ENTRADA ========== //
@@ -469,9 +471,8 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
             MakeToken(Res, State, Data, TokenType::NEW_LINE, Memory);
             continue;
         }
-        else if (C is '\t') {
-            State.currPos.indent++;
-        } else if (C is '\r') continue;
+        else if (C is '\t') { State.currPos.indent++; continue; } 
+        else if (C is '\r') continue;
         else if (C == '.')
             if (N == '.')
                 {
@@ -506,7 +507,11 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
             case ';':
                 MakeToken(Res, State, Data, TokenType::SEMI_COLON, Memory);
                 continue;
-
+                
+            case ':':
+                MakeToken(Res, State, Data, TokenType::COLON, Memory);      
+                continue; 
+            
             case '=':
                 if (N == '=')
                     { 
@@ -612,7 +617,6 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
                 MakeToken(Res, State, Data, TokenType::RPARENT, Memory);      
                 continue; 
 
-            
             default:
 
                 OrbitLog::SyntaxLog::SyntaxError(
