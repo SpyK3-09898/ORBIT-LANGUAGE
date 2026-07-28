@@ -189,7 +189,9 @@ void Lexer::Scanners::ReadNumber(Lexer& Lexer, RunTimeData& Data, LexState& Stat
 }
 
 // SCANNER TO READ A STRING | SCANNER PARA LER UMA STRING
-void Lexer::Scanners::ReadString(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N, Arena& Memory) {
+void Lexer::Scanners::ReadString(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N, Arena& Memory) 
+{
+    
     enum class StringType
     {
         SINGLE_QUOTE,
@@ -199,7 +201,8 @@ void Lexer::Scanners::ReadString(Lexer& Lexer, RunTimeData& Data, LexState& Stat
 
     StringType SType;
 
-    State.currPos.len = 1;
+    State.currPos.start = State.index;
+    State.currPos.len = 0;
 
     if (C is '\'')
         SType = StringType::SINGLE_QUOTE;
@@ -238,12 +241,12 @@ void Lexer::Scanners::ReadString(Lexer& Lexer, RunTimeData& Data, LexState& Stat
         {
             SkipLine(State, Data);
             OrbitLog::SyntaxLog::SyntaxError(
-                "Lexing",
-                "Unterminated <STRING>",
-                "Unexpected End Of Line",
-                "Close The String Before The End Of Line",
-                State.currPos.line,
-                State.currPos.collumn
+        "Lexing",
+            "Unterminated <STRING>",
+            "Unexpected End Of Line",
+            "Close The String Before The End Of Line",
+            State.currPos.line,
+            State.currPos.collumn
             );
             return;
         }
@@ -544,11 +547,6 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
                         MakeToken(Res, State, Data, TokenType::EQSTAR, Memory);
                         LexUtils::Advance(State, Data);
                     }
-                else if (N == '*')
-                    {
-                        MakeToken(Res, State, Data, TokenType::POT, Memory);
-                        LexUtils::Advance(State, Data);
-                    }
                 else MakeToken(Res, State, Data, TokenType::STAR, Memory);
                 continue;
 
@@ -568,6 +566,16 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
                     }
                 else MakeToken(Res, State, Data, TokenType::MOD, Memory);
                 continue;
+
+            case '^':
+                if (N == '=')
+                    { 
+                        MakeToken(Res, State, Data, TokenType::EQPOT, Memory);
+                        LexUtils::Advance(State, Data);
+                    }
+                else MakeToken(Res, State, Data, TokenType::POT, Memory);
+                continue;
+
             case '&':
                 if (N == '&')
                 {

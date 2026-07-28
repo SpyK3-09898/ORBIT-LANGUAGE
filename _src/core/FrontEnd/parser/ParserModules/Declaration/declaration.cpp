@@ -50,12 +50,12 @@ namespace DeclUtils {
         }
 
         // Init | Inicio
-        Inst.Advance();
+        Token* E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
         Token* NameToken = Inst.Advance();
         ParserUtils::UpdateStatePos(NameToken, State);
 
         VarDeclNode* Decl = ParserUtils::MakeNode<VarDeclNode>(State, Res,Memory);
-        ParserUtils::AddInst<DeclarationNode>(Decl, State, Res, Memory);
 
         for (Token* Arg : Inst.Modifiers)
         {
@@ -95,7 +95,8 @@ namespace DeclUtils {
         {
             if (Next->Type == TokenType::EQUAL)
             {
-                Inst.Advance();
+                Token* E = Inst.Advance();
+                ParserUtils::UpdateStatePos(E, State);
 
                 Instruction NewInst{
                     {},
@@ -115,7 +116,8 @@ namespace DeclUtils {
 
             } else if (Next->Type == TokenType::COLON) {
 
-                Inst.Advance();
+                Token* E = Inst.Advance();
+                ParserUtils::UpdateStatePos(E, State);
 
                 vec<Token*> SubInfer {
                     Inst.Tokens.begin() + Inst.pos.curr,
@@ -126,7 +128,7 @@ namespace DeclUtils {
                     ParserUtils::Comm::InferType(SubInfer, Data);
 
                 for (int i = 0; i < InferedType.second; i++)
-                    Inst.Advance();
+                { Token* E = Inst.Advance(); ParserUtils::UpdateStatePos(E, State); }
 
             } else {
 

@@ -95,6 +95,7 @@ enum class TokenType: uint8_t
     EQSL,
     EQPWR,
     EQMOD,
+    EQPOT,
     
     EQEQ,
     NOT_EQUAL,
@@ -175,6 +176,7 @@ struct Token
             // NORMALS
             case TokenType::IDENTIFIER:   return "<IDENTIFIER>";
             case TokenType::KEYWORD:      return "<KEYWORD>";
+            case TokenType::LIT_TYPE:     return "<LIT_TYPE>";
 
             // MATH
             case TokenType::EQUAL:        return "<EQUAL>";
@@ -196,6 +198,7 @@ struct Token
             case TokenType::EQSL:         return "<EQSL>";
             case TokenType::EQPWR:        return "<EQPWR>";
             case TokenType::EQMOD:        return "<EQMOD>";
+            case TokenType::EQPOT:        return "<EQPOT>";
 
             case TokenType::EQEQ:         return "<EQEQ>";
             case TokenType::NOT_EQUAL:    return "<NOT_EQUAL>";

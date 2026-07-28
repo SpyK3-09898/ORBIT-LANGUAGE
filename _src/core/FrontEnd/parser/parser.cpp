@@ -370,6 +370,87 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
 
             break;
         }
+        case NodeType::FN_CALL:
+        {
+            auto& N = static_cast<FunctionCall&>(Node);
+
+            file << Indent << "FunctionCall\n";
+
+            if (N.Callee)
+            {
+                file << Indent << "Callee:\n";
+                DumbNode(*N.Callee, file, Data, Depth + 1);
+            }
+
+            file << Indent << "Arguments: " << N.Args.size() << '\n';
+
+            for (size_t i = 0; i < N.Args.size(); i++)
+            {
+                file << Indent << "[" << i << "]\n";
+
+                if (N.Args[i])
+                    DumbNode(*N.Args[i], file, Data, Depth + 1);
+            }
+
+            break;
+        }
+ 
+        case NodeType::ARRAY_VALUE:
+        {
+            auto& N = static_cast<ArrayValue&>(Node);
+
+            file << Indent << "Array\n";
+            file << Indent << "Elements: " << N.Args.size() << '\n';
+
+            for (size_t i = 0; i < N.Args.size(); i++)
+            {
+                file << Indent
+                     << "[" << i << "]\n";
+
+                if (N.Args[i])
+                    DumbNode(*N.Args[i], file, Data, Depth + 1);
+            }
+
+            break;
+        }
+
+        case NodeType::TABLE_VALUE:
+        {
+            auto& N = static_cast<TableValue&>(Node);
+
+            file << Indent << "Table\n";
+            file << Indent << "Entries: " << N.Args.size() << '\n';
+
+            for (size_t i = 0; i < N.Args.size(); i++)
+            {
+                file << Indent
+                     << "[" << i << "]\n";
+
+                if (N.Args[i].Key)
+                {
+                    file << Indent << "Key:\n";
+                    DumbNode(
+                        *N.Args[i].Key,
+                        file,
+                        Data,
+                        Depth + 1
+                    );
+                }
+
+                if (N.Args[i].Value)
+                {
+                    file << Indent << "Value:\n";
+                    DumbNode(
+                        *N.Args[i].Value,
+                        file,
+                        Data,
+                        Depth + 1
+                    );
+                }
+            }
+
+            break;
+        }
 
         case NodeType::RANGE:
         {
@@ -516,6 +597,7 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
         //
         }
 
+        ParserUtils::AddInst<ASTNode>(Node, State, Res, Memory);
         I++;
     }
     if (Data.flags.generateLog)

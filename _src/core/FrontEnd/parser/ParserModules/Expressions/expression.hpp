@@ -41,6 +41,15 @@ class ExpressionParser
             int RightBindingPower
         );
 
+        static ExpressionNode* ParseImplMulti(
+            ExpressionNode* L,
+            Instruction& Inst,
+            ParseState& State,
+            ParseResult& Res,
+            RunTimeData& Data,
+            Arena& Memory
+        );
+
     public:
 
         // CORE

@@ -34,12 +34,13 @@ namespace ControlUtils {
     )
     {
         // INIT
-        Inst.Advance();
+        Token* E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
         vec<Token*> Cond;
         while (true)
         {
             Token* Tok = Inst.Advance();
-
+            ParserUtils::UpdateStatePos(Tok, State);
             if (!Tok)
                 break;
 
@@ -138,7 +139,9 @@ namespace ControlUtils {
         {
             if (Inst.Tokens.size() < i)
                 break;
-            Cond.push_back(Inst.Advance());
+            Token* E = Inst.Advance();
+            Cond.push_back(E);
+            ParserUtils::UpdateStatePos(E, State);
             i++;
         }
         Cond.pop_back();

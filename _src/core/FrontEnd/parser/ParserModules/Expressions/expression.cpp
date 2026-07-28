@@ -88,6 +88,483 @@ namespace ExprUtils {
                 return Operator::NONE;
         }
     }
+
+    // Parse Index Access | Parseia Acesso por Índice
+    ExpressionNode* ParseIndex(
+        ExpressionNode* L,
+        Instruction& Inst,
+        ParseState& State,
+        ParseResult& Res,
+        RunTimeData& Data,
+        Arena& Memory
+    )
+    {
+        IndexAccessNode* Index =
+            ParserUtils::MakeNode<IndexAccessNode>(
+                State,
+                Res,
+                Memory
+            );
+
+        Index->Object = L;
+
+        ExpressionNode* Expr =
+            ExpressionParser::ParseExpression(
+                Inst,
+                State,
+                Res,
+                Data,
+                Memory
+            );
+
+        if (!Expr)
+            return ParserUtils::MakeNode<ErrorExprNode>(
+                State,
+                Res,
+                Memory
+            );
+
+        Index->Index = Expr;
+
+        Token* Current = Inst.Peek();
+
+        if (!Current)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Invalid <INDEX_ACCESS>",
+                "Unexpected <EOF> While Parsing Index",
+                "Add ']' To Close Index Access",
+                State.Pos.line,
+                State.Pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+
+            return ParserUtils::MakeNode<ErrorExprNode>(
+                State,
+                Res,
+                Memory
+            );
+        }
+
+        if (Current->Type != TokenType::RBRACKET)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Invalid <INDEX_ACCESS>",
+                "Expected ']' After Index Expression",
+                "Close The Index Access With ']'",
+                Current->pos.line,
+                Current->pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+
+            return ParserUtils::MakeNode<ErrorExprNode>(
+                State,
+                Res,
+                Memory
+            );
+        }
+
+        Token* E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+
+        return Index;
+    }
+
+    // Parse Table | Parseia Tabelas.
+    ExpressionNode* ParseTable(
+        Instruction& Inst,
+        ParseState& State,
+        ParseResult& Res,
+        RunTimeData& Data,
+        Arena& Memory
+    )
+    {
+        // Create Table | Cria a Tabela.
+        TableValue* Table =
+            ParserUtils::MakeNode<TableValue>(
+                State,
+                Res,
+                Memory
+            );
+
+        while (true)
+        {
+            // Take Current Token | Pega o Token Atual.
+            Token* Current = Inst.Peek();
+
+            // Empty Table | Tabela Vazia.
+            if (Current && Current->Type == TokenType::RBRACE)
+            {
+                Token* E = Inst.Advance();
+                ParserUtils::UpdateStatePos(E, State);
+
+                return Table;
+            }
+
+            // Parse Key | Parseia a Chave.
+            ExpressionNode* Key =
+                ExpressionParser::ParseExpression(
+                    Inst,
+                    State,
+                    Res,
+                    Data,
+                    Memory
+                );
+
+            Current = Inst.Peek();
+
+            // EOF
+            if (!Current)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Parsing",
+                    "Invalid <TABLE>",
+                    "Unexpected <EOF> While Parsing Table",
+                    "Add '}' To Close Table",
+                    State.Pos.line,
+                    State.Pos.collumn
+                );
+
+                if (!Data.flags.debugMode)
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+
+                return ParserUtils::MakeNode<ErrorExprNode>(
+                    State,
+                    Res,
+                    Memory
+                );
+            }
+
+            // Expected ':'
+            if (Current->Type != TokenType::COLON)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Parsing",
+                    "Invalid <TABLE>",
+                    "Expected ':' After Table Key",
+                    "Add ':' Between Key And Value",
+                    Current->pos.line,
+                    Current->pos.collumn
+                );
+
+                if (!Data.flags.debugMode)
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+
+                return ParserUtils::MakeNode<ErrorExprNode>(
+                    State,
+                    Res,
+                    Memory
+                );
+            }
+
+            // Consume ':'
+            Token* E = Inst.Advance();
+            ParserUtils::UpdateStatePos(E, State);
+
+            // Parse Value | Parseia o Valor.
+            ExpressionNode* Value =
+                ExpressionParser::ParseExpression(
+                    Inst,
+                    State,
+                    Res,
+                    Data,
+                    Memory
+                );
+
+            // Add Entry | Adiciona a Entrada.
+            Table->Args.push_back({
+                Key,
+                Value
+            });
+
+            Current = Inst.Peek();
+
+            // EOF
+            if (!Current)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Parsing",
+                    "Invalid <TABLE>",
+                    "Unexpected <EOF> While Parsing Table",
+                    "Add '}' To Close Table",
+                    State.Pos.line,
+                    State.Pos.collumn
+                );
+
+                if (!Data.flags.debugMode)
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+
+                return ParserUtils::MakeNode<ErrorExprNode>(
+                    State,
+                    Res,
+                    Memory
+                );
+            }
+
+            // Next Entry | Próxima Entrada.
+            if (Current->Type == TokenType::COMMA)
+            {
+                Token* E = Inst.Advance();
+                ParserUtils::UpdateStatePos(E, State);
+                continue;
+            }
+
+            // Closing | Fechamento.
+            if (Current->Type == TokenType::RBRACE)
+            {
+                Token* E = Inst.Advance();
+                ParserUtils::UpdateStatePos(E, State);;
+                return Table;
+            }
+
+            // Missing Comma | Falta Virgula.
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Invalid <TABLE>",
+                "Expected ',' Or '}' After Table Entry",
+                "Separate Table Entries With ','",
+                Current->pos.line,
+                Current->pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+
+            return ParserUtils::MakeNode<ErrorExprNode>(
+                State,
+                Res,
+                Memory
+            );
+        }
+
+        if (!Data.flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(Data);
+
+        return ParserUtils::MakeNode<ErrorExprNode>(
+            State,
+            Res,
+            Memory
+        );
+    }
+    
+    // Parse Array | Parseia Arrays.
+    ExpressionNode* ParseArray(
+        Instruction& Inst,
+        ParseState& State,
+        ParseResult& Res,
+        RunTimeData& Data,
+        Arena& Memory
+    )
+    {
+        // Create Array | Cria o Array.
+        ArrayValue* Array =
+            ParserUtils::MakeNode<ArrayValue>(
+                State,
+                Res,
+                Memory
+            );
+
+        while (true)
+        {
+            // Take Current Token | Pega o Token Atual.
+            Token* Current = Inst.Peek();
+
+            // Empty Array | Array Vazio.
+            if (Current && Current->Type == TokenType::RBRACKET)
+            {
+                Token* E = Inst.Advance();
+                ParserUtils::UpdateStatePos(E, State);
+                return Array;
+            }
+
+            // Parse Value | Parseia o Valor.
+            ExpressionNode* Value =
+                ExpressionParser::ParseExpression(
+                    Inst,
+                    State,
+                    Res,
+                    Data,
+                    Memory
+                );
+
+            Array->Args.push_back(Value);
+
+            // Update Current | Atualiza o Token Atual.
+            Current = Inst.Peek();
+
+            // EOF
+            if (!Current)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Parsing",
+                    "Invalid <ARRAY>",
+                    "Unexpected <EOF> While Parsing Array",
+                    "Add ']' To Close Array",
+                    State.Pos.line,
+                    State.Pos.collumn
+                );
+
+                if (!Data.flags.debugMode)
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+
+                return ParserUtils::MakeNode<ErrorExprNode>(
+                    State,
+                    Res,
+                    Memory
+                );
+            }
+
+            // Next Element | Próximo Elemento.
+            if (Current->Type == TokenType::COMMA)
+            {
+                Token* E = Inst.Advance();
+                ParserUtils::UpdateStatePos(E, State);
+                continue;
+            }
+
+            // Closing | Fechamento.
+            if (Current->Type == TokenType::RBRACKET)
+            {
+                Token* E = Inst.Advance();
+                ParserUtils::UpdateStatePos(E, State);
+                return Array;
+            }
+
+            // Invalid Separator | Separador Inválido.
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Invalid <ARRAY>",
+                "Expected ',' Or ']' After Array Element",
+                "Separate Array Elements With ','",
+                Current->pos.line,
+                Current->pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+
+            return ParserUtils::MakeNode<ErrorExprNode>(
+                State,
+                Res,
+                Memory
+            );
+        }
+    }
+
+    // Parse Fn Calls | Parseia Chamadas de Função
+    ExpressionNode* ParseFOO(
+        ExpressionNode* L,
+        Instruction& Inst,
+        ParseState& State,
+        ParseResult& Res,
+        RunTimeData& Data,
+        Arena& Memory
+    )
+    {
+        // Call Base
+        FunctionCall* Call = ParserUtils::MakeNode<FunctionCall>(State, Res, Memory);
+        Call->Callee = L; // Set Callee | Define Callee 
+        while (true) {
+        
+            // Take Current Token.
+            Token* Current = Inst.Peek();
+            if (Current && Current->Type == TokenType::RPARENT)
+            {
+                Token* E = Inst.Advance();
+                ParserUtils::UpdateStatePos(E, State);;
+                
+                return Call;
+            }
+            // Create a New Arg
+            ExpressionNode* Arg =
+                ExpressionParser::ParseExpression(
+                    Inst,
+                    State,
+                    Res,
+                    Data,
+                    Memory
+                );
+            Current = Inst.Peek();
+
+            // Set a New Arg | Define um Novo Arg.
+            Call->Args.push_back(Arg);
+            
+            // Separate By Commas | Separa por Virgulas.
+            if (!Current)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Parsing",
+                    "Invalid <FUNCTION_CALL>",
+                    "Unexpected <EOF> While Parsing Arguments",
+                    "Add ')' To Close Function Call",
+                    State.Pos.line,
+                    State.Pos.collumn
+                );
+
+                if (!Data.flags.debugMode)
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+
+                return ParserUtils::MakeNode<ErrorExprNode>(
+                    State,
+                    Res,
+                    Memory
+                );
+            }
+            if (Current->Type == TokenType::COMMA)
+            {
+                Token* E = Inst.Advance();
+                ParserUtils::UpdateStatePos(E, State);
+                continue;
+            }
+
+            // Closing
+            if (Current->Type == TokenType::RPARENT)
+            {
+                Inst.Advance();
+                return Call;
+                break;
+            }
+
+            // FOO(1 2)/WhitOut Comma | FOO(1 2)/Sem Virgula.
+            else
+
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Parsing",
+                    "Invalid <FUNCTION_CALL>",
+                    "Expected ',' Or ')' After Function Argument",
+                    "Separate Arguments With ','",
+                    Current->pos.line,
+                    Current->pos.collumn
+                );
+
+                if (!Data.flags.debugMode)
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+
+                return ParserUtils::MakeNode<ErrorExprNode>(
+                    State,
+                    Res,
+                    Memory
+                );
+            }
+        }
+
+        if (!Data.flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(Data);
+
+        return ParserUtils::MakeNode<ErrorExprNode>(
+            State,
+            Res,
+            Memory
+        );
+    }
+
 }
 
 // ======= CORE ======= //
@@ -105,7 +582,7 @@ pair<int, int> ExpressionParser::BindingPower(TokenType Type)
         case TokenType::EQSL:
         case TokenType::EQPWR:
         case TokenType::EQMOD:
-            return {10, 10};
+            return {10, 9};
 
         case TokenType::OR:
             return {20, 21};
@@ -134,7 +611,7 @@ pair<int, int> ExpressionParser::BindingPower(TokenType Type)
 
         case TokenType::POWER:
         case TokenType::POT:
-            return {80, 80};
+            return {80, 79};
 
         case TokenType::DOT:
         case TokenType::LPARENT:
@@ -146,7 +623,7 @@ pair<int, int> ExpressionParser::BindingPower(TokenType Type)
     }
 }
 
-// Nud Denot | Denotação Nula
+// Nud Denot | Denotação Nula.
 ExpressionNode* ExpressionParser::Nud(
     Instruction& Inst,
     ParseState& State,
@@ -158,6 +635,7 @@ ExpressionNode* ExpressionParser::Nud(
     // Take Current Token
     // Pega o Token Atual
     Token* Entry = Inst.Advance();
+    ParserUtils::UpdateStatePos(Entry, State);
     if (!Entry)
     {
         OrbitLog::SyntaxLog::SyntaxError(
@@ -178,6 +656,34 @@ ExpressionNode* ExpressionParser::Nud(
     // RUN TYPES | PERCORRE O TIPO.
     switch (Entry->Type) {
         
+        // ===== UNARYS ===== //
+        case TokenType::MINUS:
+        case TokenType::PLUS:
+        {
+            // Take the Operand | Pega o Operando.
+            ExpressionNode* Operand =
+                ParseExpression(
+                Inst,
+                State,
+                Res,
+                Data,
+                Memory,
+                80
+                ); 
+            // Create Unary Node | Cria o Nó Unario.
+            UnaryNode* U =
+                ParserUtils::MakeNode<UnaryNode>(
+                    State,
+                    Res,
+                    Memory
+                );
+            // SEY UNARY | DEFINE A DATA DO NÓ UNARIO.
+            U->Operator = Entry;
+            U->Operand  = Operand;
+
+            return U;
+        }
+
         // ===== LITERALS | LITERAIS ===== //
         case TokenType::INTEGER:
         {
@@ -200,7 +706,7 @@ ExpressionNode* ExpressionParser::Nud(
             LiteralNode* Node =
                 ParserUtils::MakeNode<LiteralNode>
                     (State, Res, Memory);
-            Node->Value = Data.source.substr(Entry->pos.start, Entry->pos.len);
+            Node->Value = Entry->Lexeme(Data);
             return Node;
         }
         case TokenType::TRUE:
@@ -235,6 +741,44 @@ ExpressionNode* ExpressionParser::Nud(
             Node->Value = NullLitVal{};
             return Node;
         }
+        // ===== BLOCKS ===== //
+        case TokenType::LPARENT:
+        {
+            // Create the Node | Cria o No
+            ExpressionNode* Node =
+                ParseExpression(
+                    Inst,
+                    State,
+                    Res,
+                    Data,
+                    Memory
+                );
+            // Take Closing | Pega o Fechamento
+            Token* C = Inst.Peek();
+            if (!C or C->Type is_not TokenType::RPARENT)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Parsing",
+                    "Invalid <EXPRESSION>",
+                    "Expected ')' After Expression",
+                    "Close The Parenthesis",
+                    Entry->pos.line,
+                    Entry->pos.collumn
+                );
+
+                if (!Data.flags.debugMode)
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+
+                return ParserUtils::MakeNode<ErrorExprNode>(
+                    State,
+                    Res,
+                    Memory
+                );
+            }
+            Token* E = Inst.Advance();
+            ParserUtils::UpdateStatePos(E, State);;
+        return Node;
+        }
 
         // ===== IDENTIFIERS ===== //
         case TokenType::IDENTIFIER:
@@ -248,6 +792,25 @@ ExpressionNode* ExpressionParser::Nud(
             );
             return Node;
         }
+
+        // ===== TABLES & ARRAYS/CONTAINER ==== //
+
+        case TokenType::LBRACE:
+            return ExprUtils::ParseTable(
+                Inst,
+                State,
+                Res,
+                Data,
+                Memory
+            );
+        case TokenType::LBRACKET:
+            return ExprUtils::ParseArray(
+                Inst,
+                State,
+                Res,
+                Data,
+                Memory               
+            );
 
         // ===== DEF ===== //
         default:
@@ -280,6 +843,20 @@ ExpressionNode* ExpressionParser::Led(
     int RightBindingPower
 )
 {
+    // ===== POST-FIX!!! ===== //
+    if (OperatorToken->Type == TokenType::LPARENT)
+        return ExprUtils::ParseFOO(L, Inst, State, Res, Data, Memory);
+    if (OperatorToken->Type == TokenType::LBRACKET)
+        return ExprUtils::ParseIndex(
+            L,
+            Inst,
+            State,
+            Res,
+            Data,
+            Memory
+        );
+
+    // CONTINUE | CONTINUA.
     // Take the Curr Token and Op | Pega o Token Atual e o Operador.
     Operator Op = ExprUtils::GetOperator(OperatorToken->Type);
     if (Op == Operator::NONE)
@@ -287,8 +864,8 @@ ExpressionNode* ExpressionParser::Led(
         OrbitLog::SyntaxLog::SyntaxError(
             "Parsing",
             "Invalid <OPERATOR>",
-            "Expected A Valid <OPERATOR>",
-            "Add a Valid <OPERATOR>",
+            "Expected A Valid <OPERATOR>, But Got: "+OperatorToken->GetType(),
+            "Add a Valid <OPERATOR> To Continue Expression",
             State.Pos.line,
             State.Pos.collumn
         );
@@ -297,7 +874,6 @@ ExpressionNode* ExpressionParser::Led(
         return ParserUtils::
         MakeNode<ErrorExprNode>(State, Res, Memory);
     }
-
     ExpressionNode* R = ParseExpression(
         Inst,
         State,
@@ -323,6 +899,35 @@ ExpressionNode* ExpressionParser::Led(
             MakeNode<ErrorExprNode>(State, Res, Memory);
     }
 
+    // ASSIGNS | ASSIGNS(MEMA COISA).
+    if (
+        OperatorToken->Type == TokenType::EQUAL ||
+        OperatorToken->Type == TokenType::EQPL ||
+        OperatorToken->Type == TokenType::EQMIN ||
+        OperatorToken->Type == TokenType::EQSTAR ||
+        OperatorToken->Type == TokenType::EQSL ||
+        OperatorToken->Type == TokenType::EQMOD ||
+        OperatorToken->Type == TokenType::EQPWR
+    )
+    {
+        // ASSIGN | NÓ DE DEFINIÇÃO
+        AssignmentNode* Node =
+            ParserUtils::MakeNode<AssignmentNode>(
+                State,
+                Res,
+                Memory
+            );
+
+        // SET ASSIGN | DEFIEN O ASSIGN
+        Node->Operator = OperatorToken;
+        Node->Left = L;
+        Node->Right = R;
+
+        // FINALIZE
+        return Node;
+    }
+
+    // BINARY | NÓ DE OPERAÇÕES BINARIAS
     BinaryNode* Node =
         ParserUtils::MakeNode<BinaryNode>(
             State,
@@ -330,11 +935,74 @@ ExpressionNode* ExpressionParser::Led(
             Memory
         );
 
+    // SET BINARY | DEFINE O BINARIO.
     Node->L = L;
     Node->R = R;
     Node->Op = Op;
-
+    
+    // FINALIZE | FINALIZA.
     return Node;
+}
+
+// Implicit Multiply | Multiplicação Implicita.
+ExpressionNode* ExpressionParser::ParseImplMulti(
+    ExpressionNode* L,
+    Instruction& Inst,
+    ParseState& State,
+    ParseResult& Res,
+    RunTimeData& Data,
+    Arena& Memory
+)
+{
+    // Consumes '(' | Consome o '('.
+    Token* E = Inst.Advance();
+    ParserUtils::UpdateStatePos(E, State);
+
+    ExpressionNode* R = ParseExpression(
+        Inst,
+        State,
+        Res,
+        Data,
+        Memory
+    );
+    // Take Final | Pega o Final.
+    if (!R)
+        return nullptr;
+    if (!Inst.Peek() || Inst.Peek()->Type != TokenType::RPARENT)
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Parsing",
+            "Invalid <PARENTHESES>",
+            "Expected ')' After Expression",
+            "Close The Parentheses",
+            State.Pos.line,
+            State.Pos.collumn
+        );
+
+        if (!Data.flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(Data);
+
+        return ParserUtils::MakeNode<ErrorExprNode>(
+            State,
+            Res,
+            Memory
+        );
+    }
+     
+    E = Inst.Advance(); // Consumes ')' | Consome ')'.
+    ParserUtils::UpdateStatePos(E, State);
+    // Create Binary Node to Expression in '(...)'
+    // Cria o No Binario Para a Expressao Entre '(...)'.
+    BinaryNode* N =
+        ParserUtils::MakeNode<BinaryNode>(
+            State, Res, Memory
+        );
+    
+    N->R  = R;
+    N->L  = L;
+    N->Op = Operator::MUL;
+
+    return N;
 }
 
 // ======= ENTRY-POINT ======= //
@@ -357,7 +1025,6 @@ ExpressionNode* ExpressionParser::ParseExpression(
     );
     if (!L)
         return nullptr;
-
     
     int i=0;
     while (true)
@@ -370,13 +1037,20 @@ ExpressionNode* ExpressionParser::ParseExpression(
         Token* OpToken = Inst.Peek();
         if (!OpToken)
             break;
+
+        // Implicit Multiply | Multiplicação Implicita.
+        if (OpToken->Type == TokenType::LPARENT && L->Type == NodeType::LITERAL)
+            L = ParseImplMulti(L, Inst, State, Res, Data, Memory);
+
+        // LEFT AND RIGHT BINDING POWER | BP ESQUEDO E DIREITO.
         auto [LP, RP] = 
             BindingPower(OpToken->Type);
         if (LP < MinBindingPower)
             break;
 
         // CONSUMES OPERATOR | CONSOME O OPERADOR.
-        Inst.Advance();
+        Token* E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
 
         L = Led(
             L,
@@ -392,6 +1066,7 @@ ExpressionNode* ExpressionParser::ParseExpression(
             return nullptr;
         i++;
     }
+
     return L;
 }
 // _EOF

@@ -33,7 +33,6 @@ struct Instruction
     {
         if (pos.curr >= Tokens.size())
             return nullptr;
-
         return Tokens[pos.curr++];
     }
     Token* Peek() // Check The Next Token And Not Consumes | Olha o Proximo Token e Não Consome.
@@ -104,7 +103,9 @@ enum class NodeType : uint8_t
 
     MEMBER_ACCESS,
     INDEX_ACCESS,
-    CALL,
+    FN_CALL,
+    TABLE_VALUE,
+    ARRAY_VALUE,
 
     RANGE
 };
@@ -253,6 +254,12 @@ using LiteralValue = variant<
     NullLitVal,
     nullptr_t
 >;
+struct ArrayEntry // Entry of Array | Entrada da Tabela.
+{
+    ExpressionNode* Key;
+    ExpressionNode* Value;
+};
+
 
 // Base Expression Node | Node Base de Expressão
 struct ExpressionNode : ASTNode
@@ -359,6 +366,40 @@ struct RangeNode : ExpressionNode
         : ExpressionNode(NodeType::RANGE, P) {};
 };
 
+// FN CALL | Chamada de Função
+struct FunctionCall : ExpressionNode
+{
+    // DATA
+    ExpressionNode* Callee;
+    vec<ExpressionNode*> Args;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    FunctionCall(NodePos P)
+        : ExpressionNode(NodeType::FN_CALL, P) {};
+};
+
+// ARRAY LITERAL | Tabelas Literais.
+struct ArrayValue : ExpressionNode
+{
+    // DATA
+    vec<ExpressionNode*> Args;
+
+    // CONSTRUTOR | CONSTRUCTOR
+    ArrayValue(NodePos P)
+        : ExpressionNode(NodeType::ARRAY_VALUE, P) {};
+};
+
+// TABLE LITERAL | Tabelas.
+struct TableValue : ExpressionNode
+{
+    // DATA
+    vec<ArrayEntry> Args;
+
+    // CONSTRUTOR | CONSTRUCTOR
+    TableValue(NodePos P)
+        : ExpressionNode(NodeType::TABLE_VALUE, P) {};
+};
+
 // ERRORS | ERROS
 struct ErrorExprNode : ExpressionNode
 {
@@ -421,7 +462,7 @@ struct ElseNode : ControlNode
         : ControlNode(NodeType::ELSE_CONTROL, P) {};
 };
 
-// IElif Control Statement | Controle de Instrução 'Elif'.
+// Elif Control Statement | Controle de Instrução 'Elif'.
 struct ElifNode : ControlNode
 {
     // DATA
