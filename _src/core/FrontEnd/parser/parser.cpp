@@ -339,13 +339,19 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
         case NodeType::MEMBER_ACCESS:
         {
             auto& N = static_cast<MemberAccessNode&>(Node);
-
             file << Indent << "MemberAccess\n";
-            file << Indent << "Member: "
-                 << (N.Member ? N.Member->Lexeme(Data) : "") << '\n';
 
             if (N.Object)
+            {
+                file << Indent << "Object:\n";
                 DumbNode(*N.Object, file, Data, Depth + 1);
+            }
+
+            if (N.Member)
+            {
+                file << Indent << "Member:\n";
+                DumbNode(*N.Member, file, Data, Depth + 1);
+            }
 
             break;
         }

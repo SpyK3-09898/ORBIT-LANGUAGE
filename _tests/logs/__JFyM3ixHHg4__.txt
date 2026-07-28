@@ -1,0 +1,220 @@
+
+// ========== LEXER ============ // 
+
+TOKEN COUNT: 29
+TOKENS: 
+
+Token0: TypeId: 58
+Lexeme: 
+Pos(line/index): 0;0
+
+Token1: TypeId: 52
+Lexeme: 
+Pos(line/index): 1;0
+
+Token2: TypeId: 7
+Lexeme: const
+Pos(line/index): 1;5
+
+Token3: TypeId: 7
+Lexeme: var
+Pos(line/index): 1;9
+
+Token4: TypeId: 7
+Lexeme: y
+Pos(line/index): 1;11
+
+Token5: TypeId: 10
+Lexeme: 
+Pos(line/index): 1;13
+
+Token6: TypeId: 43
+Lexeme: 
+Pos(line/index): 1;15
+
+Token7: TypeId: 2
+Lexeme: Key
+Pos(line/index): 1;20
+
+Token8: TypeId: 50
+Lexeme: 
+Pos(line/index): 1;21
+
+Token9: TypeId: 0
+Lexeme: 3
+Pos(line/index): 1;23
+
+Token10: TypeId: 39
+Lexeme: 
+Pos(line/index): 1;24
+
+Token11: TypeId: 2
+Lexeme: Key2
+Pos(line/index): 1;31
+
+Token12: TypeId: 50
+Lexeme: 
+Pos(line/index): 1;32
+
+Token13: TypeId: 44
+Lexeme: 
+Pos(line/index): 1;34
+
+Token14: TypeId: 0
+Lexeme: 1
+Pos(line/index): 1;35
+
+Token15: TypeId: 39
+Lexeme: 
+Pos(line/index): 1;36
+
+Token16: TypeId: 0
+Lexeme: 2
+Pos(line/index): 1;38
+
+Token17: TypeId: 39
+Lexeme: 
+Pos(line/index): 1;39
+
+Token18: TypeId: 0
+Lexeme: 3
+Pos(line/index): 1;41
+
+Token19: TypeId: 45
+Lexeme: 
+Pos(line/index): 1;42
+
+Token20: TypeId: 46
+Lexeme: 
+Pos(line/index): 1;43
+
+Token21: TypeId: 52
+Lexeme: 
+Pos(line/index): 2;0
+
+Token22: TypeId: 7
+Lexeme: y
+Pos(line/index): 2;1
+
+Token23: TypeId: 38
+Lexeme: 
+Pos(line/index): 2;2
+
+Token24: TypeId: 7
+Lexeme: x
+Pos(line/index): 2;3
+
+Token25: TypeId: 10
+Lexeme: 
+Pos(line/index): 2;5
+
+Token26: TypeId: 43
+Lexeme: 
+Pos(line/index): 2;7
+
+Token27: TypeId: 46
+Lexeme: 
+Pos(line/index): 2;8
+
+Token28: TypeId: 59
+Lexeme: 
+Pos(line/index): 2;8
+
+
+// ============ ENDOF: LEXER =========== // 
+// ========== PARSING ========== //
+
+NodeType: 0
+Pos(line/collumn): 0;0
+Program
+    NodeType: 1
+    Pos(line/collumn): 0;0
+    Body
+    Children: 2
+    [0] Ptr: 0x16a53af4208 | Type: 6
+    [1] Ptr: 0x16a53af4468 | Type: 11
+        NodeType: 6
+        Pos(line/collumn): 1;11
+        VarDecl
+        Name: P
+        Mutable: 1
+        InferType: 0
+        Value:
+            NodeType: 15
+            Pos(line/collumn): 1;15
+            Table
+            Entries: 2
+            [0]
+            Key:
+                NodeType: 7
+                Pos(line/collumn): 1;20
+                Literal
+                Value: Key
+            Value:
+                NodeType: 7
+                Pos(line/collumn): 1;23
+                Literal
+                Value: 3
+            [1]
+            Key:
+                NodeType: 7
+                Pos(line/collumn): 1;31
+                Literal
+                Value: Key2
+            Value:
+                NodeType: 16
+                Pos(line/collumn): 1;34
+                Array
+                Elements: 3
+                [0]
+                    NodeType: 7
+                    Pos(line/collumn): 1;35
+                    Literal
+                    Value: 1
+                [1]
+                    NodeType: 7
+                    Pos(line/collumn): 1;38
+                    Literal
+                    Value: 2
+                [2]
+                    NodeType: 7
+                    Pos(line/collumn): 1;41
+                    Literal
+                    Value: 3
+        NodeType: 11
+        Pos(line/collumn): 2;8
+        Assignment
+        Operator: 10
+        Left:
+            NodeType: 12
+            Pos(line/collumn): 2;2
+            MemberAccess
+            Object:
+                NodeType: 8
+                Pos(line/collumn): 2;1
+                Identifier
+                Name: y
+            Member:
+                NodeType: 8
+                Pos(line/collumn): 2;2
+                Identifier
+                Name: x
+        Right:
+            NodeType: 15
+            Pos(line/collumn): 2;7
+            Table
+            Entries: 0
+
+// ========== ENDOF: PARSING ========== //
+
+// ============ MEMORY & DATA =========== //
+
+LIMIT: 65536
+USED: 1448
+AVALIABLE: 64088
+SPACES/BLOCKS USED ACCOUNT: 1
+
+Finishing Arena. .. ...
+
+\ ============ ENDOF: 'ARENA' ==========
+

@@ -10,10 +10,13 @@
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../../../../RunTimeData.hpp"
+#include <vector>
 
 // ======= UTILS ======= //
 
 namespace ExprUtils {
+
+    // UTILS
 
     // Return Op From Token | Retorna o Operador do Token.
     Operator GetOperator(TokenType Type)
@@ -87,6 +90,95 @@ namespace ExprUtils {
             default:
                 return Operator::NONE;
         }
+    }
+
+    // PARSE FUNCTIONS
+
+    // Parse Member Access | Parseia Acessos de Membro.
+    ExpressionNode* ParseAcess(
+        ExpressionNode* L,
+        Instruction& Inst,
+        ParseState& State,
+        ParseResult& Res,
+        RunTimeData& Data,
+        Arena& Memory        
+    )
+    {
+        MemberAccessNode* Access =
+            ParserUtils::MakeNode<MemberAccessNode>(
+                State,
+                Res,
+                Memory
+            );
+
+        // Set Object | Define o Objeto
+        Access->Object = L;
+
+        Token* Member = Inst.Peek();
+
+        // Check if Have Member | Olha se tem o Membro
+        if (!Member)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Invalid <MEMBER_ACCESS>",
+                "Expected Identifier After '.'",
+                "Add A Member Name After '.'",
+                State.Pos.line,
+                State.Pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+
+            return ParserUtils::MakeNode<ErrorExprNode>(
+                State,
+                Res,
+                Memory
+            );
+        }
+
+        // Check Identifier | Verifica Identifier
+        if (Member->Type != TokenType::IDENTIFIER)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Invalid <MEMBER_ACCESS>",
+                "Expected Identifier After '.', But Got: "+Member->GetType(),
+                "Use A Valid Identifier As Member Name",
+                Member->pos.line,
+                Member->pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+
+            return ParserUtils::MakeNode<ErrorExprNode>(
+                State,
+                Res,
+                Memory
+            );
+        }
+
+        // Create Identifier Node | Cria o Nó Identifier
+        IdentifierNode* Id =
+            ParserUtils::MakeNode<IdentifierNode>(
+                State,
+                Res,
+                Memory
+            );
+
+        Id->Name = str_view(
+            Data.source.data() + Member->pos.start,
+            Member->pos.len
+        );
+
+        Access->Member = Id;
+
+        Token* E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+
+        return Access;
     }
 
     // Parse Index Access | Parseia Acesso por Índice
@@ -555,9 +647,6 @@ namespace ExprUtils {
             }
         }
 
-        if (!Data.flags.debugMode)
-            OrbitLog::SyntaxLog::ThrowLog(Data);
-
         return ParserUtils::MakeNode<ErrorExprNode>(
             State,
             Res,
@@ -599,6 +688,9 @@ pair<int, int> ExpressionParser::BindingPower(TokenType Type)
         case TokenType::LESSEQ:
         case TokenType::GREATEQ:
             return {50, 51};
+
+        case TokenType::RANGE:
+            return {55,56};
 
         case TokenType::PLUS:
         case TokenType::MINUS:
@@ -843,6 +935,51 @@ ExpressionNode* ExpressionParser::Led(
     int RightBindingPower
 )
 {
+    // RANGE
+    if (OperatorToken->Type == TokenType::RANGE)
+    {
+        RangeNode* Node =
+            ParserUtils::MakeNode<RangeNode>(
+                State,
+                Res,
+                Memory
+            );
+
+        Node->Begin = L;
+
+        Node->End =
+            ParseExpression(
+                Inst,
+                State,
+                Res,
+                Data,
+                Memory,
+                RightBindingPower
+            );
+
+        if (!Node->End)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Invalid <RANGE>",
+                "Expected Expression After '..'",
+                "Add A Valid Range End",
+                State.Pos.line,
+                State.Pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+
+            return ParserUtils::MakeNode<ErrorExprNode>(
+                State,
+                Res,
+                Memory
+            );
+        }
+
+        return Node;
+    }
     // ===== POST-FIX!!! ===== //
     if (OperatorToken->Type == TokenType::LPARENT)
         return ExprUtils::ParseFOO(L, Inst, State, Res, Data, Memory);
@@ -855,7 +992,15 @@ ExpressionNode* ExpressionParser::Led(
             Data,
             Memory
         );
-
+    if (OperatorToken->Type == TokenType::DOT)
+        return ExprUtils::ParseAcess(
+            L,
+            Inst,
+            State,
+            Res,
+            Data,
+            Memory
+        );
     // CONTINUE | CONTINUA.
     // Take the Curr Token and Op | Pega o Token Atual e o Operador.
     Operator Op = ExprUtils::GetOperator(OperatorToken->Type);

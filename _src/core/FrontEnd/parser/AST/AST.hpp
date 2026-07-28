@@ -335,7 +335,7 @@ struct MemberAccessNode : ExpressionNode
 {
     // DATA
     ExpressionNode* Object;
-    Token* Member;
+    ExpressionNode* Member;
 
     // CONSTRUCTOR | CONSTRUTOR
     MemberAccessNode(NodePos P)

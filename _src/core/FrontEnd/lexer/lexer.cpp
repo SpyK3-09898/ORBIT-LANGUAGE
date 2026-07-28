@@ -576,6 +576,13 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
                 else MakeToken(Res, State, Data, TokenType::POT, Memory);
                 continue;
 
+            case ',':
+                MakeToken(Res, State, Data, TokenType::COMMA, Memory);
+                continue;
+            case '.':
+                MakeToken(Res, State, Data, TokenType::DOT, Memory);
+                continue;
+
             case '&':
                 if (N == '&')
                 {
@@ -629,7 +636,7 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
 
                 OrbitLog::SyntaxLog::SyntaxError(
                     "Lexing", 
-                    "Unknow <CHAR>",
+                    "Unknow <CHAR>: "+string(1, C),
                     "Char not Supported or Invalid in Context. Ignoring",
                     "Change to a Valid Char",
                     State.currPos.line,
