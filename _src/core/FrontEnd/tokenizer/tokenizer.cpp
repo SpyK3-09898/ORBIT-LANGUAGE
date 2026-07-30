@@ -21,7 +21,7 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
     string text;
     fstream log_file;
     TokenType LastType;
-    if (Data.flags.debugMode)
+    if (Data.flags.generateLog)
     {
         log_file.open(
             Data.LogDir,
@@ -33,7 +33,12 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
     }
     vec<string> KeyWords
     {
-        "var", "If"
+        "var", "if", "while", "for",
+        "end"
+    };
+    vec<string> CntxtKW
+    {
+        "new", "in"
     };
     vec<string> Modifiers
     {
@@ -60,6 +65,8 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
                 { LastType = Tok->Type; Tok->Type = TokenType::KEYWORD; changed=true; }
             else if (contains_at(Modifiers, Lexeme))
                 { LastType = Tok->Type; Tok->Type = TokenType::MODIFIER; changed=true; }
+            else if (contains_at(CntxtKW, Lexeme))
+                { LastType = Tok->Type; Tok->Type = TokenType::CNTXT_KW; changed=true; }
             else if (contains_at(LitTypes, Lexeme))
                 { LastType = Tok->Type; Tok->Type = TokenType::LIT_TYPE; }
             auto It = Others.find(Lexeme);

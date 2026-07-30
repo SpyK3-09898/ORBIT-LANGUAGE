@@ -1,0 +1,7 @@
+
+const var x = 10;
+
+while true:
+    if true:
+        x+=5;
+print(x);

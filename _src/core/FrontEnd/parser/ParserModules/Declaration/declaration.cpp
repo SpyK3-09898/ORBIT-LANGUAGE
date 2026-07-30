@@ -116,6 +116,7 @@ namespace DeclUtils {
 
             } else if (Next->Type == TokenType::COLON) {
 
+                // INIT 
                 Token* E = Inst.Advance();
                 ParserUtils::UpdateStatePos(E, State);
 
@@ -127,9 +128,34 @@ namespace DeclUtils {
                 pair<LiteralTypes, int> InferedType =
                     ParserUtils::Comm::InferType(SubInfer, Data);
 
+                // ADVANCE THE INFER COMP-SIZE | AVANÇA O TAMANHO DO TIPO INFERIDO.
                 for (int i = 0; i < InferedType.second; i++)
                 { Token* E = Inst.Advance(); ParserUtils::UpdateStatePos(E, State); }
+                Decl->InferType = InferedType.first;
 
+                // EQUAL | IGUAL
+                if (Next->Type == TokenType::EQUAL)
+                {
+                    Token* E = Inst.Advance();
+                    ParserUtils::UpdateStatePos(E, State);
+
+                    Instruction NewInst{
+                        {},
+                        vec<Token*>(
+                            Inst.Tokens.begin() + Inst.pos.curr,
+                            Inst.Tokens.end()
+                        ),
+                    };
+
+                    Decl->Val = ExprParser.ParseExpression(
+                        NewInst,
+                        State,
+                        Res,
+                        Data,
+                        Memory
+                    );
+
+                }
             } else {
 
                 OrbitLog::SyntaxLog::SyntaxError(

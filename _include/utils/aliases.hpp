@@ -17,6 +17,8 @@
 #include <unordered_map>
 #include <variant>
 #include <cstdint>
+#include <cctype>
+#include <algorithm>
 #include <memory>
 
 #define is ==
@@ -142,6 +144,21 @@ template<typename T, typename... Args>
 constexpr auto make_uniq(Args&&... args)
 {
     return std::make_unique<T>(std::forward<Args>(args)...);
+}
+
+string ToLower(std::string Str)
+{
+    std::transform(
+        Str.begin(),
+        Str.end(),
+        Str.begin(),
+        [](unsigned char c)
+        {
+            return std::tolower(c);
+        }
+    );
+
+    return Str;
 }
 
 // EOF

@@ -15,7 +15,7 @@
 #include <cstdint>
 #include <utility>
 
-// ======= INSTRUCTIOSN ======= //
+// ======= INSTRUCTIONS ======= //
 
 // None Value/Null Value | Valor Nulo e Noni
 struct NoneLitVal{};
@@ -47,6 +47,19 @@ using InstVec = vec<Instruction>;
 
 // ======= PREV ======= //
 
+// ENUMS
+
+enum class NodeType : uint8_t;
+enum class BodyTypes : uint8_t;
+
+enum class LoopTypes : uint8_t;
+enum class MutableTypes : uint8_t;
+enum class LiteralTypes : uint8_t;
+
+enum class Operator : uint8_t;
+
+// NODES
+
 struct ASTNode;
 
 struct BodyNode;
@@ -71,6 +84,7 @@ struct ControlNode;
 struct ElseNode;
 struct ElifNode;
 struct IfNode;
+struct WhileNode;
 struct ErrorStmtNode;
 
 // ======= NODES ======= //
@@ -89,6 +103,11 @@ enum class NodeType : uint8_t
     IF_CONTROL,
     ELSE_CONTROL,
     ELIF_CONTROL,
+
+    WHILE,
+    FOR,
+    FOR_EACH,
+    FOR_DEF,
 
     // DECLARATIONS
     VAR_DECL,
@@ -111,7 +130,7 @@ enum class NodeType : uint8_t
 };
 
 // Type of Body Insts | Tipos de Instruções de Corpo.
-enum class BodyTypes
+enum class BodyTypes: uint8_t
 {
     PROGRAM,
     CONTROL_IF,
@@ -119,6 +138,14 @@ enum class BodyTypes
     LOOP_WHILE,
     LOOP_FOR,
     OTHER
+};
+
+// Typeof Loop | Tipos de Loop
+enum class LoopTypes: uint8_t
+{
+    WHILE,
+    FOR,
+    EACH
 };
 
 // Mutable Values Types | Valores de Tipos Mutaveis.
@@ -283,7 +310,7 @@ struct LiteralNode : ExpressionNode
 struct IdentifierNode : ExpressionNode
 {
     // DATA
-    str_view Name;
+    string Name;
 
     // CONSTRUCTOR | CONSTRUTOR
     IdentifierNode(NodePos P)
@@ -422,7 +449,7 @@ struct DeclarationNode : ASTNode
 struct VarDeclNode : DeclarationNode
 {
     // DATA
-    str_view Name;
+    string Name;
     LiteralTypes InferType;
     MutableTypes MutType;
     ExpressionNode* Val;
@@ -488,6 +515,65 @@ struct IfNode : ControlNode
         : ControlNode(NodeType::IF_CONTROL, P) {};
 };
 
+// While Control Statement | Controle de Instrução 'While'.
+struct WhileNode : ControlNode
+{
+    // DATA
+    ExpressionNode* Cond;
+    BodyNode* Body;
+    LoopTypes Type;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    WhileNode(NodePos P)
+        : ControlNode(NodeType::WHILE, P) {};
+};
+
+// ForEach Control Statement | Controle de Instrução 'ForEach'
+struct ForEachNode : ControlNode
+{
+    // DATA
+    IdentifierNode* Identifier;
+    ExpressionNode* Index;
+    ArrayValue* Value;
+
+    BodyNode* Body;
+    LoopTypes Type;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    ForEachNode(NodePos P)
+        : ControlNode(NodeType::FOR_EACH, P) {};
+};
+
+// For Control Statement | Controle de Instrução 'For'
+struct ForDefNode : ControlNode
+{
+    // DATA
+    IdentifierNode* Identifier;
+    LiteralNode* Value;
+    ExpressionNode* Cond;
+
+    BodyNode* Body;
+    LoopTypes Type;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    ForDefNode(NodePos P)
+        : ControlNode(NodeType::FOR_DEF, P) {};
+};
+
+// For Control Statement | Controle de Instrução 'For'
+struct ForNode : ControlNode
+{
+    // DATA
+    IdentifierNode* Identifier;
+    RangeNode* End;
+    BodyNode* Body;
+    LoopTypes Type;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    ForNode(NodePos P)
+        : ControlNode(NodeType::FOR, P) {};
+};
+
 // Error Statements Nodes | Errors de Nos de Statement.
 struct ErrorStmtNode : ControlNode
 {
@@ -503,6 +589,7 @@ struct ParseState
 {
     int lastIndent=0;
     bool SingleStatement = false;
+    bool consumedInst=false;
     NodePos Pos; // Current Pos of Parser | Posição Atual do Lexer.
     vec<BodyNode*> Bodys;
     BodyNode* CurrBody;
@@ -575,6 +662,7 @@ namespace ParserUtils {
         return Node;
     }
 
+    // OTHERS PARSER UTILS | OUTRAS UTILIDADES DO PARSER
     namespace Comm {
         
         // Return the Typeof Explicit Type Assign

@@ -423,6 +423,7 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
     }
     text += "\n// ============ ENDOF: LEXER =========== // ";
     file << text;
+    file.close();
     if (Data.flags.debugMode)
         PrintIn("ENDOF TASK: Generate LexLog. .. ...");
 }

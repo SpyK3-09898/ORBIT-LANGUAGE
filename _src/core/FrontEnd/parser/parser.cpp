@@ -16,7 +16,11 @@
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../../RunTimeData.hpp"
+
+#include <cerrno>
 #include <cstddef>
+#include <cstring>
+#include <system_error>
 
 // ======== CORE ======== //
 
@@ -102,12 +106,12 @@ InstVec SeparateInstructions(LexResult& LRes, RunTimeData& Data)
 // Run AST | Percorre a AST
 void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
 {
+    
     string Indent(Depth * 4, ' ');
 
     file << Indent << "NodeType: " << (int)Node.Type << '\n';
     file << Indent << "Pos(line/collumn): "
          << Node.pos.line << ';' << Node.pos.collumn << '\n';
-
     switch (Node.Type) {
 
         // PROGRAM | PROGRAMA.
@@ -131,16 +135,31 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
 
             for (size_t i = 0; i < N.Data.size(); i++)
             {
+                if (!N.Data[i])
+                {
+                    file << Indent
+                        << "["
+                        << i
+                        << "] INVALID POINTER: nullptr\n";
+                    continue;
+                }
+
                 file << Indent
-                     << "[" << i << "] Ptr: " << N.Data[i]
-                     << " | Type: " << (int)N.Data[i]->Type
-                     << '\n';
+                    << "["
+                    << i
+                    << "] Ptr: "
+                    << N.Data[i]
+                    << " | Type: "
+                    << (int)N.Data[i]->Type
+                    << '\n';
             }
 
-            for (auto* Child : N.Data)
+            for (size_t i = 0; i < N.Data.size(); i++)
             {
-                if (Child)
-                    DumbNode(*Child, file, Data, Depth + 1);
+                if (!N.Data[i])
+                    continue;
+
+                DumbNode(*N.Data[i], file, Data, Depth + 1);
             }
 
             break;
@@ -240,6 +259,124 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
             break;
         }
 
+            case NodeType::WHILE:
+        {
+            auto& N = static_cast<WhileNode&>(Node);
+
+            file << Indent << "While\n";
+            file << Indent << "LoopType: " << (int)N.Type << '\n';
+
+            if (N.Cond)
+            {
+                file << Indent << "Condition:\n";
+                DumbNode(*N.Cond, file, Data, Depth + 1);
+            }
+
+            if (N.Body)
+            {
+                file << Indent << "Body:\n";
+                DumbNode(*N.Body, file, Data, Depth + 1);
+            }
+
+            break;
+        }
+
+        case NodeType::FOR_EACH:
+        {
+            auto& N = static_cast<ForEachNode&>(Node);
+
+            file << Indent << "ForEach\n";
+            file << Indent << "LoopType: " << (int)N.Type << '\n';
+
+            if (N.Identifier)
+            {
+                file << Indent << "Identifier:\n";
+                DumbNode(*N.Identifier, file, Data, Depth + 1);
+            }
+
+            if (N.Index)
+            {
+                file << Indent << "Index:\n";
+                DumbNode(*N.Index, file, Data, Depth + 1);
+            }
+
+            if (N.Value)
+            {
+                file << Indent << "Value:\n";
+                DumbNode(*N.Value, file, Data, Depth + 1);
+            }
+
+            if (N.Body)
+            {
+                file << Indent << "Body:\n";
+                DumbNode(*N.Body, file, Data, Depth + 1);
+            }
+
+            break;
+        }
+
+        case NodeType::FOR_DEF:
+        {
+            auto& N = static_cast<ForDefNode&>(Node);
+
+            file << Indent << "ForDef\n";
+            file << Indent << "LoopType: " << (int)N.Type << '\n';
+
+            if (N.Identifier)
+            {
+                file << Indent << "Identifier:\n";
+                DumbNode(*N.Identifier, file, Data, Depth + 1);
+            }
+
+            if (N.Value)
+            {
+                file << Indent << "Value:\n";
+                DumbNode(*N.Value, file, Data, Depth + 1);
+            }
+
+            if (N.Cond)
+            {
+                file << Indent << "Condition:\n";
+                DumbNode(*N.Cond, file, Data, Depth + 1);
+            }
+
+            if (N.Body)
+            {
+                file << Indent << "Body:\n";
+                DumbNode(*N.Body, file, Data, Depth + 1);
+            }
+
+            break;
+        }
+
+        case NodeType::FOR:
+        {
+            auto& N = static_cast<ForNode&>(Node);
+
+            file << Indent << "For\n";
+            file << Indent << "LoopType: " << (int)N.Type << '\n';
+
+            if (N.Identifier)
+            {
+                file << Indent << "Identifier:\n";
+                DumbNode(*N.Identifier, file, Data, Depth + 1);
+            }
+
+            if (N.End)
+            {
+                file << Indent << "Range:\n";
+                DumbNode(*N.End, file, Data, Depth + 1);
+            }
+
+            if (N.Body)
+            {
+                file << Indent << "Body:\n";
+                DumbNode(*N.Body, file, Data, Depth + 1);
+            }
+
+            break;
+        }
+        
         // EXPRESSIONS | EXPRESSOES.
         case NodeType::LITERAL:
         {
@@ -500,6 +637,15 @@ void GenerateParserLog(ParseResult& Res, RunTimeData& Data)
         PrintIn("INITING TASK: Starting Generate ParserLog. .. ...");
 
     fstream file(Data.LogDir, std::ios::out | std::ios::app);
+    if (!file.is_open())
+    {
+        OrbitLog::Error("parser.cpp", 
+            "Cannot Open Log File, Why: "+
+            string(std::strerror(errno))
+            +" Path: "+Data.LogDir.string(),
+            errno
+        );
+    }
 
     file << "\n// ========== PARSING ========== //\n\n";
 
@@ -551,8 +697,10 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
     // Take Instructions and Run Then | Pega as Instrução e Percorre/Gera Nodes e Erros
     int I=0;
     InstVec Instructions = SeparateInstructions(LRes, Data);
-    for (Instruction Inst : Instructions) // PARSE ALL INSTRUCTIONS | PARSEIA TODAS AS INTRUÇOES
+    for (Instruction& Inst : Instructions) // PARSE ALL INSTRUCTIONS | PARSEIA TODAS AS INTRUÇOES
     {
+
+        State.consumedInst=false;
 
         // PARSE TOKENS
         ASTNode* Node = nullptr; // CREATE BASE NODE
@@ -567,7 +715,7 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
             Memory
         );
         
-        if (Node == nullptr)
+        if (Node == nullptr and !State.consumedInst)
             Node = DeclParser.ParseDeclaration(
                 Inst,
                 State,
@@ -577,7 +725,7 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
                 Memory
             );
 
-        if (Node == nullptr)
+        if (Node == nullptr and !State.consumedInst)
             Node =
                 ExprParser.
                     ParseExpression(Inst, State, Res, Data, Memory);
@@ -598,17 +746,19 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
             if (
                 State.Bodys.size() > 1  and
                 NextIndent < InstIndent and
-                State.CurrBody->Type != BodyTypes::PROGRAM
+                State.CurrBody->Type != BodyTypes::PROGRAM and
+                Inst.Tokens.size() > 0 and
+                Inst.Tokens[0]->Lexeme(Data) != "End"
             ) ParserUtils::PopBodyStack(State, Data);
         //
         }
 
-        ParserUtils::AddInst<ASTNode>(Node, State, Res, Memory);
+        if (State.consumedInst)
+            ParserUtils::AddInst<ASTNode>(Node, State, Res, Memory);
         I++;
     }
     if (Data.flags.generateLog)
         GenerateParserLog(Res, Data);
-
     if (Data.flags.debugMode)
         PrintIn("ENDOF TASK: Parsing. .. ...");
     return Res;

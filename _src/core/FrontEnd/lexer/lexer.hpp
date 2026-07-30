@@ -71,6 +71,7 @@ enum class TokenType: uint8_t
     // NORMALS
     IDENTIFIER,
     KEYWORD,
+    CNTXT_KW,
     LIT_TYPE,
 
     // SIGNALS
@@ -176,6 +177,7 @@ struct Token
             // NORMALS
             case TokenType::IDENTIFIER:   return "<IDENTIFIER>";
             case TokenType::KEYWORD:      return "<KEYWORD>";
+            case TokenType::CNTXT_KW:     return "<CNTXT_KW>";
             case TokenType::LIT_TYPE:     return "<LIT_TYPE>";
 
             // MATH
