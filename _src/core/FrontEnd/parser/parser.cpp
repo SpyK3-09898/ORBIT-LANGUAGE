@@ -753,7 +753,7 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
         //
         }
 
-        if (State.consumedInst)
+        if (!State.consumedInst)
             ParserUtils::AddInst<ASTNode>(Node, State, Res, Memory);
         I++;
     }

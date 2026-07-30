@@ -1,7 +1,57 @@
 
 const var x = 10;
+const var y = 15;
+const var z = x = y;
 
-while true:
-    if true:
-        x+=5;
-print(x);
+print("oi");
+
+for i in x..y:
+    if True:
+        z = z + 5;
+    else:
+        y = y + 10;
+if False:
+    print("dont execute");
+for i in x..y:
+    if True:
+        z = z + 5;
+    else:
+        y = y + 10;
+if False:
+    print("dont execute");
+for i in x..y:
+    if True:
+        z = z + 5;
+    else:
+        y = y + 10;
+if False:
+    print("dont execute");
+for i in x..y:
+    if True:
+        z = z + 5;
+    else:
+        y = y + 10;
+if False:
+    print("dont execute");
+for i in x..y:
+    if True:
+        z = z + 5;
+    else:
+        y = y + 10;
+if False:
+    print("dont execute");
+for i in x..y:
+    if True:
+        z = z + 5;
+    else:
+        y = y + 10;
+if False:
+    print("dont execute");
+for i in x..y:
+    if True:
+        z = z + 5;
+    else:
+        y = y + 10;
+if False:
+    print("dont execute");
+    

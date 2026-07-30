@@ -421,13 +421,13 @@ namespace ControlUtils {
             return ParserUtils::
                 MakeNode<ErrorStmtNode>(State, Res, Memory);            
         }
-        else if (Inst.Peek()->Type != TokenType::CNTXT_KW or Inst.Peek()->Lexeme(Data) != "In")
+        else if (Inst.Peek()->Type != TokenType::CNTXT_KW or Inst.Peek()->Lexeme(Data) != "in")
         {
-           OrbitLog::SyntaxLog::SyntaxError(
+            OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",
-                "Expected 'In' After '"+E->Lexeme(Data)+"' Statement",
-                "For Need A 'In', But Got: "+Inst.Peek()->Lexeme(Data),
-                "Add a Valid 'In' After 'IDENTIFIER'",
+                "Expected 'in' After '"+E->Lexeme(Data)+"' Statement",
+                "For Need A 'in', But Got: "+Inst.Peek()->Lexeme(Data),
+                "Add a Valid 'in' After 'IDENTIFIER'",
                 E->pos.line,
                 E->pos.collumn
             );
@@ -441,10 +441,12 @@ namespace ControlUtils {
         Cntrl->Identifier = ParserUtils::MakeNode<IdentifierNode>
             (State, Res, Memory);
 
+        // IND
         Cntrl->Identifier->Name = E->Lexeme(Data);
         E = Inst.Advance();
         ParserUtils::UpdateStatePos(E, State);
-
+        
+        // COND LOOP | LOOP DE CONDIÇÃO
         vec<Token*> Cond;
         while (true)
         {
@@ -547,10 +549,10 @@ ControlNode* ControlParser::ParseControl(
                 return ControlUtils::ParseElifNode(Inst, State, Res, Data, DeclParser, ExprParser, Memory);  
             else if (Lexeme == "while")
                 return ControlUtils::ParseWhileLoop(Inst, State, Res, Data, DeclParser, ExprParser, Memory);
-            else if (Lexeme == "for")    
+            else if (Lexeme == "for") 
                 return ControlUtils::ParseForLoop(Inst, State, Res, Data, DeclParser, ExprParser, Memory);
             else if (Lexeme == "end")
-                { 
+                {
                     ParserUtils::PopBodyStack(State, Data); 
                     State.consumedInst=true;  
                     return nullptr;
