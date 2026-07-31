@@ -15,6 +15,7 @@
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../../RunTimeData.hpp"
+
 #include <cstddef>
 
 // CORE
@@ -33,6 +34,7 @@ struct Symbol
 
     // DERIVATED | DERIVADOS
     bool is_live=false;
+    NodePos Pos;
 };
 
 // Current Base Scope | Base do Escopo Atual 
@@ -85,11 +87,13 @@ class SemanticAnalizer
         struct
         {
             Scope* CurrScope   = nullptr;
-
-            Arena* Memory      = nullptr;
-            RunTimeData* Data  = nullptr;
+            int currScopeLvl = 0;
         } SAState;
 
+        // DATA
+        Arena* M_Memory      =  nullptr;
+        RunTimeData* M_Data  =  nullptr;
+        SAResult SARes;
     // PUBLICS
     public:
 
@@ -98,7 +102,10 @@ class SemanticAnalizer
     // VISIT FUNCTIONS
     private:
 
+        // VISIT
         void Visit(ASTNode* Node);
+        void EnterScope(BodyTypes Kind);
+        void LeaveScope(BodyTypes Kind);
 
         // PROGRAM
         void VisitProgram(ProgramNode* Node);
@@ -121,6 +128,7 @@ class SemanticAnalizer
         void VisitReturn(ReturnNode* Node);
 
         // EXPRESSIONS
+        void VisitExpression(ExpressionNode* Node);
         void VisitLiteral(LiteralNode* Node);
         void VisitIdentifier(IdentifierNode* Node);
 

@@ -1,3 +1,9 @@
 
-func Oi():
-end
+const var x = 10;
+
+func Oi(): 
+    if true:
+
+        var y = x + z;
+        Print(x);
+    end

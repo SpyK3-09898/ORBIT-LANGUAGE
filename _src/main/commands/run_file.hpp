@@ -14,6 +14,7 @@
 #include "../../core/FrontEnd/lexer/lexer.hpp"
 #include "../../core/FrontEnd/tokenizer/tokenizer.hpp"
 #include "../../core/FrontEnd/parser/parser.hpp"
+#include "../../core/FrontEnd/SA/semantic_analysis.hpp"
 
 #include <string>
 #include <thread>
@@ -89,9 +90,12 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
     Lexer L;
     Tokenizer T;
     Parser P;
+    SemanticAnalizer AS;
+
     LexResult LRes = L.InitL(file, Data, Memory);
     LRes = T.InitT(LRes, Data, Memory);
     ParseResult PRes = P.InitP(LRes, Data, Memory);
+    SAResult SARes = AS.InitSA(PRes, Data, Memory);
 
     if (Data.flags.debugMode)
     {
