@@ -191,7 +191,6 @@ namespace DeclUtils {
         return Decl;
     }
 
-    // PARSE FN DECLARATIONS | PARSEIA DECLARAÇOES DE FUNÇÕES.
     DeclarationNode* ParseFnDecl(
         Token* Entry,
         Instruction& Inst,
@@ -219,13 +218,12 @@ namespace DeclUtils {
                 ::MakeNode<ErrorDeclNode>(State, Res, Memory);
         }
 
-        string Name;
+        // consome "func"
         Token* E = Inst.Advance();
         ParserUtils::UpdateStatePos(E, State);
-        Name = E->Lexeme(Data);
 
         // ERROR PREVENTIONS | PREVENÇÃO DE ERROS.
-        if (Inst.Peek()->Type != TokenType::LPARENT)
+        if (!Inst.Peek() || Inst.Peek()->Type != TokenType::IDENTIFIER)
         {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",
@@ -241,6 +239,29 @@ namespace DeclUtils {
                 ::MakeNode<ErrorDeclNode>(State, Res, Memory);
         }
 
+        // nome da função
+        E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+        string Name = E->Lexeme(Data);
+
+        // espera '('
+        if (!Inst.Peek() || Inst.Peek()->Type != TokenType::LPARENT)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Expected '(' After Function Name",
+                "Functions Need '(' After The Name",
+                "Complete <FUNCTION> Statement",
+                E->pos.line,
+                E->pos.collumn
+            );
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils
+                ::MakeNode<ErrorDeclNode>(State, Res, Memory);
+        }
+
+        // consome '('
         E = Inst.Advance();
         ParserUtils::UpdateStatePos(E, State);
 
@@ -256,7 +277,7 @@ namespace DeclUtils {
             ParserUtils::UpdateStatePos(Tok, State);
             Cond.push_back(Tok);
         }
-        
+
         // ERROR PREV | PREVENÇÃO DE ERRO.
         if (Cond.size() < 2)
         {
@@ -272,15 +293,15 @@ namespace DeclUtils {
                 OrbitLog::SyntaxLog::ThrowLog(Data);
             return ParserUtils::MakeNode<ErrorDeclNode>(State, Res, Memory);
         }
-        if (Cond.back()->Type != TokenType::RPARENT)
+        if (Cond[Cond.size() - 2]->Type != TokenType::RPARENT)
         {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",
                 "Expected ')'",
-                "Expected ')' Before ':'",
+                "Expected ')' Before ':', But Got: "+Cond[Cond.size() - 2]->GetType(),
                 "Close Function Arguments",
-                Cond.back()->pos.line,
-                Cond.back()->pos.collumn
+                Cond[Cond.size() - 2]->pos.line,
+                Cond[Cond.size() - 2]->pos.collumn
             );
             if (!Data.flags.debugMode)
                 OrbitLog::SyntaxLog::ThrowLog(Data);
@@ -291,7 +312,7 @@ namespace DeclUtils {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",
                 "Expected ':'",
-                "Expected ':' After ')'",
+                "Expected ':' After ')', But Got: "+Cond.back()->GetType(),
                 "Finalize Function Declaration",
                 Cond.back()->pos.line,
                 Cond.back()->pos.collumn
@@ -306,29 +327,37 @@ namespace DeclUtils {
         Cond.pop_back(); // )
 
         FnDecl* Decl = ParserUtils::MakeNode<FnDecl>(State, Res, Memory);
-        Instruction CondInst{{}, Cond};
-        Decl->Args = 
-            ExprParser.ParseExpression(CondInst, State, Res, Data, Memory);
-        
-        // CREATE BODY | CRIA O BODY.
 
+        // args vazios são válidos (func foo():)
+        if (!Cond.empty())
+        {
+            Instruction CondInst{{}, Cond};
+            Decl->Args = 
+                ExprParser.ParseExpression(CondInst, State, Res, Data, Memory);
+        }
+        else
+        {
+            Decl->Args = nullptr; // ou um nó vazio, conforme sua AST
+        }
+
+        // CREATE BODY | CRIA O BODY.
         BodyNode* Body = ParserUtils::MakeNode<BodyNode>(State, Res, Memory);
         Body->Type = BodyTypes::FUNCTION;
         Body->Father = Decl;
-        State.lastIndent = Body->pos.indent;
 
         // SET BODY | DEFINE O BODY;
         Decl->Body = Body;
         Decl->Name = Name;
 
         // UPDATE STACK | ATUALIZA A PILHA
-        State.consumedInst=true;
+        State.consumedInst = true;
         ParserUtils::AddInst<FnDecl>(Decl, State, Res, Memory);
         ParserUtils::UpdateBodyStack(Body, State, Data);
+        State.lastIndent = Body->pos.indent;
 
         // FINALIZE | FINALIZA.
         return Decl;
-    }   
+    }
 }
 
 // ======= ENTRY-POINT | PONTO-DE-ENTRADA ====== //
@@ -342,12 +371,12 @@ DeclarationNode* DeclarationParser::ParseDeclaration(
 )
 {
     Token* Entry = Inst.Tokens[0];
-    string lexeme = Entry->Lexeme(Data);
+    string Lexeme = Entry->Lexeme(Data);
     switch (Entry->Type) {
      
         case TokenType::KEYWORD:
 
-            if (lexeme == "var")
+            if (Lexeme == "var")
                 return DeclUtils::ParseVarDecl(
                     Entry, 
                     Inst, 
@@ -357,7 +386,7 @@ DeclarationNode* DeclarationParser::ParseDeclaration(
                     ExprParser,
                     Memory
                 );
-            else if (lexeme == "func")
+            else if (Lexeme == "func")
                 return DeclUtils::ParseFnDecl(
                     Entry, 
                     Inst, 

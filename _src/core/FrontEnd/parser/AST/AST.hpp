@@ -78,6 +78,8 @@ struct ErrorExprNode;
 
 struct DeclarationNode;
 struct VarDeclNode;
+struct ReturnNode;
+struct FnDecl;
 struct ErrorDeclNode;
 
 struct ControlNode;
@@ -108,6 +110,8 @@ enum class NodeType : uint8_t
     FOR,
     FOR_EACH,
     FOR_DEF,
+
+    RETURN,
 
     // DECLARATIONS
     VAR_DECL,
@@ -224,6 +228,48 @@ struct ASTNode
     // DATA
     NodePos pos;
     NodeType Type;
+
+    // UTILS | UTILIDADES
+    inline const char* GetNodeType(NodeType Type)
+    {
+        switch (Type)
+        {
+            case NodeType::PROGRAM:        return "<PROGRAM>";
+            case NodeType::BODY:           return "<BODY>";
+            case NodeType::ERROR:          return "<ERROR>";
+
+            case NodeType::IF_CONTROL:     return "<IF_CONTROL>";
+            case NodeType::ELSE_CONTROL:   return "<ELSE_CONTROL>";
+            case NodeType::ELIF_CONTROL:   return "<ELIF_CONTROL>";
+
+            case NodeType::WHILE:          return "<WHILE>";
+            case NodeType::FOR:            return "<FOR>";
+            case NodeType::FOR_EACH:       return "<FOR_EACH>";
+            case NodeType::FOR_DEF:        return "<FOR_DEF>";
+
+            case NodeType::RETURN:         return "<RETURN>";
+
+            case NodeType::VAR_DECL:       return "<VAR_DECL>";
+            case NodeType::FN_DECL:        return "<FN_DECL>";
+
+            case NodeType::LITERAL:        return "<LITERAL>";
+            case NodeType::IDENTIFIER:     return "<IDENTIFIER>";
+
+            case NodeType::UNARY:          return "<UNARY>";
+            case NodeType::BINARY:         return "<BINARY>";
+            case NodeType::ASSIGNMENT:     return "<ASSIGNMENT>";
+
+            case NodeType::MEMBER_ACCESS:  return "<MEMBER_ACCESS>";
+            case NodeType::INDEX_ACCESS:   return "<INDEX_ACCESS>";
+            case NodeType::FN_CALL:        return "<FN_CALL>";
+            case NodeType::TABLE_VALUE:    return "<TABLE_VALUE>";
+            case NodeType::ARRAY_VALUE:    return "<ARRAY_VALUE>";
+
+            case NodeType::RANGE:          return "<RANGE>";
+        }
+
+        return "<UNKNOWN>";
+    }
 
     // CONSTRUCTOR | COSNTRUTOR
     ASTNode(NodeType T, NodePos P)
@@ -460,12 +506,15 @@ struct VarDeclNode : DeclarationNode
         : DeclarationNode(NodeType::VAR_DECL, P) {}
 };
 
+
 // Functions Decl | Declaração de Função.
 struct FnDecl : DeclarationNode
 {
     string Name;
     BodyNode* Body;
     ExpressionNode* Args;
+
+    ReturnNode* ReturnValue;
 
     // CONSTRUCTOR | CONSTRUTOR
     FnDecl(NodePos P)
@@ -585,6 +634,17 @@ struct ForNode : ControlNode
     // CONSTRUCTOR | CONSTRUTOR
     ForNode(NodePos P)
         : ControlNode(NodeType::FOR, P) {};
+};
+
+// Function Return | Retorno de Funçoes.
+struct ReturnNode : ControlNode
+{
+    // DATA
+    ExpressionNode* Value;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    ReturnNode(NodePos P)
+        : ControlNode(NodeType::RETURN, P) {};
 };
 
 // Error Statements Nodes | Errors de Nos de Statement.

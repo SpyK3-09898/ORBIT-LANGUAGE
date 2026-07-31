@@ -182,6 +182,49 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
 
             break;
         }
+        
+        case NodeType::FN_DECL:
+        {
+            auto& N = static_cast<FnDecl&>(Node);
+
+            file << Indent << "Function\n";
+            file << Indent << "Name: " << N.Name << '\n';
+
+            if (N.Args)
+            {
+                file << Indent << "Arguments:\n";
+                DumbNode(*N.Args, file, Data, Depth + 1);
+            }
+
+            if (N.ReturnValue)
+            {
+                file << Indent << "Return:\n";
+                DumbNode(*N.ReturnValue, file, Data, Depth + 1);
+            }
+
+            if (N.Body)
+            {
+                file << Indent << "Body:\n";
+                DumbNode(*N.Body, file, Data, Depth + 1);
+            }
+
+            break;
+        }
+
+        case NodeType::RETURN:
+        {
+            auto& N = static_cast<ReturnNode&>(Node);
+
+            file << Indent << "Return\n";
+
+            if (N.Value)
+            {
+                file << Indent << "Value:\n";
+                DumbNode(*N.Value, file, Data, Depth + 1);
+            }
+
+            break;
+        }
 
         // CONTROL | CONTROLE.
         case NodeType::IF_CONTROL:

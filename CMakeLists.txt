@@ -22,6 +22,7 @@ set(ORBIT_CORE
     _src/core/FrontEnd/parser/ParserModules/Control/control.cpp
     _src/core/FrontEnd/parser/ParserModules/Declaration/declaration.cpp
     _src/core/FrontEnd/parser/ParserModules/Expressions/expression.cpp
+    _src/core/FrontEnd/SA/sematic_analysis.cpp
     _src/core/Arena/Arena.cpp
 )
 

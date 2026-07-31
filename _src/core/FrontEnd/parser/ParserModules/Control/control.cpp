@@ -520,6 +520,64 @@ namespace ControlUtils {
 
         return Cntrl;
     }
+
+    // Parse Return Statements | Parseia Instruç~eos de Retorno.
+    ControlNode* ParseReturn(
+        Instruction& Inst, 
+        ParseState& State, 
+        ParseResult& Res,
+        RunTimeData& Data, 
+        DeclarationParser& DeclParser,
+        ExpressionParser& ExprParser,
+        Arena& Memory        
+    )
+    {
+        // ERROR PREV | PREVENÇÃO DE ERROS.
+        if (State.CurrBody->Type != BodyTypes::FUNCTION)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "<RETURN> Not In <FUNCTION> Body",
+                "<RETURN> Can ONLY Stay in <FUNCTION> Bodys",
+                "Move Or Remove <RETURN>",
+                State.Pos.line,
+                State.Pos.collumn
+            );
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::
+                MakeNode<ErrorStmtNode>(State, Res, Memory);              
+        }
+
+        // RETURN
+        Token* E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+        
+        // TAKE COND
+        vec<Token*> Cond;
+        while(true)
+        {
+            Token* Tok = Inst.Advance();
+
+            if (!Tok)
+                break;
+
+            ParserUtils::UpdateStatePos(Tok, State);
+            Cond.push_back(Tok);
+        }
+
+        // INSTRUCTION COND
+        Instruction ICond{{}, Cond};
+        ExpressionNode* CondNode = ExprParser.
+            ParseExpression(ICond, State,Res, Data, Memory);
+        
+        // SET NODE | DEFINE O NODE
+        ReturnNode* Cntrl = ParserUtils::
+            MakeNode<ReturnNode>(State, Res, Memory);
+        Cntrl->Value = CondNode;
+
+        return Cntrl;
+    }
 }
 
 // ======== ENTRY-POINT | PONTO DE ENTRADA ======= //

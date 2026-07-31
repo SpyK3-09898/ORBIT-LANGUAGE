@@ -33,7 +33,8 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
     }
     vec<string> KeyWords
     {
-        "var", "if", "while", "for",
+        "var", "if", "while", "for", 
+        "func", "return",
         "end"
     };
     vec<string> CntxtKW
