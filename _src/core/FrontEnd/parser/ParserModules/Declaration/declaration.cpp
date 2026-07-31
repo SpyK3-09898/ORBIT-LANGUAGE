@@ -16,7 +16,7 @@
 
 namespace DeclUtils {
 
-    // PARSER VAR DECLARATIONS | PARSERIA DECLARAÇOES DE VARIAVEIS.
+    // PARSER VAR DECLARATIONS | PARSEIA DECLARAÇOES DE VARIAVEIS.
     DeclarationNode* ParseVarDecl(
         Token* Entry,
         Instruction& Inst,
@@ -190,6 +190,145 @@ namespace DeclUtils {
 
         return Decl;
     }
+
+    // PARSE FN DECLARATIONS | PARSEIA DECLARAÇOES DE FUNÇÕES.
+    DeclarationNode* ParseFnDecl(
+        Token* Entry,
+        Instruction& Inst,
+        ParseState& State,
+        ParseResult& Res,
+        RunTimeData& Data,
+        ExpressionParser& ExprParser,
+        Arena& Memory    
+    )
+    {
+        // ERROR PREVENTIONS | PREVENÇÃO DE ERROS.
+        if (Inst.Tokens.size() == 1)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Expected <IDENTIFIER> After 'func'",
+                "Functions Need A Name to Call After",
+                "Complete <FUNCTION> Statement",
+                Inst.Tokens[0]->pos.line,
+                Inst.Tokens[0]->pos.collumn
+            );
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils
+                ::MakeNode<ErrorDeclNode>(State, Res, Memory);
+        }
+
+        string Name;
+        Token* E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+        Name = E->Lexeme(Data);
+
+        // ERROR PREVENTIONS | PREVENÇÃO DE ERROS.
+        if (Inst.Peek()->Type != TokenType::LPARENT)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Expected <IDENTIFIER> After 'func'",
+                "Functions Need A Name to Call After",
+                "Complete <FUNCTION> Statement",
+                Inst.Tokens[0]->pos.line,
+                Inst.Tokens[0]->pos.collumn
+            );
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils
+                ::MakeNode<ErrorDeclNode>(State, Res, Memory);
+        }
+
+        E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+
+        // COND LOOP | LOOP DE CONDIÇÃO
+        vec<Token*> Cond;
+        while (true)
+        {
+            Token* Tok = Inst.Advance();
+
+            if (!Tok)
+                break;
+
+            ParserUtils::UpdateStatePos(Tok, State);
+            Cond.push_back(Tok);
+        }
+        
+        // ERROR PREV | PREVENÇÃO DE ERRO.
+        if (Cond.size() < 2)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Expected '):'",
+                "Expected ')' Followed By ':' After Function Arguments",
+                "Finalize Function Declaration",
+                Inst.Tokens.back()->pos.line,
+                Inst.Tokens.back()->pos.collumn
+            );
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>(State, Res, Memory);
+        }
+        if (Cond.back()->Type != TokenType::RPARENT)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Expected ')'",
+                "Expected ')' Before ':'",
+                "Close Function Arguments",
+                Cond.back()->pos.line,
+                Cond.back()->pos.collumn
+            );
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>(State, Res, Memory);
+        }
+        if (Cond.back()->Type != TokenType::COLON)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Expected ':'",
+                "Expected ':' After ')'",
+                "Finalize Function Declaration",
+                Cond.back()->pos.line,
+                Cond.back()->pos.collumn
+            );
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>(State, Res, Memory);
+        }
+
+        // REMOVE THE '):' | REMOVE O '):'.
+        Cond.pop_back(); // :
+        Cond.pop_back(); // )
+
+        FnDecl* Decl = ParserUtils::MakeNode<FnDecl>(State, Res, Memory);
+        Instruction CondInst{{}, Cond};
+        Decl->Args = 
+            ExprParser.ParseExpression(CondInst, State, Res, Data, Memory);
+        
+        // CREATE BODY | CRIA O BODY.
+
+        BodyNode* Body = ParserUtils::MakeNode<BodyNode>(State, Res, Memory);
+        Body->Type = BodyTypes::FUNCTION;
+        Body->Father = Decl;
+        State.lastIndent = Body->pos.indent;
+
+        // SET BODY | DEFINE O BODY;
+        Decl->Body = Body;
+        Decl->Name = Name;
+
+        // UPDATE STACK | ATUALIZA A PILHA
+        State.consumedInst=true;
+        ParserUtils::AddInst<FnDecl>(Decl, State, Res, Memory);
+        ParserUtils::UpdateBodyStack(Body, State, Data);
+
+        // FINALIZE | FINALIZA.
+        return Decl;
+    }   
 }
 
 // ======= ENTRY-POINT | PONTO-DE-ENTRADA ====== //
@@ -213,6 +352,16 @@ DeclarationNode* DeclarationParser::ParseDeclaration(
                     Entry, 
                     Inst, 
                     State, 
+                    Res,
+                    Data, 
+                    ExprParser,
+                    Memory
+                );
+            else if (lexeme == "func")
+                return DeclUtils::ParseFnDecl(
+                    Entry, 
+                    Inst, 
+                    State, 
                     Res, 
                     Data, 
                     ExprParser,
@@ -223,3 +372,5 @@ DeclarationNode* DeclarationParser::ParseDeclaration(
     }
     return nullptr;
 }
+
+// EOF

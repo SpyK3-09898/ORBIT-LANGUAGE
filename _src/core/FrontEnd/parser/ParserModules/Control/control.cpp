@@ -21,7 +21,7 @@
 // ======== UTILS ======= //
 
 namespace ControlUtils {
-
+    
     // Parse If Controls | Parser Ifs
     ControlNode* ParseIfNode(
         Instruction& Inst, 
@@ -81,7 +81,6 @@ namespace ControlUtils {
 
         // CREATE PREV.
         IfNode* Ctrl = ParserUtils::MakeNode<IfNode>(State, Res, Memory);
-        ParserUtils::AddInst<IfNode>(Ctrl, State, Res, Memory);
 
         // PARSE CONDITION | FAZ O PARSER DA CONDIÇÃO.
         Instruction ICond{{}, Cond};
@@ -100,10 +99,13 @@ namespace ControlUtils {
         Body->Father = Ctrl;
         Body->Type = BodyTypes::CONTROL_IF;
 
-        // FINALIZE | FINALIZA.
+        // UPDATE STACK | ATUALIZA A PILHA.
+        State.consumedInst = true;
+        ParserUtils::AddInst<IfNode>(Ctrl, State, Res, Memory);
         ParserUtils::UpdateBodyStack(Body, State, Data);
         State.lastIndent = Body->pos.indent;
         
+        // FINALIZE | FINALIZA.
         return Ctrl;
     }
 
@@ -190,25 +192,8 @@ namespace ControlUtils {
         }
         Cond.pop_back();
 
-        // ERROR PREVENTION | PREVENÇÃO DE ERROS.
-        if (Cond[Cond.size() - 1]->Type != TokenType::COLON)
-        {
-            OrbitLog::SyntaxLog::SyntaxError(
-                "Parsing",
-                "Invalid <ELIF_COND>",
-                "Expected ':' After Elif Condition",
-                "Finalize Elif Instruction",
-                Cond[Cond.size() - 1]->pos.line,
-                Cond[Cond.size() - 1]->pos.collumn
-            );
-            if (!Data.flags.debugMode)
-                OrbitLog::SyntaxLog::ThrowLog(Data);
-            return ParserUtils::MakeNode<ErrorStmtNode>(State, Res, Memory);
-        }
-
         // CREATE PREV.
         ElifNode* Elif = ParserUtils::MakeNode<ElifNode>(State, Res, Memory);
-        ParserUtils::AddInst<ElifNode>(Elif, State, Res, Memory);
         BodyNode* Body = ParserUtils::MakeNode<BodyNode>(State, Res, Memory);
 
         // PARSE CONDITION | FAZ O PARSER DA CONDIÇÃO.
@@ -223,21 +208,19 @@ namespace ControlUtils {
 
         // SET BODYS | SETA OS BODYS.
         Elif->Body = Body;
-
-        // UPDATE STACK | ATUALIZA A PILHA.
-        ParserUtils::UpdateBodyStack(Body, State, Data);
-
-        // SET IF | DEFINE IF.
-        IfNode* PrevIfFather = static_cast<IfNode*>(State.CurrBody->Father);
-        PrevIfFather->ElifBodyStack.push_back(Body);
-
         Body->Father = Elif;
         Body->Type = BodyTypes::CONTROL_IF;
 
+        // SET IF | DEFINE IF.
+        IfFather->ElifBodyStack.push_back(Body);
+
+        // UPDATE STACK | ATUALIZA A PILHA.
+        State.consumedInst = true;
+        ParserUtils::PopBodyStack(State, Data);
+        ParserUtils::UpdateBodyStack(Body, State, Data);
         State.lastIndent = Body->pos.indent;
 
         // FINALIZE | FINALIZA.
-        ParserUtils::PopBodyStack(State, Data);
         return Elif;
     }
 
@@ -272,20 +255,23 @@ namespace ControlUtils {
         // CREATE PREV.
         ElseNode* Else = ParserUtils::MakeNode<ElseNode>(State, Res, Memory);
         BodyNode* Body = ParserUtils::MakeNode<BodyNode>(State, Res, Memory);
-        ParserUtils::AddInst<ElseNode>(Else, State, Res, Memory);
 
         // SET BODYS | SETA OS BODYS.
         Else->Body = Body;
-
-        // UPDATE STACK | ATUALIZA A PILH.A
-        ParserUtils::UpdateBodyStack(Body, State, Data);
+        Body->Father = Else;
+        Body->Type = BodyTypes::CONTROL_IF;
 
         // SET IF | DEFINE IF.
         IfNode* PrevIfFather = static_cast<IfNode*>(State.CurrBody->Father);
         PrevIfFather->ElseBody = Else;
 
-        // FINALIZE | FINALIZA.
+        // UPDATE STACK | ATUALIZA A PILHA.
+        State.consumedInst = true;
         ParserUtils::PopBodyStack(State, Data);
+        ParserUtils::UpdateBodyStack(Body, State, Data);
+        State.lastIndent = Body->pos.indent;
+
+        // FINALIZE | FINALIZA.
         return Else;
     }
 
@@ -348,10 +334,16 @@ namespace ControlUtils {
         // CREATE A NEW BODY | CRIA UM NOVO BODY
         BodyNode* Body = ParserUtils::
             MakeNode<BodyNode>(State, Res, Memory);
-        Body->Father = Cntrl;
+
         // SET BODY
+        Body->Father = Cntrl;
         Cntrl->Body = Body;
+
+        // UPDATE STACK | ATUALIZA A PILHA.
+        State.consumedInst = true;
+        ParserUtils::AddInst<WhileNode>(Cntrl, State, Res, Memory);
         ParserUtils::UpdateBodyStack(Body, State, Data);
+        State.lastIndent = Body->pos.indent;
 
         return Cntrl;
     }
@@ -512,14 +504,19 @@ namespace ControlUtils {
         RangeNode* R = static_cast<RangeNode*>(Range);
     
         BodyNode* Body = ParserUtils::MakeNode<BodyNode>(State, Res, Memory);
-        Body->Father = Cntrl;
-        Body->Type = BodyTypes::LOOP_FOR;
-        ParserUtils::UpdateBodyStack(Body, State, Data);
 
         // SET FOR | DEFINE O FOR 
+        Body->Father = Cntrl;
+        Body->Type = BodyTypes::LOOP_FOR;
         Cntrl->End = R;
         Cntrl->Body = Body;
         Cntrl->Type = LoopTypes::FOR;
+
+        // UPDATE STACK | ATUALIZA A PILHA.
+        State.consumedInst = true;
+        ParserUtils::AddInst<ForNode>(Cntrl, State, Res, Memory);
+        ParserUtils::UpdateBodyStack(Body, State, Data);
+        State.lastIndent = Body->pos.indent;
 
         return Cntrl;
     }

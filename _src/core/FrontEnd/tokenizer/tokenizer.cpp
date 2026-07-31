@@ -73,7 +73,7 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
             if (It != Others.end())
                 { LastType = Tok->Type; Tok->Type = It->second; changed=true; }
         } 
-        if (changed and Data.flags.debugMode)
+        if (changed and Data.flags.generateLog)
             text += "\nToken"+std::to_string(i)+
             ": LastType: "
             +std::to_string(static_cast<int>(LastType))
@@ -82,7 +82,7 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
             +"\n";
         i++;
     }
-    if (Data.flags.debugMode)
+    if (Data.flags.generateLog)
     {
         text += "\n\n// =========== ENDOF: TOKENIZING ========== //\n";
         log_file << text;

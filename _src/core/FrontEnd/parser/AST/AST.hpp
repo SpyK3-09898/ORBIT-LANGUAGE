@@ -111,6 +111,7 @@ enum class NodeType : uint8_t
 
     // DECLARATIONS
     VAR_DECL,
+    FN_DECL,
 
     // EXPRESSIONS
     LITERAL,
@@ -457,6 +458,18 @@ struct VarDeclNode : DeclarationNode
     // CONSTRUCTOR | CONSTRUTOR
     VarDeclNode(NodePos P)
         : DeclarationNode(NodeType::VAR_DECL, P) {}
+};
+
+// Functions Decl | Declaração de Função.
+struct FnDecl : DeclarationNode
+{
+    string Name;
+    BodyNode* Body;
+    ExpressionNode* Args;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    FnDecl(NodePos P)
+        : DeclarationNode(NodeType::FN_DECL, P) {};
 };
 
 // ERRORS | ERROS
