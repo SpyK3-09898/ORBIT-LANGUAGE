@@ -1,9 +1,3 @@
 
-const var x = 10;
-
-func Oi(): 
-    if true:
-
-        var y = x + z;
-        Print(x);
-    end
+const list x = [1,2,3];
+const var y = {"Oi": 234};

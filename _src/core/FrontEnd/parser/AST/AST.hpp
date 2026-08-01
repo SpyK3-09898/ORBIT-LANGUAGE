@@ -169,7 +169,21 @@ enum class LiteralTypes: uint8_t
     STRING,
     BOOL,
     NONE,
-    _NULL
+    _NULL,
+
+    ARRAY_INT,
+    ARRAY_FLOAT,
+    ARRAY_STRING,
+    ARRAY_BOOL,
+    ARRAY_NONE,
+    ARRAY_NULL,
+
+    TABLE_INT,
+    TABLE_FLOAT,
+    TABLE_STRING,
+    TABLE_BOOL,
+    TABLE_NONE,
+    TABLE_NULL,   
 };
 
 // Math Operators | Operadores de Matematica.
@@ -766,12 +780,151 @@ namespace ParserUtils {
                             return DEF_RET;
                         }
                         string Lex = Tokens[2]->Lexeme(Data);
+                        // LITERALS | LITERAIS.
                         if (Lex is "Int") return {LiteralTypes::INT, 2};
                         else if (Lex is "Float") return {LiteralTypes::FLOAT, 2};
                         else if (Lex is "Bool") return {LiteralTypes::BOOL, 2};
                         else if (Lex is "String") return {LiteralTypes::STRING, 2};
                         else if (Lex is "None") return {LiteralTypes::NONE, 2};
                         else if (Lex is "Null") return {LiteralTypes::_NULL, 2};  
+                        
+                        // LISTS | LISTAS
+                        else if (Lex is "Array")
+                        {
+                            if (Tokens.size() == 1)
+                                return {LiteralTypes::ARRAY_NULL, 1};
+                            if (Tokens[2]->Type != TokenType::LESS)
+                            {
+                                OrbitLog::SyntaxLog::SyntaxError(
+                                    "Parsing",
+                                    "'<' Expected",
+                                    "'<' Expected After 'Array' Infer",
+                                    "Add a '<' After 'Array'",
+                                    Tokens[2]->pos.line,
+                                    Tokens[2]->pos.collumn
+                                );
+                                if (!Data.flags.debugMode)
+                                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                                return DEF_RET;
+                            }
+                            if (Tokens.size() == 2)
+                            {
+                                OrbitLog::SyntaxLog::SyntaxError(
+                                    "Parsing",
+                                    "<TYPE> Expected",
+                                    "<TYPE> Expected After 'Array<' Infer",
+                                    "Add a <TYPE> After 'Array<'",
+                                    Tokens[2]->pos.line,
+                                    Tokens[2]->pos.collumn
+                                );
+                                if (!Data.flags.debugMode)
+                                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                                return DEF_RET;                                
+                            }
+                            if (Tokens.size() == 3)
+                            {
+                                OrbitLog::SyntaxLog::SyntaxError(
+                                    "Parsing",
+                                    "'>' Expected",
+                                    "'>' Expected After 'Array<TYPE' Infer",
+                                    "Add a '> After 'Array<TYPE'",
+                                    Tokens[2]->pos.line,
+                                    Tokens[2]->pos.collumn
+                                );
+                                if (!Data.flags.debugMode)
+                                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                                return DEF_RET;                                
+                            }
+                            if (Tokens[4]->Type != TokenType::GREATER)
+                            {
+                                OrbitLog::SyntaxLog::SyntaxError(
+                                    "Parsing",
+                                    "'>' Expected",
+                                    "'>' Expected After 'Array<TYPE' Infer",
+                                    "Add a '> After 'Array<TYPE'",
+                                    Tokens[2]->pos.line,
+                                    Tokens[2]->pos.collumn
+                                );
+                                if (!Data.flags.debugMode)
+                                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                                return DEF_RET;
+                            }
+                            Lex = Tokens[3]->Lexeme(Data);
+                                if (Lex is "Int") return {LiteralTypes::ARRAY_INT, 3};
+                                else if (Lex is "Float") return {LiteralTypes::ARRAY_FLOAT, 3};
+                                else if (Lex is "Bool") return {LiteralTypes::ARRAY_BOOL, 3};
+                                else if (Lex is "String") return {LiteralTypes::ARRAY_STRING, 3};
+                                else if (Lex is "None") return {LiteralTypes::ARRAY_NONE, 3};
+                                else if (Lex is "Null") return {LiteralTypes::ARRAY_NULL, 3};                    
+                        }
+                        else if (Lex is "List")
+                        {
+                            if (Tokens.size() == 1)
+                                return {LiteralTypes::ARRAY_NULL, 1};
+                            if (Tokens[2]->Type != TokenType::LESS)
+                            {
+                                OrbitLog::SyntaxLog::SyntaxError(
+                                    "Parsing",
+                                    "'<' Expected",
+                                    "'<' Expected After 'List' Infer",
+                                    "Add a '<' After 'List'",
+                                    Tokens[2]->pos.line,
+                                    Tokens[2]->pos.collumn
+                                );
+                                if (!Data.flags.debugMode)
+                                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                                return DEF_RET;
+                            }
+                            if (Tokens.size() == 2)
+                            {
+                                OrbitLog::SyntaxLog::SyntaxError(
+                                    "Parsing",
+                                    "<TYPE> Expected",
+                                    "<TYPE> Expected After 'List<' Infer",
+                                    "Add a <TYPE> After 'List<'",
+                                    Tokens[2]->pos.line,
+                                    Tokens[2]->pos.collumn
+                                );
+                                if (!Data.flags.debugMode)
+                                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                                return DEF_RET;                                
+                            }
+                            if (Tokens.size() == 3)
+                            {
+                                OrbitLog::SyntaxLog::SyntaxError(
+                                    "Parsing",
+                                    "'>' Expected",
+                                    "'>' Expected After 'List<TYPE' Infer",
+                                    "Add a '> After 'List]<TYPE'",
+                                    Tokens[2]->pos.line,
+                                    Tokens[2]->pos.collumn
+                                );
+                                if (!Data.flags.debugMode)
+                                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                                return DEF_RET;                                
+                            }
+                            if (Tokens[4]->Type != TokenType::GREATER)
+                            {
+                                OrbitLog::SyntaxLog::SyntaxError(
+                                    "Parsing",
+                                    "'>' Expected",
+                                    "'>' Expected After 'List<TYPE' Infer",
+                                    "Add a '> After 'List<TYPE'",
+                                    Tokens[2]->pos.line,
+                                    Tokens[2]->pos.collumn
+                                );
+                                if (!Data.flags.debugMode)
+                                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                                return DEF_RET;
+                            }
+                            Lex = Tokens[3]->Lexeme(Data);
+                                if (Lex is "Int") return {LiteralTypes::TABLE_INT, 3};
+                                else if (Lex is "Float") return {LiteralTypes::TABLE_FLOAT, 3};
+                                else if (Lex is "Bool") return {LiteralTypes::TABLE_BOOL, 3};
+                                else if (Lex is "String") return {LiteralTypes::TABLE_STRING, 3};
+                                else if (Lex is "None") return {LiteralTypes::TABLE_NONE, 3};
+                                else if (Lex is "Null") return {LiteralTypes::TABLE_NULL, 3};                    
+                        }
                     }
             } else
                 return DEF_RET;

@@ -24,7 +24,8 @@ namespace DeclUtils {
         ParseResult& Res,
         RunTimeData& Data,
         ExpressionParser& ExprParser,
-        Arena& Memory    
+        Arena& Memory,
+        bool isList=false   
     )
     {
         // Check if Have Identifier | Verifica se um Identificador foi Passado.
@@ -187,7 +188,41 @@ namespace DeclUtils {
             ValueNode->Value = NoneLitVal{};
             Decl->Val = ValueNode;
         }
-
+        if (Decl->Val->Type == NodeType::ARRAY_VALUE or Decl->Val->Type == NodeType::TABLE_VALUE)
+        {
+            if (!isList)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Parsing",
+                    "<LITERAL_VALUE> Expected, But Got: "+Decl->Val->GetNodeType(),
+                    "'var' ONLY Can be Used to Literals(Array, Tables)",
+                    "Change 'var' to 'list'",
+                    Decl->pos.line, Decl->pos.collumn
+                );
+                if (!Data.flags.debugMode)
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                return ParserUtils::MakeNode<ErrorDeclNode>
+                    (State, Res, Memory);            
+            }
+        }
+        else 
+        {
+            if (isList)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Parsing",
+                    "<ARRAY_VALUE> Expected, But Got: "+Decl->Val->GetNodeType(),
+                    "'list' ONLY Can be Used to Lists(Array, Tables)",
+                    "Change 'list' to 'var'",
+                    Decl->pos.line, Decl->pos.collumn
+                );
+                if (!Data.flags.debugMode)
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                return ParserUtils::MakeNode<ErrorDeclNode>
+                    (State, Res, Memory);
+            }
+        }
+        
         return Decl;
     }
 
@@ -386,6 +421,17 @@ DeclarationNode* DeclarationParser::ParseDeclaration(
                     ExprParser,
                     Memory
                 );
+            if (Lexeme == "list")
+                return DeclUtils::ParseVarDecl(
+                    Entry, 
+                    Inst, 
+                    State, 
+                    Res,
+                    Data, 
+                    ExprParser,
+                    Memory,
+                    true
+                );
             else if (Lexeme == "func")
                 return DeclUtils::ParseFnDecl(
                     Entry, 
@@ -395,7 +441,7 @@ DeclarationNode* DeclarationParser::ParseDeclaration(
                     Data, 
                     ExprParser,
                     Memory
-                );
+                );    
         default:
             return nullptr;
     }

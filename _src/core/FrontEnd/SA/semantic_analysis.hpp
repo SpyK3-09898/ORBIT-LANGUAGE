@@ -17,11 +17,19 @@
 #include "../../RunTimeData.hpp"
 
 #include <cstddef>
-using IValueTypes = std::variant<
-    std::integral_constant<NodeType, NodeType::IDENTIFIER>,
-    std::integral_constant<NodeType, NodeType::MEMBER_ACCESS>,
-    std::integral_constant<NodeType, NodeType::INDEX_ACCESS>
->;
+inline bool IsIValue(ExpressionNode* Node)
+{
+    if (!Node) return false;
+    switch (Node->Type)
+    {
+        case NodeType::IDENTIFIER:
+        case NodeType::MEMBER_ACCESS:
+        case NodeType::INDEX_ACCESS:
+            return true;
+        default:
+            return false;
+    }
+}
 
 // CORE
 
@@ -60,6 +68,12 @@ struct TypeInfo
     // STRUCT / CLASS
     string Name;
     unord_map<string, TypeInfo*> Members;
+};
+
+// INFO OF EXPRESSIONS | INFORMAÇÕES DE EXPRESSOES.
+struct ExprInfo
+{
+    TypeInfo* Info = nullptr;
 };
 
 // Def Symbol | Simbolo Padrão.
@@ -118,7 +132,7 @@ struct Scope
 // Result of AS | Resultado do AS
 struct SAResult
 {
-    
+    unord_map<ExpressionNode*, ExprInfo> ExpressionInfos;
 };
 
 // MAIN CLASS | CLASSE PRINCIPAL
@@ -149,6 +163,9 @@ class SemanticAnalizer
         // ===== UTILS ===== //
         
         TypeInfo* GetExpressionType(ExpressionNode* Node);
+        TypeInfo* ConvertLiteralTypeInfo(LiteralTypes Type);
+        string TypeToString(TypeKind Type);
+        bool SameType(TypeInfo* A, TypeInfo* B);
 
         // ===== VISIT-FUNCTIONS =====
 
@@ -163,42 +180,42 @@ class SemanticAnalizer
 
         // DECLARATIONS
         void VisitVarDecl(VarDeclNode* Node);
-        void VisitFnDecl(FnDecl* Node);
+        // void VisitFnDecl(FnDecl* Node);
 
         // CONTROL
-        void VisitIf(IfNode* Node);
-        void VisitElse(ElseNode* Node);
-        void VisitElif(ElifNode* Node);
+        // void VisitIf(IfNode* Node);
+        // void VisitElse(ElseNode* Node);
+        // void VisitElif(ElifNode* Node);
 
-        void VisitWhile(WhileNode* Node);
-        void VisitFor(ForNode* Node);
-        void VisitForEach(ForEachNode* Node);
-        void VisitForDef(ForDefNode* Node);
+        // void VisitWhile(WhileNode* Node);
+        // void VisitFor(ForNode* Node);
+        // void VisitForEach(ForEachNode* Node);
+        // void VisitForDef(ForDefNode* Node);
 
-        void VisitReturn(ReturnNode* Node);
+        // void VisitReturn(ReturnNode* Node);
 
         // EXPRESSIONS
         void VisitExpression(ExpressionNode* Node);
         void VisitLiteral(LiteralNode* Node);
         void VisitIdentifier(IdentifierNode* Node);
 
-        void VisitUnary(UnaryNode* Node);
+        // void VisitUnary(UnaryNode* Node);
         void VisitBinary(BinaryNode* Node);
         void VisitAssignment(AssignmentNode* Node);
 
         void VisitMemberAccess(MemberAccessNode* Node, bool isBase=true);
         void VisitIndexAccess(IndexAccessNode* Node, bool isAssign=false);
-        void VisitFunctionCall(FunctionCall* Node);
+        // void VisitFunctionCall(FunctionCall* Node);
 
-        void VisitArray(ArrayValue* Node);
-        void VisitTable(TableValue* Node);
+        // void VisitArray(ArrayValue* Node);
+        // void VisitTable(TableValue* Node);
 
-        void VisitRange(RangeNode* Node);
+        // void VisitRange(RangeNode* Node);
 
         // ERRORS
-        void VisitErrorExpr(ErrorExprNode* Node);
-        void VisitErrorDecl(ErrorDeclNode* Node);
-        void VisitErrorStmt(ErrorStmtNode* Node);     
+        // void VisitErrorExpr(ErrorExprNode* Node);
+        // void VisitErrorDecl(ErrorDeclNode* Node);
+        // void VisitErrorStmt(ErrorStmtNode* Node);
 };
 
 // EOF
