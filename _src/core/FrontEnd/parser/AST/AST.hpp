@@ -164,6 +164,8 @@ enum class MutableTypes : uint8_t
 // Literal Value Types | Tipos de Valores Literais.
 enum class LiteralTypes: uint8_t
 {
+    MONO_STATE,
+
     INT,
     FLOAT,
     STRING,

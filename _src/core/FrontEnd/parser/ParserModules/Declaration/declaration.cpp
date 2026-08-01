@@ -89,6 +89,7 @@ namespace DeclUtils {
 
         string name = NameToken->Lexeme(Data);
         Decl->Name = name;
+        Decl->InferType = LiteralTypes::MONO_STATE;
 
         Token* Next = Inst.Peek();
 

@@ -1,3 +1,6 @@
 
 const list x = [1,2,3];
-const var y = {"Oi": 234};
+const var y = 3;
+
+func Oi():
+    

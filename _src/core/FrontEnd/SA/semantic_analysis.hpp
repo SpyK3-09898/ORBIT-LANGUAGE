@@ -165,7 +165,7 @@ class SemanticAnalizer
         TypeInfo* GetExpressionType(ExpressionNode* Node);
         TypeInfo* ConvertLiteralTypeInfo(LiteralTypes Type);
         string TypeToString(TypeKind Type);
-        bool SameType(TypeInfo* A, TypeInfo* B);
+        bool TypesEqual(TypeInfo* A, TypeInfo* B);
 
         // ===== VISIT-FUNCTIONS =====
 

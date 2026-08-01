@@ -3,7 +3,6 @@
 // Analyzes the Code for Semantic Errors | Analiza o COdigo em Busca de Erros Semanticos.
 // Developed By: SpyK3(2026) | License: GitHub(MIT).
 
-
 // INCLUDE HEADERS 'N DEPENDENCES
 #include "semantic_analysis.hpp"
 
@@ -78,7 +77,8 @@ TypeInfo* SemanticAnalizer::GetExpressionType(ExpressionNode* Node)
             TypeInfo* Type = M_Memory->New<TypeInfo>();
 
             Type->Kind = TypeKind::ARRAY;
-
+            Type->ElementType = nullptr;
+            
             return Type;
         }
 
@@ -88,6 +88,7 @@ TypeInfo* SemanticAnalizer::GetExpressionType(ExpressionNode* Node)
             TypeInfo* Type = M_Memory->New<TypeInfo>();
 
             Type->Kind = TypeKind::TABLE;
+            Type->ElementType = nullptr;
 
             return Type;
         }
@@ -103,7 +104,7 @@ TypeInfo* SemanticAnalizer::GetExpressionType(ExpressionNode* Node)
                 return nullptr;
 
             if (Object->Kind != TypeKind::STRUCT &&
-                Object->Kind != TypeKind::CLASS)
+            Object->Kind != TypeKind::CLASS)
                 return nullptr;
 
 
@@ -246,6 +247,38 @@ TypeInfo* SemanticAnalizer::ConvertLiteralTypeInfo(LiteralTypes Type)
     }
 
     return Info;
+}
+
+// Compare Two Types | Compara Dois Tipos.
+bool SemanticAnalizer::TypesEqual(TypeInfo* A, TypeInfo* B)
+{
+    // ERROR PREV | PREVENÇÃO DE ERROS
+    if (!A || !B)
+        return false;
+
+    // BASIC CHECK | CHECAGEM BASICA
+    if (A->Kind != B->Kind)
+        return false;
+
+// COMPOUND TYPES | TIPOS COMPOSTOS
+    switch (A->Kind)
+    {
+        case TypeKind::ARRAY:
+            // nullptr = "qualquer tipo de elemento"
+            if (!A->ElementType || !B->ElementType)
+                return true;
+            return TypesEqual(A->ElementType, B->ElementType);
+
+        case TypeKind::TABLE:
+            // nullptr = "qualquer tipo de valor"
+            if (!A->ValueType || !B->ValueType)
+                return true;
+            return TypesEqual(A->ValueType, B->ValueType);
+
+        // SIMPLE TYPES | TIPOS SIMPLES
+        default:
+            return true;
+    }
 }
 
 string SemanticAnalizer::TypeToString(TypeKind Type)
@@ -393,10 +426,10 @@ void SemanticAnalizer::EnterScope(BodyTypes Kind)
     Scope* New = M_Memory->New<Scope>();
 
     New->Parent = SAState.CurrScope;
-    New->Kind = Kind;
+    New->Kind   = Kind;
 
+    SAState.CurrScope = New;
     SAState.currScopeLvl++;
-    SAState.CurrScope->Parent = New;
 }
 
 // Back to a Father Scope | Volta Para o Escopo pai.
@@ -405,7 +438,7 @@ void SemanticAnalizer::LeaveScope(BodyTypes Kind)
     Scope* Curr = SAState.CurrScope;
     if (!Curr)
         OrbitLog::Error("semantic_analysis.cpp", "Try to Back to a Null Scope", true);
-    SAState.CurrScope = Curr;
+    SAState.CurrScope = SAState.CurrScope->Parent;
     SAState.currScopeLvl--;
 }
 
@@ -466,23 +499,28 @@ void SemanticAnalizer::VisitVarDecl(VarDeclNode* Node)
     S->Pos  = Node->pos;
     S->name = Node->Name;
 
-    TypeInfo* SType = GetExpressionType(Node->Val);
-    if (ConvertLiteralTypeInfo(Node->InferType) != SType)
+
+    TypeInfo* Expected =  ConvertLiteralTypeInfo(Node->InferType);
+    TypeInfo* Actual   =  GetExpressionType(Node->Val);  
+    if (Node->InferType != LiteralTypes::MONO_STATE && !TypesEqual(Expected, Actual))
     {
         OrbitLog::SyntaxLog::SyntaxError(
             "Semantic",
-            string(TypeToString(SType->Kind)) +
-            " Expected, But Got: " +
-            string(TypeToString(ConvertLiteralTypeInfo(Node->InferType)->Kind)),
-            "<INFER_TYPE> is DIFFERENT to typeof Value",
+        string(TypeToString(Expected ? Expected->Kind : TypeKind::UNKNOWN)) +
+            "    Expected, But Got: " +
+            string(TypeToString(Actual ? Actual->Kind : TypeKind::UNKNOWN)),
+           "<INFER_TYPE> is DIFFERENT to typeof Value",
             "Add a Valid Type or Convert",
             S->Pos.line, S->Pos.collumn
         );
+
         if (!M_Data->flags.debugMode)
             OrbitLog::SyntaxLog::ThrowLog(*M_Data);
+
         return;
     }
-    S->Type = SType;
+
+    S->Type = Actual;
 
     // Finalize | Finaliza.
     SAState.CurrScope->Symbols[S->name] = S;
@@ -865,7 +903,13 @@ SAResult SemanticAnalizer::InitSA(ParseResult& Res, RunTimeData& Data, Arena& Me
     M_Data = &Data;
 
     SARes = SAResult{};
-    
+   
+    // Create Global Scope | Cria o Escopo Global
+    SAState.CurrScope = M_Memory->New<Scope>();
+    SAState.CurrScope->Parent = nullptr;
+    SAState.CurrScope->Kind = BodyTypes::PROGRAM; // ou o enum que você usar
+    SAState.currScopeLvl = 0;
+
     // Visit AST | Visita a AST
     Visit(Res.AST);
 

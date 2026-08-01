@@ -1,7 +1,7 @@
 
 // ========== LEXER ============ // 
 
-TOKEN COUNT: 27
+TOKEN COUNT: 23
 TOKENS: 
 
 Token0: TypeId: 59
@@ -80,35 +80,19 @@ Token18: TypeId: 11
 Lexeme: 
 Pos(line/index): 2;13
 
-Token19: TypeId: 44
-Lexeme: 
+Token19: TypeId: 0
+Lexeme: 3
 Pos(line/index): 2;15
 
-Token20: TypeId: 2
-Lexeme: Oi
-Pos(line/index): 2;19
-
-Token21: TypeId: 51
+Token20: TypeId: 52
 Lexeme: 
-Pos(line/index): 2;20
+Pos(line/index): 2;16
 
-Token22: TypeId: 0
-Lexeme: 234
-Pos(line/index): 2;24
-
-Token23: TypeId: 47
-Lexeme: 
-Pos(line/index): 2;25
-
-Token24: TypeId: 52
-Lexeme: 
-Pos(line/index): 2;26
-
-Token25: TypeId: 53
+Token21: TypeId: 53
 Lexeme: 
 Pos(line/index): 3;0
 
-Token26: TypeId: 60
+Token22: TypeId: 60
 Lexeme: 
 Pos(line/index): 3;0
 
@@ -137,8 +121,8 @@ Program
     Pos(line/collumn): 0;0
     Body
     Children: 2
-    [0] Ptr: 0x214d8da3948 | Type: 11
-    [1] Ptr: 0x214d8da3b28 | Type: 2
+    [0] Ptr: 0x14453693288 | Type: 11
+    [1] Ptr: 0x14453693390 | Type: 11
         NodeType: 11
         Pos(line/collumn): 1;12
         VarDecl
@@ -165,8 +149,28 @@ Program
                 Pos(line/collumn): 1;21
                 Literal
                 Value: 3
-        NodeType: 2
-        Pos(line/collumn): 2;25
-        ErrorNode
+        NodeType: 11
+        Pos(line/collumn): 2;11
+        VarDecl
+        Name: y
+        Mutable: 1
+        InferType: 0
+        Value:
+            NodeType: 13
+            Pos(line/collumn): 2;15
+            Literal
+            Value: 3
 
 // ========== ENDOF: PARSING ========== //
+
+// ============ MEMORY & DATA =========== //
+
+LIMIT: 65536
+USED: 1864
+AVALIABLE: 63672
+SPACES/BLOCKS USED ACCOUNT: 1
+
+Finishing Arena. .. ...
+
+\ ============ ENDOF: 'ARENA' ==========
+
