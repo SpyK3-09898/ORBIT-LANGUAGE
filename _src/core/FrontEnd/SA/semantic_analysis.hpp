@@ -17,14 +17,57 @@
 #include "../../RunTimeData.hpp"
 
 #include <cstddef>
+using IValueTypes = std::variant<
+    std::integral_constant<NodeType, NodeType::IDENTIFIER>,
+    std::integral_constant<NodeType, NodeType::MEMBER_ACCESS>,
+    std::integral_constant<NodeType, NodeType::INDEX_ACCESS>
+>;
 
 // CORE
+
+// TYPE OF TYPES | TIPO DOS TIPOS.
+enum class TypeKind : uint8_t
+{
+    UNKNOWN,
+
+    INT,
+    FLOAT,
+    STRING,
+    BOOL,
+
+    NONE,
+    NULLVAL,
+
+    ARRAY,
+    TABLE,
+
+    STRUCT,
+    CLASS
+};
+
+// INFO OF TYPES | INFORMAÇÕES DE INFERIÇÃO
+struct TypeInfo
+{
+    TypeKind Kind = TypeKind::UNKNOWN;
+
+    // ARRAY
+    TypeInfo* ElementType = nullptr;
+
+    // TABLE
+    TypeInfo* KeyType = nullptr;
+    TypeInfo* ValueType = nullptr;
+
+    // STRUCT / CLASS
+    string Name;
+    unord_map<string, TypeInfo*> Members;
+};
 
 // Def Symbol | Simbolo Padrão.
 struct Symbol
 {
     // DATA 
     string name;
+    TypeInfo* Type;
     MutableTypes Mut = MutableTypes::UNK;
 
     // USING | USOS
@@ -34,6 +77,7 @@ struct Symbol
 
     // DERIVATED | DERIVADOS
     bool is_live=false;
+    bool initialized=false;
     NodePos Pos;
 };
 
@@ -102,6 +146,12 @@ class SemanticAnalizer
     // VISIT FUNCTIONS
     private:
 
+        // ===== UTILS ===== //
+        
+        TypeInfo* GetExpressionType(ExpressionNode* Node);
+
+        // ===== VISIT-FUNCTIONS =====
+
         // VISIT
         void Visit(ASTNode* Node);
         void EnterScope(BodyTypes Kind);
@@ -136,8 +186,8 @@ class SemanticAnalizer
         void VisitBinary(BinaryNode* Node);
         void VisitAssignment(AssignmentNode* Node);
 
-        void VisitMemberAccess(MemberAccessNode* Node);
-        void VisitIndexAccess(IndexAccessNode* Node);
+        void VisitMemberAccess(MemberAccessNode* Node, bool isBase=true);
+        void VisitIndexAccess(IndexAccessNode* Node, bool isAssign=false);
         void VisitFunctionCall(FunctionCall* Node);
 
         void VisitArray(ArrayValue* Node);

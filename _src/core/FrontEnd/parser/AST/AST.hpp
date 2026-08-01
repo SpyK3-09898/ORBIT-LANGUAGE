@@ -230,7 +230,7 @@ struct ASTNode
     NodeType Type;
 
     // UTILS | UTILIDADES
-    inline const char* GetNodeType(NodeType Type)
+    inline string GetNodeType()
     {
         switch (Type)
         {

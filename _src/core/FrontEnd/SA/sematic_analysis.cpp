@@ -22,6 +22,109 @@
 
 // ======= CORE ======= //
 
+// ===== UTILS ===== //
+
+TypeInfo* SemanticAnalizer::GetExpressionType(ExpressionNode* Node)
+{
+    if (!Node)
+        return nullptr;
+
+    switch (Node->Type)
+    {
+        case NodeType::LITERAL:
+        {
+            LiteralNode* Lit = static_cast<LiteralNode*>(Node);
+
+            TypeInfo* Type = M_Memory->New<TypeInfo>();
+
+            if (holds_alternative<i64>(Lit->Value))
+                Type->Kind = TypeKind::INT;
+
+            else if (holds_alternative<float>(Lit->Value))
+                Type->Kind = TypeKind::FLOAT;
+
+            else if (holds_alternative<str_view>(Lit->Value))
+                Type->Kind = TypeKind::STRING;
+
+            else if (holds_alternative<bool>(Lit->Value))
+                Type->Kind = TypeKind::BOOL;
+
+            else if (holds_alternative<NoneLitVal>(Lit->Value))
+                Type->Kind = TypeKind::NONE;
+
+            else if (holds_alternative<NullLitVal>(Lit->Value))
+                Type->Kind = TypeKind::NULLVAL;
+
+            return Type;
+        }
+
+
+        case NodeType::IDENTIFIER:
+        {
+            IdentifierNode* Id = static_cast<IdentifierNode*>(Node);
+
+            Symbol* Sym = SAState.CurrScope->LookUp(Id->Name);
+
+            if (!Sym)
+                return nullptr;
+
+            return Sym->Type;
+        }
+
+
+        case NodeType::ARRAY_VALUE:
+        {
+            TypeInfo* Type = M_Memory->New<TypeInfo>();
+
+            Type->Kind = TypeKind::ARRAY;
+
+            return Type;
+        }
+
+
+        case NodeType::TABLE_VALUE:
+        {
+            TypeInfo* Type = M_Memory->New<TypeInfo>();
+
+            Type->Kind = TypeKind::TABLE;
+
+            return Type;
+        }
+
+
+        case NodeType::MEMBER_ACCESS:
+        {
+            MemberAccessNode* Access = static_cast<MemberAccessNode*>(Node);
+
+            TypeInfo* Object = GetExpressionType(Access->Object);
+
+            if (!Object)
+                return nullptr;
+
+            if (Object->Kind != TypeKind::STRUCT &&
+                Object->Kind != TypeKind::CLASS)
+                return nullptr;
+
+
+            IdentifierNode* Member =
+                static_cast<IdentifierNode*>(Access->Member);
+
+
+            auto It = Object->Members.find(Member->Name);
+
+            if (It == Object->Members.end())
+                return nullptr;
+
+
+            return It->second;
+        }
+
+
+        default:
+            return nullptr;
+    }
+}
+
 // ===== SCOPES ===== //
 
 // Analize the Node | Analisa o Nó.
@@ -202,8 +305,11 @@ void SemanticAnalizer::VisitVarDecl(VarDeclNode* Node)
     }
 
     // Validate Expression and Create Symbol | Valida Expressoes e Cria o Simbolo.
-    VisitExpression(Node->Val);
+    bool inited=false;
+    if (Node->Val)
+        { VisitExpression(Node->Val); inited=true; }
     Symbol* S = M_Memory->New<Symbol>();
+    S->initialized = inited;
 
     // Set Symbol | Define o Simbolo.
     S->Mut  = Node->MutType;
@@ -230,12 +336,111 @@ void SemanticAnalizer::VisitIdentifier(IdentifierNode* Node)
         );
         if (!M_Data->flags.debugMode)
             OrbitLog::SyntaxLog::ThrowLog(*M_Data);
-        return ;
+        return;
     }
     Sym->read_count++;
 }
 
+// Visit Member Acess Using | Visita Acesso de membros.
+void SemanticAnalizer::VisitMemberAccess(MemberAccessNode* Node, bool isBase)
+{
+    // ERROR PREV | PREVENÇÃO DE ERROS
+    if (!holds_alt<IValueTypes>(Node->Member))
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Parsing",
+            "Trying to Acess Using A Non <I_VALUE>",
+            "Expected <IVALUE> But Got: "+Node->Member->GetNodeType(),
+            "Try To Assign In A Valid <IVALUE>",
+            Node->pos.line,
+            Node->pos.collumn
+        );
+        if (!M_Data->flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(*M_Data);
+        return;
+    }
+    if (!holds_alt<IValueTypes>(Node->Object))
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Parsing",
+            "Trying to Acess A Non <I_VALUE>",
+            "Expected <IVALUE> But Got: "+Node->Member->GetNodeType(),
+            "Try To Assign In A Valid <IVALUE>",
+            Node->pos.line,
+            Node->pos.collumn
+        );
+        if (!M_Data->flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(*M_Data);
+        return;
+    }
+    // SET | DEFINE
+    if (Node->Member->Type == NodeType::MEMBER_ACCESS)
+    {
+        MemberAccessNode* Mb = static_cast<MemberAccessNode*>(Node->Member);
+        VisitMemberAccess(Mb, false);
+    }
+    if (isBase)
+    {
+        IdentifierNode* Id = static_cast<IdentifierNode*>(Node->Object);
+        VisitIdentifier(Id);
+    }
+}
+
+// Visit Index Acess Using | Visita o Acesso Per Indice
+void SemanticAnalizer::VisitIndexAccess(IndexAccessNode* Node, bool isAssign)
+{
+    // ERROR PREV | PREVENÇÃO DE ERROS.
+    if (!holds_alt<IValueTypes>(Node->Object))
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Parsing",
+            "Trying to Assign A Non <I_VALUE>",
+            "Expected <IVALUE> But Got: "+Node->Object->GetNodeType(),
+            "Try To Assign In A Valid <IVALUE>",
+            Node->pos.line,
+            Node->pos.collumn
+        );
+        if (!M_Data->flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(*M_Data);
+        return;
+    }
+    if ()
+}
+
 // Visit Assign Nodes | Visita Nós de Atribuição.
+void SemanticAnalizer::VisitAssignment(AssignmentNode* Node)
+{
+    // ERROR PREV | PREVENÇÃO DE ERROS.
+    if (holds_alt<IValueTypes>(Node->Left->Type))
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Parsing",
+            "Trying to Assign A Non <I_VALUE>",
+            "Expected <IVALUE> But Got: "+Node->Left->GetNodeType(),
+            "Try To Assign In A Valid <IVALUE>",
+            Node->pos.line,
+            Node->pos.collumn
+        );
+        if (!M_Data->flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(*M_Data);
+        return;
+    }
+
+    // ANALIZE | ANALIZA
+    if (Node->Left->Type == NodeType::MEMBER_ACCESS)
+        VisitMemberAccess(static_cast<MemberAccessNode*>(Node->Left));
+    else if (Node->Left->Type == NodeType::INDEX_ACCESS)
+        VisitIndexAccess(static_cast<IndexAccessNode*>(Node->Left));    
+    else {
+        Symbol* Sym = SAState.CurrScope->LookUp(
+            static_cast<IdentifierNode*>(Node->Left)->Name
+        );
+
+        Sym->write_count++;
+        Sym->initialized = true;
+    }
+    VisitExpression(Node->Right);
+}
 
 // ======= ENTRY-POINT ======= //
 // Entry-Point of SA Program | Ponto-de-Entrada do Programa de AS
