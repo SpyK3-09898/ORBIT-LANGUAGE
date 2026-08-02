@@ -136,7 +136,8 @@ namespace DeclUtils {
                 Decl->InferType = InferedType.first;
 
                 // EQUAL | IGUAL
-                if (Next->Type == TokenType::EQUAL)
+                Next = Inst.Peek();
+                if (Next != nullptr && Next->Type == TokenType::EQUAL)
                 {
                     Token* E = Inst.Advance();
                     ParserUtils::UpdateStatePos(E, State);
@@ -156,8 +157,8 @@ namespace DeclUtils {
                         Data,
                         Memory
                     );
-
                 }
+
             } else {
 
                 OrbitLog::SyntaxLog::SyntaxError(

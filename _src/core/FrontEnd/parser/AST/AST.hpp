@@ -779,165 +779,93 @@ namespace ParserUtils {
         // Retorna o Tipo dos Tipos Explicitamente Infernidos
         inline pair<LiteralTypes, int> InferType(vec<Token*>& Tokens, RunTimeData& Data)
         {
-            pair<LiteralTypes, int> DEF_RET = {LiteralTypes::_NULL, 2};
+            pair<LiteralTypes, int> DEF_RET = {LiteralTypes::_NULL, 1};
 
-            if (Tokens.size() < 2)
-                return {LiteralTypes::_NULL, static_cast<int>(Tokens.size())};
-
-            if (Tokens[1]->Type is_not TokenType::COLON)
+            if (Tokens.size() == 0)
                 return DEF_RET;
 
-            if (Tokens.size() < 3)
+            if (Tokens[0]->Type is_not TokenType::LIT_TYPE)
             {
                 OrbitLog::SyntaxLog::SyntaxError(
                     "Parsing",
                     "<LIT_TYPE> Expected After ':'",
-                    "Expected <LIT_TYPE> After ':' But Found End Of Tokens",
+                    "Expected <LIT_TYPE> After ':' But Found: " + Tokens[0]->GetType(),
                     "Complete the Statement or Delete ':'",
-                    Tokens[1]->pos.line,
-                    Tokens[1]->pos.collumn
+                    Tokens[0]->pos.line,
+                    Tokens[0]->pos.collumn
                 );
                 if (!Data.flags.debugMode)
+                {
                     OrbitLog::SyntaxLog::ThrowLog(Data);
-                return {LiteralTypes::_NULL, 2};
+                    return DEF_RET;
+                }
             }
 
-            if (Tokens[2]->Type is_not TokenType::LIT_TYPE)
-            {
-                OrbitLog::SyntaxLog::SyntaxError(
-                    "Parsing",
-                    "<LIT_TYPE> Expected After ':'",
-                    "Expected <LIT_TYPE> After ':' But Found: " + Tokens[2]->GetType(),
-                    "Complete the Statement or Delete ':'",
-                    Tokens[2]->pos.line,
-                    Tokens[2]->pos.collumn
-                );
-                if (!Data.flags.debugMode)
-                    OrbitLog::SyntaxLog::ThrowLog(Data);
-                return {LiteralTypes::_NULL, 2};
-            }
-
-            string Lex = Tokens[2]->Lexeme(Data);
+            string Lex = Tokens[0]->Lexeme(Data);
 
             // LITERALS | LITERAIS.
-            if (Lex is "Int")    return {LiteralTypes::INT,    3};
-            if (Lex is "Float")  return {LiteralTypes::FLOAT,  3};
-            if (Lex is "Bool")   return {LiteralTypes::BOOL,   3};
-            if (Lex is "String") return {LiteralTypes::STRING, 3};
-            if (Lex is "None")   return {LiteralTypes::NONE,   3};
-            if (Lex is "Null")   return {LiteralTypes::_NULL,  3};
+            if (Lex is "Int") return {LiteralTypes::INT, 1};
+            else if (Lex is "Float") return {LiteralTypes::FLOAT, 1};
+            else if (Lex is "Bool") return {LiteralTypes::BOOL, 1};
+            else if (Lex is "String") return {LiteralTypes::STRING, 1};
+            else if (Lex is "None") return {LiteralTypes::NONE, 1};
+            else if (Lex is "Null") return {LiteralTypes::_NULL, 1};
 
             // LISTS | LISTAS
-            if (Lex is "Array")
+            else if (Lex is "Array")
             {
-                // Array < Type >
-                if (Tokens.size() < 6)
+                if (Tokens.size() < 4)
                 {
                     OrbitLog::SyntaxLog::SyntaxError(
                         "Parsing",
                         "Incomplete Array Type",
                         "Expected Array<TYPE> But Found Incomplete Declaration",
                         "Complete with Array<Type>",
-                        Tokens[2]->pos.line,
-                        Tokens[2]->pos.collumn
+                        Tokens[0]->pos.line,
+                        Tokens[0]->pos.collumn
                     );
                     if (!Data.flags.debugMode)
                         OrbitLog::SyntaxLog::ThrowLog(Data);
-                    return {LiteralTypes::_NULL, 3};
+                    return {LiteralTypes::_NULL, 1};
                 }
 
-                if (Tokens[3]->Type is_not TokenType::LESS)
+                if (Tokens[1]->Type is_not TokenType::LESS)
                 {
                     OrbitLog::SyntaxLog::SyntaxError(
                         "Parsing",
                         "'<' Expected",
                         "'<' Expected After 'Array' Infer",
                         "Add a '<' After 'Array'",
-                        Tokens[3]->pos.line,
-                        Tokens[3]->pos.collumn
+                        Tokens[1]->pos.line,
+                        Tokens[1]->pos.collumn
                     );
                     if (!Data.flags.debugMode)
                         OrbitLog::SyntaxLog::ThrowLog(Data);
-                    return {LiteralTypes::_NULL, 3};
+                    return {LiteralTypes::_NULL, 1};
                 }
 
-                if (Tokens[4]->Type is_not TokenType::LIT_TYPE)
+                if (Tokens[2]->Type is_not TokenType::LIT_TYPE)
                 {
                     OrbitLog::SyntaxLog::SyntaxError(
                         "Parsing",
                         "<TYPE> Expected",
                         "<TYPE> Expected After 'Array<' Infer",
                         "Add a <TYPE> After 'Array<'",
-                        Tokens[4]->pos.line,
-                        Tokens[4]->pos.collumn
+                        Tokens[2]->pos.line,
+                        Tokens[2]->pos.collumn
                     );
                     if (!Data.flags.debugMode)
                         OrbitLog::SyntaxLog::ThrowLog(Data);
-                    return {LiteralTypes::_NULL, 4};
+                    return {LiteralTypes::_NULL, 2};
                 }
 
-                if (Tokens[5]->Type is_not TokenType::GREATER)
+                if (Tokens[3]->Type is_not TokenType::GREATER)
                 {
                     OrbitLog::SyntaxLog::SyntaxError(
                         "Parsing",
                         "'>' Expected",
                         "'>' Expected After 'Array<TYPE' Infer",
                         "Add a '>' After 'Array<TYPE'",
-                        Tokens[5]->pos.line,
-                        Tokens[5]->pos.collumn
-                    );
-                    if (!Data.flags.debugMode)
-                        OrbitLog::SyntaxLog::ThrowLog(Data);
-                    return {LiteralTypes::_NULL, 5};
-                }
-
-                string Inner = Tokens[4]->Lexeme(Data);
-
-                if (Inner is "Int")    return {LiteralTypes::ARRAY_INT,    6};
-                if (Inner is "Float")  return {LiteralTypes::ARRAY_FLOAT,  6};
-                if (Inner is "Bool")   return {LiteralTypes::ARRAY_BOOL,   6};
-                if (Inner is "String") return {LiteralTypes::ARRAY_STRING, 6};
-                if (Inner is "None")   return {LiteralTypes::ARRAY_NONE,   6};
-                if (Inner is "Null")   return {LiteralTypes::ARRAY_NULL,   6};
-
-                OrbitLog::SyntaxLog::SyntaxError(
-                    "Parsing",
-                    "Invalid Type Inside Array",
-                    "Unknown Type Inside Array<>: " + Inner,
-                    "Use a Valid Literal Type (Int, Float, Bool, String, None, Null)",
-                    Tokens[4]->pos.line,
-                    Tokens[4]->pos.collumn
-                );
-                if (!Data.flags.debugMode)
-                    OrbitLog::SyntaxLog::ThrowLog(Data);
-                return {LiteralTypes::_NULL, 6};
-            }
-
-            if (Lex is "List")
-            {
-                // List < Type >
-                if (Tokens.size() < 6)
-                {
-                    OrbitLog::SyntaxLog::SyntaxError(
-                        "Parsing",
-                        "Incomplete List Type",
-                        "Expected List<TYPE> But Found Incomplete Declaration",
-                        "Complete with List<Type>",
-                        Tokens[2]->pos.line,
-                        Tokens[2]->pos.collumn
-                    );
-                    if (!Data.flags.debugMode)
-                        OrbitLog::SyntaxLog::ThrowLog(Data);
-                    return {LiteralTypes::_NULL, 3};
-                }
-
-                if (Tokens[3]->Type is_not TokenType::LESS)
-                {
-                    OrbitLog::SyntaxLog::SyntaxError(
-                        "Parsing",
-                        "'<' Expected",
-                        "'<' Expected After 'List' Infer",
-                        "Add a '<' After 'List'",
                         Tokens[3]->pos.line,
                         Tokens[3]->pos.collumn
                     );
@@ -946,71 +874,123 @@ namespace ParserUtils {
                     return {LiteralTypes::_NULL, 3};
                 }
 
-                if (Tokens[4]->Type is_not TokenType::LIT_TYPE)
+                string Inner = Tokens[2]->Lexeme(Data);
+
+                if (Inner is "Int") return {LiteralTypes::ARRAY_INT, 4};
+                else if (Inner is "Float") return {LiteralTypes::ARRAY_FLOAT, 4};
+                else if (Inner is "Bool") return {LiteralTypes::ARRAY_BOOL, 4};
+                else if (Inner is "String") return {LiteralTypes::ARRAY_STRING, 4};
+                else if (Inner is "None") return {LiteralTypes::ARRAY_NONE, 4};
+                else if (Inner is "Null") return {LiteralTypes::ARRAY_NULL, 4};
+
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Parsing",
+                    "Invalid Type Inside Array",
+                    "Unknown Type Inside Array<>: " + Inner,
+                    "Use a Valid Literal Type (Int, Float, Bool, String, None, Null)",
+                    Tokens[2]->pos.line,
+                    Tokens[2]->pos.collumn
+                );
+                if (!Data.flags.debugMode)
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                return {LiteralTypes::_NULL, 4};
+            }
+            else if (Lex is "List")
+            {
+                if (Tokens.size() < 4)
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "Parsing",
+                        "Incomplete List Type",
+                        "Expected List<TYPE> But Found Incomplete Declaration",
+                        "Complete with List<Type>",
+                        Tokens[0]->pos.line,
+                        Tokens[0]->pos.collumn
+                    );
+                    if (!Data.flags.debugMode)
+                        OrbitLog::SyntaxLog::ThrowLog(Data);
+                    return {LiteralTypes::_NULL, 1};
+                }
+
+                if (Tokens[1]->Type is_not TokenType::LESS)
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "Parsing",
+                        "'<' Expected",
+                        "'<' Expected After 'List' Infer",
+                        "Add a '<' After 'List'",
+                        Tokens[1]->pos.line,
+                        Tokens[1]->pos.collumn
+                    );
+                    if (!Data.flags.debugMode)
+                        OrbitLog::SyntaxLog::ThrowLog(Data);
+                    return {LiteralTypes::_NULL, 1};
+                }
+
+                if (Tokens[2]->Type is_not TokenType::LIT_TYPE)
                 {
                     OrbitLog::SyntaxLog::SyntaxError(
                         "Parsing",
                         "<TYPE> Expected",
                         "<TYPE> Expected After 'List<' Infer",
                         "Add a <TYPE> After 'List<'",
-                        Tokens[4]->pos.line,
-                        Tokens[4]->pos.collumn
+                        Tokens[2]->pos.line,
+                        Tokens[2]->pos.collumn
                     );
                     if (!Data.flags.debugMode)
                         OrbitLog::SyntaxLog::ThrowLog(Data);
-                    return {LiteralTypes::_NULL, 4};
+                    return {LiteralTypes::_NULL, 2};
                 }
 
-                if (Tokens[5]->Type is_not TokenType::GREATER)
+                if (Tokens[3]->Type is_not TokenType::GREATER)
                 {
                     OrbitLog::SyntaxLog::SyntaxError(
                         "Parsing",
                         "'>' Expected",
                         "'>' Expected After 'List<TYPE' Infer",
                         "Add a '>' After 'List<TYPE'",
-                        Tokens[5]->pos.line,
-                        Tokens[5]->pos.collumn
+                        Tokens[3]->pos.line,
+                        Tokens[3]->pos.collumn
                     );
                     if (!Data.flags.debugMode)
                         OrbitLog::SyntaxLog::ThrowLog(Data);
-                    return {LiteralTypes::_NULL, 5};
+                    return {LiteralTypes::_NULL, 3};
                 }
 
-                string Inner = Tokens[4]->Lexeme(Data);
+                string Inner = Tokens[2]->Lexeme(Data);
 
-                if (Inner is "Int")    return {LiteralTypes::TABLE_INT,    6};
-                if (Inner is "Float")  return {LiteralTypes::TABLE_FLOAT,  6};
-                if (Inner is "Bool")   return {LiteralTypes::TABLE_BOOL,   6};
-                if (Inner is "String") return {LiteralTypes::TABLE_STRING, 6};
-                if (Inner is "None")   return {LiteralTypes::TABLE_NONE,   6};
-                if (Inner is "Null")   return {LiteralTypes::TABLE_NULL,   6};
+                if (Inner is "Int") return {LiteralTypes::TABLE_INT, 4};
+                else if (Inner is "Float") return {LiteralTypes::TABLE_FLOAT, 4};
+                else if (Inner is "Bool") return {LiteralTypes::TABLE_BOOL, 4};
+                else if (Inner is "String") return {LiteralTypes::TABLE_STRING, 4};
+                else if (Inner is "None") return {LiteralTypes::TABLE_NONE, 4};
+                else if (Inner is "Null") return {LiteralTypes::TABLE_NULL, 4};
 
                 OrbitLog::SyntaxLog::SyntaxError(
                     "Parsing",
                     "Invalid Type Inside List",
                     "Unknown Type Inside List<>: " + Inner,
                     "Use a Valid Literal Type (Int, Float, Bool, String, None, Null)",
-                    Tokens[4]->pos.line,
-                    Tokens[4]->pos.collumn
+                    Tokens[2]->pos.line,
+                    Tokens[2]->pos.collumn
                 );
                 if (!Data.flags.debugMode)
                     OrbitLog::SyntaxLog::ThrowLog(Data);
-                return {LiteralTypes::_NULL, 6};
+                return {LiteralTypes::_NULL, 4};
             }
 
-            // Tipo desconhecido
             OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",
                 "Unknown Type",
                 "Unknown Type After ':': " + Lex,
                 "Use a Valid Type (Int, Float, Bool, String, None, Null, Array, List)",
-                Tokens[2]->pos.line,
-                Tokens[2]->pos.collumn
+                Tokens[0]->pos.line,
+                Tokens[0]->pos.collumn
             );
             if (!Data.flags.debugMode)
                 OrbitLog::SyntaxLog::ThrowLog(Data);
 
-            return {LiteralTypes::_NULL, 3};
+            return DEF_RET;
         }
     }
 }
