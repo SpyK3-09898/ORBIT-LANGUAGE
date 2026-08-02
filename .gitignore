@@ -89,7 +89,8 @@ Desktop.ini
 
 # ======= ORBIT ======= //
 
-_tests\logs
-!_tests\logs\log.txt
-_tests\scripts
-!_tests\scripts\.ORBIT
+_tests/logs/**
+!_tests/logs/log.txt
+
+_tests/scripts/**
+!_tests/scripts/.ORBIT

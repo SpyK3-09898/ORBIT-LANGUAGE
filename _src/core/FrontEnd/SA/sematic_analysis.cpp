@@ -24,10 +24,31 @@
 
 // ===== UTILS ===== //
 
+// Create a New TInfo | Cria um Novo TInfo
+TypeInfo* SemanticAnalizer::CreateTInfo(TypeKind K, ASTNode* Node)
+{
+    TypeInfo* TInfo = M_Memory->New<TypeInfo>();
+
+    TInfo->Kind = K;
+    TInfo->ValueType   = nullptr;
+
+    return TInfo;
+}
+
+// Get Type of Expressions | Pega o tipos de Expressoes.
 TypeInfo* SemanticAnalizer::GetExpressionType(ExpressionNode* Node)
 {
+    // ERROR PREV | PREVENÇÃO DE ERROS
     if (!Node)
         return nullptr;
+
+    // ALREADY COMPUTED | JA CALCULADO
+    auto It = SARes.ExpressionInfos.find(Node);
+    if (It != SARes.ExpressionInfos.end())
+        return It->second.Info;
+
+    // COMPUTE NOW | CALCULA AGORA
+    TypeInfo* Type = nullptr;
 
     switch (Node->Type)
     {
@@ -35,211 +56,195 @@ TypeInfo* SemanticAnalizer::GetExpressionType(ExpressionNode* Node)
         {
             LiteralNode* Lit = static_cast<LiteralNode*>(Node);
 
-            TypeInfo* Type = M_Memory->New<TypeInfo>();
-
             if (holds_alternative<i64>(Lit->Value))
-                Type->Kind = TypeKind::INT;
-
+                Type = CreateTInfo(TypeKind::INT, Node);
             else if (holds_alternative<float>(Lit->Value))
-                Type->Kind = TypeKind::FLOAT;
-
+                Type = CreateTInfo(TypeKind::FLOAT, Node);
             else if (holds_alternative<str_view>(Lit->Value))
-                Type->Kind = TypeKind::STRING;
-
+                Type = CreateTInfo(TypeKind::STRING, Node);
             else if (holds_alternative<bool>(Lit->Value))
-                Type->Kind = TypeKind::BOOL;
-
+                Type = CreateTInfo(TypeKind::BOOL, Node);
             else if (holds_alternative<NoneLitVal>(Lit->Value))
-                Type->Kind = TypeKind::NONE;
-
+                Type = CreateTInfo(TypeKind::NONE, Node);
             else if (holds_alternative<NullLitVal>(Lit->Value))
-                Type->Kind = TypeKind::NULLVAL;
+                Type = CreateTInfo(TypeKind::NULLVAL, Node);
 
-            return Type;
+            break;
         }
-
 
         case NodeType::IDENTIFIER:
         {
             IdentifierNode* Id = static_cast<IdentifierNode*>(Node);
-
             Symbol* Sym = SAState.CurrScope->LookUp(Id->Name);
-
-            if (!Sym)
-                return nullptr;
-
-            return Sym->Type;
+            if (Sym)
+                Type = Sym->Type;
+            break;
         }
-
 
         case NodeType::ARRAY_VALUE:
         {
-            TypeInfo* Type = M_Memory->New<TypeInfo>();
-
-            Type->Kind = TypeKind::ARRAY;
-            Type->ElementType = nullptr;
-            
-            return Type;
+            Type = CreateTInfo(TypeKind::ARRAY, Node);
+            break;
         }
-
 
         case NodeType::TABLE_VALUE:
         {
-            TypeInfo* Type = M_Memory->New<TypeInfo>();
-
-            Type->Kind = TypeKind::TABLE;
-            Type->ElementType = nullptr;
-
-            return Type;
+            Type = CreateTInfo(TypeKind::TABLE, Node);
+            break;
         }
-
 
         case NodeType::MEMBER_ACCESS:
         {
             MemberAccessNode* Access = static_cast<MemberAccessNode*>(Node);
-
             TypeInfo* Object = GetExpressionType(Access->Object);
 
-            if (!Object)
-                return nullptr;
-
-            if (Object->Kind != TypeKind::STRUCT &&
-            Object->Kind != TypeKind::CLASS)
-                return nullptr;
-
-
-            IdentifierNode* Member =
-                static_cast<IdentifierNode*>(Access->Member);
-
-
-            auto It = Object->Members.find(Member->Name);
-
-            if (It == Object->Members.end())
-                return nullptr;
-
-
-            return It->second;
+            if (Object &&
+                (Object->Kind == TypeKind::STRUCT || Object->Kind == TypeKind::CLASS))
+            {
+                IdentifierNode* Member = static_cast<IdentifierNode*>(Access->Member);
+                auto ItM = Object->Members.find(Member->Name);
+                if (ItM != Object->Members.end())
+                    Type = ItM->second;
+            }
+            break;
         }
 
         case NodeType::INDEX_ACCESS:
         {
             IndexAccessNode* Access = static_cast<IndexAccessNode*>(Node);
             TypeInfo* ObjType = GetExpressionType(Access->Object);
-            if (!ObjType) return nullptr;
 
-            if (ObjType->Kind == TypeKind::ARRAY)
-                return ObjType->ElementType;
-            if (ObjType->Kind == TypeKind::TABLE)
-                return ObjType->ValueType;
+            if (ObjType)
+            {
+                if (ObjType->Kind == TypeKind::ARRAY)
+                    Type = ObjType->ElementType;
+                else if (ObjType->Kind == TypeKind::TABLE)
+                    Type = ObjType->ValueType;
+            }
+            break;
+        }
 
-            return nullptr;
+        case NodeType::ASSIGNMENT:
+        case NodeType::BINARY:
+        case NodeType::UNARY:
+        {
+            // Esses precisam do Visit* para calcular corretamente
+            // (o Visit já preenche o cache)
+            break;
         }
 
         default:
-            return nullptr;
+            break;
     }
+
+    // CACHE RESULT | GUARDA O RESULTADO
+    if (Type)
+        SARes.ExpressionInfos[Node].Info = Type;
+
+    return Type;
 }
 
+// Convert Literal to a TypeInfo | Converte um Literal para TypeInfo
 TypeInfo* SemanticAnalizer::ConvertLiteralTypeInfo(LiteralTypes Type)
 {
-    TypeInfo* Info = M_Memory->New<TypeInfo>();
+    TypeInfo* Info = nullptr;
 
     switch (Type)
     {
         case LiteralTypes::INT:
-            Info->Kind = TypeKind::INT;
+            Info = CreateTInfo(TypeKind::INT, nullptr);
             break;
 
         case LiteralTypes::FLOAT:
-            Info->Kind = TypeKind::FLOAT;
+            Info = CreateTInfo(TypeKind::FLOAT, nullptr);
             break;
 
         case LiteralTypes::STRING:
-            Info->Kind = TypeKind::STRING;
+            Info = CreateTInfo(TypeKind::STRING, nullptr);
             break;
 
         case LiteralTypes::BOOL:
-            Info->Kind = TypeKind::BOOL;
+            Info = CreateTInfo(TypeKind::BOOL, nullptr);
             break;
 
         case LiteralTypes::NONE:
-            Info->Kind = TypeKind::NONE;
+            Info = CreateTInfo(TypeKind::NONE, nullptr);
             break;
 
         case LiteralTypes::_NULL:
-            Info->Kind = TypeKind::NULLVAL;
+            Info = CreateTInfo(TypeKind::NULLVAL, nullptr);
             break;
 
         case LiteralTypes::ARRAY_INT:
-            Info->Kind = TypeKind::ARRAY;
-            Info->ElementType = M_Memory->New<TypeInfo>();
-            Info->ElementType->Kind = TypeKind::INT;
+            Info = CreateTInfo(TypeKind::ARRAY, nullptr);
+            Info->ElementType = CreateTInfo(TypeKind::INT, nullptr);
+            Info->ExplElemType = true;
             break;
 
         case LiteralTypes::ARRAY_FLOAT:
-            Info->Kind = TypeKind::ARRAY;
-            Info->ElementType = M_Memory->New<TypeInfo>();
-            Info->ElementType->Kind = TypeKind::FLOAT;
+            Info = CreateTInfo(TypeKind::ARRAY, nullptr);
+            Info->ElementType = CreateTInfo(TypeKind::FLOAT, nullptr);
+            Info->ExplElemType = true;
             break;
 
         case LiteralTypes::ARRAY_STRING:
-            Info->Kind = TypeKind::ARRAY;
-            Info->ElementType = M_Memory->New<TypeInfo>();
-            Info->ElementType->Kind = TypeKind::STRING;
+            Info = CreateTInfo(TypeKind::ARRAY, nullptr);
+            Info->ElementType = CreateTInfo(TypeKind::STRING, nullptr);
+            Info->ExplElemType = true;
             break;
 
         case LiteralTypes::ARRAY_BOOL:
-            Info->Kind = TypeKind::ARRAY;
-            Info->ElementType = M_Memory->New<TypeInfo>();
-            Info->ElementType->Kind = TypeKind::BOOL;
+            Info = CreateTInfo(TypeKind::ARRAY, nullptr);
+            Info->ElementType = CreateTInfo(TypeKind::BOOL, nullptr);
+            Info->ExplElemType = true;
             break;
 
         case LiteralTypes::ARRAY_NONE:
-            Info->Kind = TypeKind::ARRAY;
-            Info->ElementType = M_Memory->New<TypeInfo>();
-            Info->ElementType->Kind = TypeKind::NONE;
+            Info = CreateTInfo(TypeKind::ARRAY, nullptr);
+            Info->ElementType = CreateTInfo(TypeKind::NONE, nullptr);
+            Info->ExplElemType = true;
             break;
 
         case LiteralTypes::ARRAY_NULL:
-            Info->Kind = TypeKind::ARRAY;
-            Info->ElementType = M_Memory->New<TypeInfo>();
-            Info->ElementType->Kind = TypeKind::NULLVAL;
+            Info = CreateTInfo(TypeKind::ARRAY, nullptr);
+            Info->ElementType = CreateTInfo(TypeKind::NULLVAL, nullptr);
+            Info->ExplElemType = true;
             break;
 
         case LiteralTypes::TABLE_INT:
-            Info->Kind = TypeKind::TABLE;
-            Info->ValueType = M_Memory->New<TypeInfo>();
-            Info->ValueType->Kind = TypeKind::INT;
+            Info = CreateTInfo(TypeKind::TABLE, nullptr);
+            Info->ValueType = CreateTInfo(TypeKind::INT, nullptr);
+            Info->ExplElemType = true;
             break;
 
         case LiteralTypes::TABLE_FLOAT:
-            Info->Kind = TypeKind::TABLE;
-            Info->ValueType = M_Memory->New<TypeInfo>();
-            Info->ValueType->Kind = TypeKind::FLOAT;
+            Info = CreateTInfo(TypeKind::TABLE, nullptr);
+            Info->ValueType = CreateTInfo(TypeKind::FLOAT, nullptr);
+            Info->ExplElemType = true;
             break;
 
         case LiteralTypes::TABLE_STRING:
-            Info->Kind = TypeKind::TABLE;
-            Info->ValueType = M_Memory->New<TypeInfo>();
-            Info->ValueType->Kind = TypeKind::STRING;
+            Info = CreateTInfo(TypeKind::TABLE, nullptr);
+            Info->ValueType = CreateTInfo(TypeKind::STRING, nullptr);
+            Info->ExplElemType = true;
             break;
 
         case LiteralTypes::TABLE_BOOL:
-            Info->Kind = TypeKind::TABLE;
-            Info->ValueType = M_Memory->New<TypeInfo>();
-            Info->ValueType->Kind = TypeKind::BOOL;
+            Info = CreateTInfo(TypeKind::TABLE, nullptr);
+            Info->ValueType = CreateTInfo(TypeKind::BOOL, nullptr);
+            Info->ExplElemType = true;
             break;
 
         case LiteralTypes::TABLE_NONE:
-            Info->Kind = TypeKind::TABLE;
-            Info->ValueType = M_Memory->New<TypeInfo>();
-            Info->ValueType->Kind = TypeKind::NONE;
+            Info = CreateTInfo(TypeKind::TABLE, nullptr);
+            Info->ValueType = CreateTInfo(TypeKind::NONE, nullptr);
+            Info->ExplElemType = true;
             break;
 
         case LiteralTypes::TABLE_NULL:
-            Info->Kind = TypeKind::TABLE;
-            Info->ValueType = M_Memory->New<TypeInfo>();
-            Info->ValueType->Kind = TypeKind::NULLVAL;
+            Info = CreateTInfo(TypeKind::TABLE, nullptr);
+            Info->ValueType = CreateTInfo(TypeKind::NULLVAL, nullptr);
+            Info->ExplElemType = true;
             break;
 
         default:
@@ -260,11 +265,10 @@ bool SemanticAnalizer::TypesEqual(TypeInfo* A, TypeInfo* B)
     if (A->Kind != B->Kind)
         return false;
 
-// COMPOUND TYPES | TIPOS COMPOSTOS
+    // COMPOUND TYPES | TIPOS COMPOSTOS
     switch (A->Kind)
     {
         case TypeKind::ARRAY:
-            // nullptr = "qualquer tipo de elemento"
             if (!A->ElementType || !B->ElementType)
                 return true;
             return TypesEqual(A->ElementType, B->ElementType);
@@ -281,6 +285,7 @@ bool SemanticAnalizer::TypesEqual(TypeInfo* A, TypeInfo* B)
     }
 }
 
+// Convert TypeKind to a String | Converte TypeKind Para uma String.
 string SemanticAnalizer::TypeToString(TypeKind Type)
 {
     switch (Type)
@@ -458,7 +463,7 @@ void SemanticAnalizer::VisitProgram(ProgramNode* Node)
 // BODY NODE | NO DE BODYS
 void SemanticAnalizer::VisitBody(BodyNode* Node)
 {
-    for(ASTNode* Child : Node->Data)
+    for (ASTNode* Child : Node->Data)
     {
         Visit(Child);
     }
@@ -470,27 +475,31 @@ void SemanticAnalizer::VisitBody(BodyNode* Node)
 void SemanticAnalizer::VisitVarDecl(VarDeclNode* Node)
 {
     // Error Prev | Prevenção de Erros
-    if(SAState.CurrScope->LookUp(Node->Name))
+    if (SAState.CurrScope->LookUp(Node->Name))
     {
         OrbitLog::SyntaxLog::SyntaxError(
             "Parsing",
             "<IDENTIFIER> Already Exists",
-            "Ident: "+Node->Name+" Already Exists, First Declareated Here: "
-            +std::to_string(SAState.CurrScope->LookUp(Node->Name)->Pos.line)
-            +":"+std::to_string(SAState.CurrScope->LookUp(Node->Name)->Pos.collumn),
-            "Add a Diferent Name, Ex: "+Node->Name+"2",
+            "Ident: " + Node->Name + " Already Exists, First Declareated Here: "
+            + std::to_string(SAState.CurrScope->LookUp(Node->Name)->Pos.line)
+            + ":" + std::to_string(SAState.CurrScope->LookUp(Node->Name)->Pos.collumn),
+            "Add a Diferent Name, Ex: " + Node->Name + "2",
             Node->pos.line,
             Node->pos.collumn
         );
         if (!M_Data->flags.debugMode)
             OrbitLog::SyntaxLog::ThrowLog(*M_Data);
-        return ;
+        return;
     }
 
     // Validate Expression and Create Symbol | Valida Expressoes e Cria o Simbolo.
-    bool inited=false;
+    bool inited = false;
     if (Node->Val)
-        { VisitExpression(Node->Val); inited=true; }
+    {
+        VisitExpression(Node->Val);
+        inited = true;
+    }
+
     Symbol* S = M_Memory->New<Symbol>();
     S->initialized = inited;
 
@@ -499,28 +508,82 @@ void SemanticAnalizer::VisitVarDecl(VarDeclNode* Node)
     S->Pos  = Node->pos;
     S->name = Node->Name;
 
+    // TYPE CHECKING | CHECK DE TIPOS.
+    TypeInfo* Expected = ConvertLiteralTypeInfo(Node->InferType);
+    TypeInfo* Actual   = Node->Val ? GetExpressionType(Node->Val) : nullptr;
 
-    TypeInfo* Expected =  ConvertLiteralTypeInfo(Node->InferType);
-    TypeInfo* Actual   =  GetExpressionType(Node->Val);  
-    if (Node->InferType != LiteralTypes::MONO_STATE && !TypesEqual(Expected, Actual))
+    // ERROR PREV | PREVENÇÃO DE ERRO.
+    if (Node->InferType != LiteralTypes::MONO_STATE)
     {
-        OrbitLog::SyntaxLog::SyntaxError(
-            "Semantic",
-        string(TypeToString(Expected ? Expected->Kind : TypeKind::UNKNOWN)) +
-            "    Expected, But Got: " +
-            string(TypeToString(Actual ? Actual->Kind : TypeKind::UNKNOWN)),
-           "<INFER_TYPE> is DIFFERENT to typeof Value",
-            "Add a Valid Type or Convert",
-            S->Pos.line, S->Pos.collumn
-        );
+        if (!Actual)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                "Variable with explicit type requires initializer",
+                "Type was declared but no value given",
+                "Add a value or remove the type annotation",
+                S->Pos.line, S->Pos.collumn
+            );
 
-        if (!M_Data->flags.debugMode)
-            OrbitLog::SyntaxLog::ThrowLog(*M_Data);
+            if (!M_Data->flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(*M_Data);
 
-        return;
+            return;
+        }
+
+        if (!TypesEqual(Expected, Actual))
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                string(TypeToString(Expected ? Expected->Kind : TypeKind::UNKNOWN)) +
+                "    Expected, But Got: " +
+                string(TypeToString(Actual ? Actual->Kind : TypeKind::UNKNOWN)),
+                "<INFER_TYPE> is DIFFERENT to typeof Value",
+                "Add a Valid Type or Convert",
+                S->Pos.line, S->Pos.collumn
+            );
+
+            if (!M_Data->flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(*M_Data);
+
+            return;
+        }
+
+        // ARRAY ELEMENT CHECK | CHECAGEM DE ELEMENTOS DE ARRAY.
+        if (Expected &&
+            Actual &&
+            Expected->Kind == TypeKind::ARRAY &&
+            Expected->ExplElemType)
+        {
+            for (TypeInfo* ElemType : Actual->Elements)
+            {
+                if (!TypesEqual(ElemType, Expected->ElementType))
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "Semantic",
+                        "Invalid Array Element",
+                        "Expected " +
+                        TypeToString(Expected->ElementType->Kind) +
+                        ", But Got: " +
+                        TypeToString(ElemType->Kind),
+                        "Use a compatible value",
+                        S->Pos.line,
+                        S->Pos.collumn
+                    );
+
+                    if (!M_Data->flags.debugMode)
+                        OrbitLog::SyntaxLog::ThrowLog(*M_Data);
+
+                    return;
+                }
+            }
+        }
     }
 
-    S->Type = Actual;
+    if (Expected)
+        S->Type = Expected;
+    else
+        S->Type = Actual;
 
     // Finalize | Finaliza.
     SAState.CurrScope->Symbols[S->name] = S;
@@ -535,7 +598,7 @@ void SemanticAnalizer::VisitIdentifier(IdentifierNode* Node)
         OrbitLog::SyntaxLog::SyntaxError(
             "Parsing",
             "Use a Undefined <IDENTIFIER>",
-            "Ident: "+Node->Name+" Non Exists",
+            "Ident: " + Node->Name + " Non Exists",
             "Create or Change the Symbol",
             Node->pos.line,
             Node->pos.collumn
@@ -544,6 +607,8 @@ void SemanticAnalizer::VisitIdentifier(IdentifierNode* Node)
             OrbitLog::SyntaxLog::ThrowLog(*M_Data);
         return;
     }
+
+    SARes.ExpressionInfos[Node].Info = Sym->Type;
     Sym->read_count++;
 }
 
@@ -556,7 +621,7 @@ void SemanticAnalizer::VisitMemberAccess(MemberAccessNode* Node, bool isBase)
         OrbitLog::SyntaxLog::SyntaxError(
             "Parsing",
             "Trying to Acess Using A Non <I_VALUE>",
-            "Expected <IVALUE> But Got: "+Node->Member->GetNodeType(),
+            "Expected <IVALUE> But Got: " + Node->Member->GetNodeType(),
             "Try To Assign In A Valid <IVALUE>",
             Node->pos.line,
             Node->pos.collumn
@@ -570,7 +635,7 @@ void SemanticAnalizer::VisitMemberAccess(MemberAccessNode* Node, bool isBase)
         OrbitLog::SyntaxLog::SyntaxError(
             "Parsing",
             "Trying to Acess A Non <I_VALUE>",
-            "Expected <IVALUE> But Got: "+Node->Member->GetNodeType(),
+            "Expected <IVALUE> But Got: " + Node->Member->GetNodeType(),
             "Try To Assign In A Valid <IVALUE>",
             Node->pos.line,
             Node->pos.collumn
@@ -579,6 +644,7 @@ void SemanticAnalizer::VisitMemberAccess(MemberAccessNode* Node, bool isBase)
             OrbitLog::SyntaxLog::ThrowLog(*M_Data);
         return;
     }
+
     // SET | DEFINE
     if (Node->Member->Type == NodeType::MEMBER_ACCESS)
     {
@@ -596,7 +662,7 @@ void SemanticAnalizer::VisitMemberAccess(MemberAccessNode* Node, bool isBase)
 void SemanticAnalizer::VisitIndexAccess(IndexAccessNode* Node, bool isAssign)
 {
     // ERROR PREV | PREVENÇÃO DE ERROS.
-    if(!Node) return;
+    if (!Node) return;
     if (
         !IsIValue(Node->Object) &&
         Node->Object->Type != NodeType::ARRAY_VALUE &&
@@ -606,7 +672,7 @@ void SemanticAnalizer::VisitIndexAccess(IndexAccessNode* Node, bool isAssign)
         OrbitLog::SyntaxLog::SyntaxError(
             "Parsing",
             "Trying to Assign A Non <I_VALUE>",
-            "Expected <IVALUE> But Got: "+Node->Object->GetNodeType(),
+            "Expected <IVALUE> But Got: " + Node->Object->GetNodeType(),
             "Try To Assign In A Valid <IVALUE>",
             Node->pos.line,
             Node->pos.collumn
@@ -615,7 +681,7 @@ void SemanticAnalizer::VisitIndexAccess(IndexAccessNode* Node, bool isAssign)
             OrbitLog::SyntaxLog::ThrowLog(*M_Data);
         return;
     }
-    
+
     // Visit Childs | Visita os Filhos.
     Visit(Node->Object);
     Visit(Node->Index);
@@ -653,9 +719,9 @@ void SemanticAnalizer::VisitIndexAccess(IndexAccessNode* Node, bool isAssign)
     }
 
     // RULES | REGRAS.
-    if(ObjType->Kind == TypeKind::ARRAY) // ARRAY | LISTAS. 
+    if (ObjType->Kind == TypeKind::ARRAY) // ARRAY | LISTAS. 
     {
-        if(!IdxType || IdxType->Kind != TypeKind::INT)
+        if (!IdxType || IdxType->Kind != TypeKind::INT)
         {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Semantic",
@@ -667,7 +733,7 @@ void SemanticAnalizer::VisitIndexAccess(IndexAccessNode* Node, bool isAssign)
             if (!M_Data->flags.debugMode)
                 OrbitLog::SyntaxLog::ThrowLog(*M_Data);
             return;
-        }   
+        }
         if (isAssign)
         {
             OrbitLog::SyntaxLog::SyntaxError(
@@ -680,7 +746,7 @@ void SemanticAnalizer::VisitIndexAccess(IndexAccessNode* Node, bool isAssign)
             if (!M_Data->flags.debugMode)
                 OrbitLog::SyntaxLog::ThrowLog(*M_Data);
             return;
-        }     
+        }
     }
     else // TABLE | TABELAS.
     {
@@ -696,7 +762,7 @@ void SemanticAnalizer::VisitIndexAccess(IndexAccessNode* Node, bool isAssign)
             );
             if (!M_Data->flags.debugMode)
                 OrbitLog::SyntaxLog::ThrowLog(*M_Data);
-            return;    
+            return;
         }
 
         // Assign: só permite se a chave já existir.
@@ -772,9 +838,23 @@ void SemanticAnalizer::VisitAssignment(AssignmentNode* Node)
         VisitIndexAccess(static_cast<IndexAccessNode*>(Node->Left), true);
     else
     {
-        Symbol* Sym = SAState.CurrScope->LookUp(
-            static_cast<IdentifierNode*>(Node->Left)->Name
-        );
+        IdentifierNode* Id = static_cast<IdentifierNode*>(Node->Left);
+        Symbol* Sym = SAState.CurrScope->LookUp(Id->Name);
+
+        if (!Sym)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                "Use a Undefined <IDENTIFIER>",
+                "Ident: " + Id->Name + " Non Exists",
+                "Create or Change the Symbol",
+                Node->pos.line,
+                Node->pos.collumn
+            );
+            if (!M_Data->flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(*M_Data);
+            return;
+        }
 
         if (Sym->Mut == MutableTypes::CONST)
         {
@@ -786,10 +866,8 @@ void SemanticAnalizer::VisitAssignment(AssignmentNode* Node)
                 Sym->Pos.line,
                 Sym->Pos.collumn
             );
-
             if (!M_Data->flags.debugMode)
                 OrbitLog::SyntaxLog::ThrowLog(*M_Data);
-
             return;
         }
 
@@ -799,7 +877,7 @@ void SemanticAnalizer::VisitAssignment(AssignmentNode* Node)
 
     VisitExpression(Node->Right);
 
-    TypeInfo* LeftType = GetExpressionType(Node->Left);
+    TypeInfo* LeftType  = GetExpressionType(Node->Left);
     TypeInfo* RightType = GetExpressionType(Node->Right);
 
     if (!LeftType || !RightType)
@@ -823,6 +901,8 @@ void SemanticAnalizer::VisitAssignment(AssignmentNode* Node)
 
         return;
     }
+
+    SARes.ExpressionInfos[Node].Info = RightType;
 }
 
 // --- EXPRESSION --- //
@@ -850,7 +930,27 @@ void SemanticAnalizer::VisitExpression(ExpressionNode* Node)
         case NodeType::ASSIGNMENT:
             VisitAssignment(static_cast<AssignmentNode*>(Node));
             break;
-        
+
+        case NodeType::UNARY:
+            VisitUnary(static_cast<UnaryNode*>(Node));
+            break;
+
+        case NodeType::MEMBER_ACCESS:
+            VisitMemberAccess(static_cast<MemberAccessNode*>(Node));
+            break;
+
+        case NodeType::INDEX_ACCESS:
+            VisitIndexAccess(static_cast<IndexAccessNode*>(Node), false);
+            break;
+
+        case NodeType::ARRAY_VALUE:
+            VisitArray(static_cast<ArrayValue*>(Node));
+            break;
+
+        // case NodeType::TABLE_VALUE:
+        //     VisitTable(static_cast<TableValue*>(Node));
+        //     break;
+
         default: {};
     }
 }
@@ -861,34 +961,288 @@ void SemanticAnalizer::VisitLiteral(LiteralNode* Node)
     if (!Node)
         return;
 
-    TypeInfo* Type = M_Memory->New<TypeInfo>();
+    TypeInfo* Type = nullptr;
 
     if (holds_alternative<i64>(Node->Value))
-        Type->Kind = TypeKind::INT;
+        Type = CreateTInfo(TypeKind::INT, Node);
 
     else if (holds_alternative<float>(Node->Value))
-        Type->Kind = TypeKind::FLOAT;
+        Type = CreateTInfo(TypeKind::FLOAT, Node);
 
     else if (holds_alternative<str_view>(Node->Value))
-        Type->Kind = TypeKind::STRING;
+        Type = CreateTInfo(TypeKind::STRING, Node);
 
     else if (holds_alternative<bool>(Node->Value))
-        Type->Kind = TypeKind::BOOL;
+        Type = CreateTInfo(TypeKind::BOOL, Node);
 
     else if (holds_alternative<NoneLitVal>(Node->Value))
-        Type->Kind = TypeKind::NONE;
+        Type = CreateTInfo(TypeKind::NONE, Node);
 
     else if (holds_alternative<NullLitVal>(Node->Value))
-        Type->Kind = TypeKind::NULLVAL;
+        Type = CreateTInfo(TypeKind::NULLVAL, Node);
 
     SARes.ExpressionInfos[Node].Info = Type;
+}
+
+// Visit Array Values | Visita Valores de Arrays.
+void SemanticAnalizer::VisitArray(ArrayValue* Node)
+{
+    if (!Node)
+        return;
+    TypeInfo* ArrayType = CreateTInfo(TypeKind::ARRAY, Node);
+    for (ExpressionNode* C : Node->Args)
+    {
+        VisitExpression(C);
+        TypeInfo* ElemType = GetExpressionType(C);
+        if (!ElemType)
+            continue;
+        ArrayType->Elements.push_back(ElemType);
+    }
+
+    SARes.ExpressionInfos[Node].Info = ArrayType;
 }
 
 // Visit Binary Expressions | Visita Expressoes Binarias.
 void SemanticAnalizer::VisitBinary(BinaryNode* Node)
 {
+    // Error Prev | Prevenção de Erros.
     if (!Node)
+    {
+        SARes.ExpressionInfos[Node].Info = nullptr;
         return;
+    }
+
+    // Valid Expression of L and R | Valida as Expressoes De Ambos os Lados.
+    VisitExpression(Node->L);
+    VisitExpression(Node->R);
+
+    // Take Types of Sides | Pega o Tipo dos 2 Lados.
+    TypeInfo* L = GetExpressionType(Node->L);
+    TypeInfo* R = GetExpressionType(Node->R);
+
+    if (!L || !R)
+    {
+        SARes.ExpressionInfos[Node].Info = nullptr;
+        return;
+    }
+
+    TypeInfo* Result = CreateTInfo(TypeKind::UNKNOWN, Node);
+
+    // NONE / NULL | Apenas Comparação.
+    if (L->Kind == TypeKind::NONE ||
+        R->Kind == TypeKind::NONE ||
+        L->Kind == TypeKind::NULLVAL ||
+        R->Kind == TypeKind::NULLVAL)
+    {
+        switch (Node->Op)
+        {
+            case Operator::EQUAL:
+            case Operator::NOT_EQUAL:
+                Result->Kind = TypeKind::BOOL;
+                SARes.ExpressionInfos[Node].Info = Result;
+                return;
+
+            default:
+                break;
+        }
+    }
+
+    // BOOL | Operações Booleanas.
+    if (L->Kind == TypeKind::BOOL || R->Kind == TypeKind::BOOL)
+    {
+        switch (Node->Op)
+        {
+            case Operator::AND:
+            case Operator::OR:
+                if (L->Kind == TypeKind::BOOL && R->Kind == TypeKind::BOOL)
+                {
+                    Result->Kind = TypeKind::BOOL;
+                    SARes.ExpressionInfos[Node].Info = Result;
+                }
+                return;
+
+            case Operator::EQUAL:
+            case Operator::NOT_EQUAL:
+                if (L->Kind == TypeKind::BOOL && R->Kind == TypeKind::BOOL)
+                {
+                    Result->Kind = TypeKind::BOOL;
+                    SARes.ExpressionInfos[Node].Info = Result;
+                }
+                return;
+
+            default:
+                break;
+        }
+    }
+
+    // STRING CONCAT | Concatenação de Strings.
+    if (Node->Op == Operator::ADD)
+    {
+        if (L->Kind == TypeKind::STRING &&
+            (R->Kind == TypeKind::STRING ||
+             R->Kind == TypeKind::INT ||
+             R->Kind == TypeKind::FLOAT))
+        {
+            Result->Kind = TypeKind::STRING;
+            SARes.ExpressionInfos[Node].Info = Result;
+            return;
+        }
+
+        if (R->Kind == TypeKind::STRING &&
+            (L->Kind == TypeKind::INT ||
+             L->Kind == TypeKind::FLOAT))
+        {
+            Result->Kind = TypeKind::STRING;
+            SARes.ExpressionInfos[Node].Info = Result;
+            return;
+        }
+    }
+
+    // FLOAT | Qualquer operação envolvendo FLOAT retorna FLOAT.
+    if (L->Kind == TypeKind::FLOAT || R->Kind == TypeKind::FLOAT)
+    {
+        switch (Node->Op)
+        {
+            case Operator::ADD:
+            case Operator::SUB:
+            case Operator::MUL:
+            case Operator::DIV:
+            case Operator::MOD:
+            case Operator::POWER:
+                Result->Kind = TypeKind::FLOAT;
+                SARes.ExpressionInfos[Node].Info = Result;
+                return;
+
+            case Operator::EQUAL:
+            case Operator::NOT_EQUAL:
+            case Operator::LESS:
+            case Operator::GREATER:
+            case Operator::LESS_EQUAL:
+            case Operator::GREATER_EQUAL:
+                Result->Kind = TypeKind::BOOL;
+                SARes.ExpressionInfos[Node].Info = Result;
+                return;
+
+            default:
+                break;
+        }
+    }
+
+    // INT | Operações entre inteiros.
+    if (L->Kind == TypeKind::INT && R->Kind == TypeKind::INT)
+    {
+        switch (Node->Op)
+        {
+            case Operator::ADD:
+            case Operator::SUB:
+            case Operator::MUL:
+            case Operator::POWER:
+                Result->Kind = TypeKind::INT;
+                SARes.ExpressionInfos[Node].Info = Result;
+                return;
+
+            case Operator::DIV:
+            case Operator::MOD:
+                Result->Kind = TypeKind::FLOAT;
+                SARes.ExpressionInfos[Node].Info = Result;
+                return;
+
+            case Operator::EQUAL:
+            case Operator::NOT_EQUAL:
+            case Operator::LESS:
+            case Operator::GREATER:
+            case Operator::LESS_EQUAL:
+            case Operator::GREATER_EQUAL:
+                Result->Kind = TypeKind::BOOL;
+                SARes.ExpressionInfos[Node].Info = Result;
+                return;
+
+            default:
+                break;
+        }
+    }
+
+    // STRING COMPARISON | Comparação de Strings.
+    if (L->Kind == TypeKind::STRING && R->Kind == TypeKind::STRING)
+    {
+        switch (Node->Op)
+        {
+            case Operator::EQUAL:
+            case Operator::NOT_EQUAL:
+                Result->Kind = TypeKind::BOOL;
+                SARes.ExpressionInfos[Node].Info = Result;
+                return;
+
+            default:
+                break;
+        }
+    }
+
+    // Invalid Operation | Operação Inválida.
+    OrbitLog::SyntaxLog::SyntaxError(
+        "Semantic",
+        "Invalid Binary Operation",
+        string(TypeToString(L->Kind)) +
+        " Operator " +
+        string(TypeToString(R->Kind)),
+        "Use Compatible Types",
+        Node->pos.line,
+        Node->pos.collumn
+    );
+
+    if (!M_Data->flags.debugMode)
+        OrbitLog::SyntaxLog::ThrowLog(*M_Data);
+}
+
+// Visit Unary Expressions | Visita Expressoes Unarias.
+void SemanticAnalizer::VisitUnary(UnaryNode* Node)
+{
+    // Error Prev | Prevenção de Erros.
+    if (!Node)
+    {
+        SARes.ExpressionInfos[Node].Info = nullptr;
+        return;
+    }
+
+    // Valid Operand | Valida Operando.
+    VisitExpression(Node->Operand);
+
+    if (Node->Operator == Operator::NOT)
+    {
+        TypeInfo* OpType = GetExpressionType(Node->Operand);
+        if (!OpType || OpType->Kind != TypeKind::BOOL)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                "Invalid Operands for <UNARY> Expression",
+                "Expected <BOOL> or <IDENTIFIER>... But Got: " +
+                TypeToString(OpType ? OpType->Kind : TypeKind::UNKNOWN),
+                "~",
+                Node->Operand->pos.line,
+                Node->Operand->pos.collumn
+            );
+            if (!M_Data->flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(*M_Data);
+            return;
+        }
+    }
+    else
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            "Invalid Operator for <UNARY> Value",
+            "~",
+            "~",
+            Node->pos.line,
+            Node->pos.collumn
+        );
+        if (!M_Data->flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(*M_Data);
+        return;
+    }
+
+    TypeInfo* Result = CreateTInfo(TypeKind::BOOL, Node);
+    SARes.ExpressionInfos[Node].Info = Result;
 }
 
 // ======= ENTRY-POINT ======= //
@@ -900,14 +1254,14 @@ SAResult SemanticAnalizer::InitSA(ParseResult& Res, RunTimeData& Data, Arena& Me
 
     // Create Data | Cria a Data
     M_Memory = &Memory;
-    M_Data = &Data;
+    M_Data   = &Data;
 
     SARes = SAResult{};
-   
+
     // Create Global Scope | Cria o Escopo Global
     SAState.CurrScope = M_Memory->New<Scope>();
     SAState.CurrScope->Parent = nullptr;
-    SAState.CurrScope->Kind = BodyTypes::PROGRAM; // ou o enum que você usar
+    SAState.CurrScope->Kind = BodyTypes::PROGRAM;
     SAState.currScopeLvl = 0;
 
     // Visit AST | Visita a AST
@@ -915,5 +1269,6 @@ SAResult SemanticAnalizer::InitSA(ParseResult& Res, RunTimeData& Data, Arena& Me
 
     if (Data.flags.debugMode)
         PrintIn("ENDOF TASK: Semantic Analizing. .. ...");
+
     return SARes;
 }

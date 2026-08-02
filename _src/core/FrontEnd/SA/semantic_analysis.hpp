@@ -59,7 +59,9 @@ struct TypeInfo
     TypeKind Kind = TypeKind::UNKNOWN;
 
     // ARRAY
-    TypeInfo* ElementType = nullptr;
+    bool ExplElemType=false;
+    TypeInfo* ElementType;
+    vec<TypeInfo*> Elements;
 
     // TABLE
     TypeInfo* KeyType = nullptr;
@@ -162,6 +164,7 @@ class SemanticAnalizer
 
         // ===== UTILS ===== //
         
+        TypeInfo* CreateTInfo(TypeKind K, ASTNode* Node);
         TypeInfo* GetExpressionType(ExpressionNode* Node);
         TypeInfo* ConvertLiteralTypeInfo(LiteralTypes Type);
         string TypeToString(TypeKind Type);
@@ -199,7 +202,7 @@ class SemanticAnalizer
         void VisitLiteral(LiteralNode* Node);
         void VisitIdentifier(IdentifierNode* Node);
 
-        // void VisitUnary(UnaryNode* Node);
+        void VisitUnary(UnaryNode* Node);
         void VisitBinary(BinaryNode* Node);
         void VisitAssignment(AssignmentNode* Node);
 
@@ -207,7 +210,7 @@ class SemanticAnalizer
         void VisitIndexAccess(IndexAccessNode* Node, bool isAssign=false);
         // void VisitFunctionCall(FunctionCall* Node);
 
-        // void VisitArray(ArrayValue* Node);
+        void VisitArray(ArrayValue* Node);
         // void VisitTable(TableValue* Node);
 
         // void VisitRange(RangeNode* Node);

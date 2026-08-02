@@ -384,7 +384,7 @@ struct IdentifierNode : ExpressionNode
 struct UnaryNode : ExpressionNode
 {
     // DATA
-    Token* Operator;
+    Operator Operator;
     ExpressionNode* Operand;
 
     // CONSTRUCTOR | CONSTRUTOR
