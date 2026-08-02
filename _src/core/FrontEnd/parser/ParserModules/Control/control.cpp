@@ -120,7 +120,7 @@ namespace ControlUtils {
         Arena& Memory
     )
     {
-        // ERROR PREVENTION | PREVENÇÃO DE ERROS.
+        // ERROR PREVENTION
         if (State.CurrBody->Type != BodyTypes::CONTROL_IF)
         {
             OrbitLog::SyntaxLog::SyntaxError(
@@ -135,34 +135,33 @@ namespace ControlUtils {
                 OrbitLog::SyntaxLog::ThrowLog(Data);
             return ParserUtils::MakeNode<ErrorStmtNode>(State, Res, Memory);
         }
+
         IfNode* IfFather = static_cast<IfNode*>(State.CurrBody->Father);
+
         if (IfFather->ElseBody != nullptr)
         {
             OrbitLog::SyntaxLog::SyntaxWarn(
                 "Parsing",
                 "'Elif' Block After <ELSE>",
-                "<ELIF> After <ELSE> BLock",
+                "<ELIF> After <ELSE> Block",
                 "Elif Must be After If or Others Elifs",
                 IfFather->pos.line,
                 IfFather->pos.collumn
             );
         }
 
-        // GET CONDITION | OBTÉM A CONDIÇÃO.
+        // GET CONDITION
         vec<Token*> Cond;
-        int i = 1;
         while (true)
         {
             Token* Tok = Inst.Advance();
-
-            if (!Tok)
-                break;
-
+            if (!Tok) break;
             ParserUtils::UpdateStatePos(Tok, State);
             Cond.push_back(Tok);
         }
-        // ERROR PREV | PREVENÇÃO DE ERRO.
-        if (Cond.size()-1 == 0)
+
+        // ERROR PREV
+        if (Cond.empty() || Cond.size() == 1)   // só o ':' ou vazio
         {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",
@@ -176,51 +175,42 @@ namespace ControlUtils {
                 OrbitLog::SyntaxLog::ThrowLog(Data);
             return ParserUtils::MakeNode<ErrorStmtNode>(State, Res, Memory);
         }
-        else if (Cond[Cond.size()-1]->Type != TokenType::COLON)
+        else if (Cond.back()->Type != TokenType::COLON)
         {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",
                 "Invalid <ELIF_COND>",
                 "Expected ':' After Elif Condition",
                 "Finalize Elif Instruction",
-                Cond[Cond.size()-1]->pos.line,
-                Cond[Cond.size()-1]->pos.collumn
+                Cond.back()->pos.line,
+                Cond.back()->pos.collumn
             );
             if (!Data.flags.debugMode)
-                OrbitLog::SyntaxLog::ThrowLog(Data); 
+                OrbitLog::SyntaxLog::ThrowLog(Data);
             return ParserUtils::MakeNode<ErrorStmtNode>(State, Res, Memory);
         }
-        Cond.pop_back();
+        Cond.pop_back(); // remove o ':'
 
-        // CREATE PREV.
+        // CREATE NODES
         ElifNode* Elif = ParserUtils::MakeNode<ElifNode>(State, Res, Memory);
         BodyNode* Body = ParserUtils::MakeNode<BodyNode>(State, Res, Memory);
 
-        // PARSE CONDITION | FAZ O PARSER DA CONDIÇÃO.
+        // PARSE CONDITION
         Instruction ICond{{}, Cond};
-        Elif->Cond = ExprParser.ParseExpression(
-            ICond,
-            State,
-            Res,
-            Data,
-            Memory
-        );
+        Elif->Cond = ExprParser.ParseExpression(ICond, State, Res, Data, Memory);
 
-        // SET BODYS | SETA OS BODYS.
+        // SET BODY
         Elif->Body = Body;
         Body->Father = Elif;
         Body->Type = BodyTypes::CONTROL_IF;
+        IfFather->ElifBodyStack.push_back(Elif);
 
-        // SET IF | DEFINE IF.
-        IfFather->ElifBodyStack.push_back(Body);
-
-        // UPDATE STACK | ATUALIZA A PILHA.
+        // UPDATE STACK
         State.consumedInst = true;
         ParserUtils::PopBodyStack(State, Data);
         ParserUtils::UpdateBodyStack(Body, State, Data);
         State.lastIndent = Body->pos.indent;
 
-        // FINALIZE | FINALIZA.
         return Elif;
     }
 

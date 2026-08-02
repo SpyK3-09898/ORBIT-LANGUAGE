@@ -770,7 +770,7 @@ ExpressionNode* ExpressionParser::Nud(
                     Memory
                 );
             // SEY UNARY | DEFINE A DATA DO NÓ UNARIO.
-            U->Operator = Entry;
+            U->Operator = ExprUtils::GetOperator(Entry->Type);
             U->Operand  = Operand;
 
             return U;

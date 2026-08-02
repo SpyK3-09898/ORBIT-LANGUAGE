@@ -464,7 +464,7 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
             auto& N = static_cast<UnaryNode&>(Node);
 
             file << Indent << "Unary\n";
-            file << Indent << "Operator: " << (N.Operator ? (int)N.Operator->Type : -1) << '\n';
+            file << Indent << "Operator: " << (int)N.Operator << '\n';
 
             if (N.Operand)
                 DumbNode(*N.Operand, file, Data, Depth + 1);

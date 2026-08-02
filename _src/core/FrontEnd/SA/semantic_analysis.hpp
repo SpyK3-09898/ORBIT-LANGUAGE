@@ -186,9 +186,9 @@ class SemanticAnalizer
         // void VisitFnDecl(FnDecl* Node);
 
         // CONTROL
-        // void VisitIf(IfNode* Node);
-        // void VisitElse(ElseNode* Node);
-        // void VisitElif(ElifNode* Node);
+        void VisitIf(IfNode* Node);
+        void VisitElse(ElseNode* Node);
+        void VisitElif(ElifNode* Node);
 
         // void VisitWhile(WhileNode* Node);
         // void VisitFor(ForNode* Node);
@@ -211,7 +211,7 @@ class SemanticAnalizer
         // void VisitFunctionCall(FunctionCall* Node);
 
         void VisitArray(ArrayValue* Node);
-        // void VisitTable(TableValue* Node);
+        void VisitTable(TableValue* Node);
 
         // void VisitRange(RangeNode* Node);
 

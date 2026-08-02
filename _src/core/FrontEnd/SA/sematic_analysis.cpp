@@ -381,11 +381,11 @@ void SemanticAnalizer::Visit(ASTNode* Node)
             VisitIdentifier(static_cast<IdentifierNode*>(Node));
             break;
 
-        // case NodeType::UNARY:
+        case NodeType::UNARY:
         //     VisitUnary(static_cast<UnaryNode*>(Node));
         //     break;
 
-        // case NodeType::BINARY:
+        case NodeType::BINARY:
         //     VisitBinary(static_cast<BinaryNode*>(Node));
         //     break;
 
@@ -393,11 +393,11 @@ void SemanticAnalizer::Visit(ASTNode* Node)
             VisitAssignment(static_cast<AssignmentNode*>(Node));
             break;
 
-        // case NodeType::MEMBER_ACCESS:
+        case NodeType::MEMBER_ACCESS:
         //     VisitMemberAccess(static_cast<MemberAccessNode*>(Node));
         //     break;
 
-        // case NodeType::INDEX_ACCESS:
+        case NodeType::INDEX_ACCESS:
         //     VisitIndexAccess(static_cast<IndexAccessNode*>(Node));
         //     break;
 
@@ -409,7 +409,7 @@ void SemanticAnalizer::Visit(ASTNode* Node)
         //     VisitTable(static_cast<TableValue*>(Node));
         //     break;
 
-        // case NodeType::ARRAY_VALUE:
+        case NodeType::ARRAY_VALUE:
         //     VisitArray(static_cast<ArrayValue*>(Node));
         //     break;
 
@@ -467,6 +467,66 @@ void SemanticAnalizer::VisitBody(BodyNode* Node)
     {
         Visit(Child);
     }
+}
+
+// --- CONTROL --- //
+
+// Visit Else Nodes | Visita Nós de Elses.
+void SemanticAnalizer::VisitElse(ElseNode* Node)
+{ return VisitBody(Node->Body); }
+
+
+// Visit Elif Nodes | Visita Nós de Elifs.
+void SemanticAnalizer::VisitElif(ElifNode* Node)
+{
+    // ERROR PREV | PREVENÇÃO DE ERROS.
+    VisitExpression(Node->Cond);
+    if (GetExpressionType(Node->Cond)->Kind != TypeKind::BOOL)
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            "Expected <BOOLEAN> Cond",
+            "Ifs Need a Condition Who Returns <TRUE> or <FALSE>",
+            "Add a '==' And a Comparasion Value",
+            Node->Cond->pos.line,
+            Node->Cond->pos.collumn
+        );
+        if (!M_Data->flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(*M_Data);
+        return;
+    }
+    VisitBody(Node->Body);
+    
+    return;    
+}
+
+// Visit If Nodes | Visita Nó de Ifs.
+void SemanticAnalizer::VisitIf(IfNode* Node)
+{
+    // ERROR PREV | PREVENÇÃO DE ERROS.
+    VisitExpression(Node->Cond);
+    if (GetExpressionType(Node->Cond)->Kind != TypeKind::BOOL)
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            "Expected <BOOLEAN> Cond",
+            "Ifs Need a Condition Who Returns <TRUE> or <FALSE>",
+            "Add a '==' And a Comparasion Value",
+            Node->Cond->pos.line,
+            Node->Cond->pos.collumn
+        );
+        if (!M_Data->flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(*M_Data);
+        return;
+    }
+
+    VisitBody(Node->IfBody);
+
+    // Validate Elifs & Elses | Valida os Elifs e Elses.
+    for (ElifNode* Elif : Node->ElifBodyStack)
+        VisitElif(Elif);
+    if (Node->ElseBody)
+        VisitElse(Node->ElseBody);
 }
 
 // --- DECLARATION --- //
@@ -1000,6 +1060,54 @@ void SemanticAnalizer::VisitArray(ArrayValue* Node)
     }
 
     SARes.ExpressionInfos[Node].Info = ArrayType;
+}
+
+// Visit Table Values | Visita Valores de Tabelas.
+// Visit Table Values | Visita Valores de Tabelas.
+void SemanticAnalizer::VisitTable(TableValue* Node)
+{
+    
+    // ERROR PREV | PREVENÇÃO DE ERROS
+    if (!Node)
+        return;
+
+    TypeInfo* TableType = CreateTInfo(TypeKind::TABLE, Node);
+
+    for (ArrayEntry& Entry : Node->Args)
+    {
+        // Visit Childs | Visita os Filhos.
+        if (Entry.Key)
+            VisitExpression(Entry.Key);
+        VisitExpression(Entry.Value);
+
+        // Take Typeof Key and Value | Pega o Tipo Da Chave E Do Valor.
+        TypeInfo* KeyType   = Entry.Key ? GetExpressionType(Entry.Key) : nullptr;
+        TypeInfo* ValueType = GetExpressionType(Entry.Value);
+
+        // ERROR PREV | PREVENÇÃO DE ERROS
+        if (KeyType &&
+            KeyType->Kind != TypeKind::STRING &&
+            KeyType->Kind != TypeKind::INT)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                "Invalid Table Key",
+                "Expected STRING or INT key",
+                "Use a string or integer as key",
+                Node->pos.line,
+                Node->pos.collumn
+            );
+            if (!M_Data->flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(*M_Data);
+            continue;
+        }
+
+        // SET VALUE TYPE | DEFINE O TIPO DO VALOR
+        if (ValueType && !TableType->ValueType)
+            TableType->ValueType = ValueType;
+    }
+
+    SARes.ExpressionInfos[Node].Info = TableType;
 }
 
 // Visit Binary Expressions | Visita Expressoes Binarias.

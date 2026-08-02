@@ -586,7 +586,7 @@ struct IfNode : ControlNode
     ExpressionNode* Cond;
     BodyNode* IfBody;
     ElseNode* ElseBody;
-    vec<BodyNode*> ElifBodyStack;
+    vec<ElifNode*> ElifBodyStack;
 
     // CONSTRUCTOR | CONSTRUTOR
     IfNode(NodePos P)
