@@ -120,7 +120,7 @@ namespace ControlUtils {
         Arena& Memory
     )
     {
-        // ERROR PREVENTION
+        // ERROR PREVENTION | PREVENÇÃO DE ERROS.
         if (State.CurrBody->Type != BodyTypes::CONTROL_IF)
         {
             OrbitLog::SyntaxLog::SyntaxError(
@@ -150,7 +150,10 @@ namespace ControlUtils {
             );
         }
 
-        // GET CONDITION
+        Token* E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+
+        // GET CONDITION | PEGA A COND.
         vec<Token*> Cond;
         while (true)
         {
@@ -160,8 +163,8 @@ namespace ControlUtils {
             Cond.push_back(Tok);
         }
 
-        // ERROR PREV
-        if (Cond.empty() || Cond.size() == 1)   // só o ':' ou vazio
+        // ERROR PREV | PREVENÇÃO DE ERROS.
+        if (Cond.empty() || Cond.size() == 1)
         {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",
@@ -189,23 +192,23 @@ namespace ControlUtils {
                 OrbitLog::SyntaxLog::ThrowLog(Data);
             return ParserUtils::MakeNode<ErrorStmtNode>(State, Res, Memory);
         }
-        Cond.pop_back(); // remove o ':'
+        Cond.pop_back();
 
-        // CREATE NODES
+        // CREATE NODES | CRIA OS NOS
         ElifNode* Elif = ParserUtils::MakeNode<ElifNode>(State, Res, Memory);
         BodyNode* Body = ParserUtils::MakeNode<BodyNode>(State, Res, Memory);
 
-        // PARSE CONDITION
+        // PARSE CONDITION | PARSEIA A COND
         Instruction ICond{{}, Cond};
         Elif->Cond = ExprParser.ParseExpression(ICond, State, Res, Data, Memory);
 
-        // SET BODY
+        // SET BODY | DEFINE O BODY
         Elif->Body = Body;
         Body->Father = Elif;
         Body->Type = BodyTypes::CONTROL_IF;
         IfFather->ElifBodyStack.push_back(Elif);
 
-        // UPDATE STACK
+        // UPDATE STACK | ATUALIZA A STACK
         State.consumedInst = true;
         ParserUtils::PopBodyStack(State, Data);
         ParserUtils::UpdateBodyStack(Body, State, Data);
@@ -596,6 +599,8 @@ ControlNode* ControlParser::ParseControl(
                 return ControlUtils::ParseWhileLoop(Inst, State, Res, Data, DeclParser, ExprParser, Memory);
             else if (Lexeme == "for") 
                 return ControlUtils::ParseForLoop(Inst, State, Res, Data, DeclParser, ExprParser, Memory);
+            else if (Lexeme == "return")
+                return ControlUtils::ParseReturn(Inst, State, Res, Data, DeclParser, ExprParser, Memory);
             else if (Lexeme == "end")
                 {
                     ParserUtils::PopBodyStack(State, Data); 

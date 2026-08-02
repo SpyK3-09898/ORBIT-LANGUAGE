@@ -34,7 +34,8 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
     vec<string> KeyWords
     {
         "var", "list", 
-        "if", "while", "for", 
+        "if", "else", "elif",
+        "while", "for", 
         "func", "return",
         "end"
     };
