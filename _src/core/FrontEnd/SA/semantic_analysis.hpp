@@ -15,210 +15,131 @@
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../../RunTimeData.hpp"
-
 #include <cstddef>
-inline bool IsIValue(ExpressionNode* Node)
+
+// ======= PREV ======= //
+struct Scope;
+struct Symbol;
+
+// ======= ENUMS ====== //
+
+// Typeof Symbols | Tipo dos Simbolos(Obvio).
+enum class SymbolTypes: ui8
 {
-    if (!Node) return false;
-    switch (Node->Type)
-    {
-        case NodeType::IDENTIFIER:
-        case NodeType::MEMBER_ACCESS:
-        case NodeType::INDEX_ACCESS:
-            return true;
-        default:
-            return false;
-    }
-}
-
-// CORE
-
-// TYPE OF TYPES | TIPO DOS TIPOS.
-enum class TypeKind : uint8_t
-{
-    UNKNOWN,
-
-    INT,
-    FLOAT,
-    STRING,
-    BOOL,
-
-    NONE,
-    NULLVAL,
-
-    ARRAY,
-    TABLE,
-
+    UNK,
+    VAR,
+    FN,
+    IDENTIFIER,
+    PARAM,
     STRUCT,
-    CLASS
+    CLASS,
+    ENUM,
+    MODULE,
+    LIBRARIE 
 };
 
-// INFO OF TYPES | INFORMAÇÕES DE INFERIÇÃO
-struct TypeInfo
-{
-    TypeKind Kind = TypeKind::UNKNOWN;
-
-    // ARRAY
-    bool ExplElemType=false;
-    TypeInfo* ElementType;
-    vec<TypeInfo*> Elements;
-
-    // TABLE
-    TypeInfo* KeyType = nullptr;
-    TypeInfo* ValueType = nullptr;
-
-    // STRUCT / CLASS
-    string Name;
-    unord_map<string, TypeInfo*> Members;
-};
-
-// INFO OF EXPRESSIONS | INFORMAÇÕES DE EXPRESSOES.
-struct ExprInfo
-{
-    TypeInfo* Info = nullptr;
-};
-
-// Def Symbol | Simbolo Padrão.
-struct Symbol
-{
-    // DATA 
-    string name;
-    TypeInfo* Type;
-    MutableTypes Mut = MutableTypes::UNK;
-
-    // USING | USOS
-    ui32 read_count  = 0;
-    ui32 write_count = 0;
-    ui32 call_count  = 0;
-
-    // DERIVATED | DERIVADOS
-    bool is_live=false;
-    bool initialized=false;
-    NodePos Pos;
-};
-
-// Current Base Scope | Base do Escopo Atual 
+// Scope Repr | Representação de Escopos.
 struct Scope
 {
+    Scope* Parent  =  nullptr;
+    Scope* Next    =  nullptr;
+    ASTNode* Owner;
+    unord_map<str_view, Symbol*> Symbols;
 
-    // DATA
-    unord_map<string, Symbol*> Symbols;
-    Scope* Parent;
-    BodyTypes Kind;
+    // HELPERS
 
-    // UTILS | UTILIDADES.
-
-    // Return If Have This Symbol In Scope & Parents 
-    // Retorna se Tem o Simbolo no Escopo ou Nos Pais.
-    Symbol* LookUp(const string& N) const 
+    // Find Symbol ONLY in THIS Scope
+    // Encontra o Simbolo APENAS NESTE Escopo.
+    Symbol* FindSymLocal(string& sym)
     {
-        auto it = Symbols.find(N);
-        if(it != Symbols.end())
-            return it->second;
-        if (Parent)
-            return Parent->LookUp(N);
+        for (pair<str_view, Symbol*> P : Symbols)
+            if (P.first == sym)
+                return P.second;
+        return nullptr;
+    }    
 
+    // Find Symbol in Scopes | Encontra Simbolo no Escopo.
+    Symbol* FindSym(string& sym)
+    {
+        for (pair<str_view, Symbol*> P : Symbols)
+            if (P.first == sym)
+                return P.second;
+            else
+                if (Parent) return Parent->FindSym(sym);
+                else return nullptr;
         return nullptr;
     }
-    // Return If Have This Symbol In Scope
-    // Retorna se Tem o Simbolo Neste Escopo.
-    Symbol* LookupLocal(const string& name) const
-    {
-        auto it = Symbols.find(name);
-        return (it != Symbols.end()) ? it->second : nullptr;
-    }
 };
 
-// RESULT
-
-// Result of AS | Resultado do AS
-struct SAResult
+// Type Informations | Infos dos Tipos.
+struct TypeInfo
 {
-    unord_map<ExpressionNode*, ExprInfo> ExpressionInfos;
+
 };
 
-// MAIN CLASS | CLASSE PRINCIPAL
+// Symbol Repr | Representação dos Simbolos.
+struct Symbol
+{
+    str_view Name;
+    SymbolTypes Type = SymbolTypes::UNK;
+    TypeInfo* TInfo;
+
+    NodePos Pos;
+    Scope* DeclaredScope;
+
+    MutableTypes Mut;
+
+    bool inited = false;
+    ui32 read_count  = 0;
+    ui32 write_count = 0;
+};
+
+// STATE & RESULT | ESTADO E RESULTADO.
+struct SAState 
+{
+    vec<Scope*> ScopeStack = {};
+    Scope* CurrScope = nullptr;
+};
+
+struct SAResult 
+{
+    Scope* GlobalScope = nullptr;
+    unord_map<str_view, Symbol*> SymbolTable;
+};
+
+// MAIN CLASS | CLASSE PRINCIPAL.
 class SemanticAnalizer
 {
-    // DATA
-    private:
-
-        // Current State of SA | Estado Atual do AS
-        struct
-        {
-            Scope* CurrScope   = nullptr;
-            int currScopeLvl = 0;
-        } SAState;
-
-        // DATA
-        Arena* M_Memory      =  nullptr;
-        RunTimeData* M_Data  =  nullptr;
-        SAResult SARes;
-    // PUBLICS
     public:
-
-        SAResult InitSA(ParseResult& Res, RunTimeData& Data, Arena& Memory);
-
-    // VISIT FUNCTIONS
+        SAResult InitSA(ParseResult& PRes, RunTimeData& Data, Arena& Memory);
     private:
 
-        // ===== UTILS ===== //
-        
-        TypeInfo* CreateTInfo(TypeKind K, ASTNode* Node);
-        TypeInfo* GetExpressionType(ExpressionNode* Node);
-        TypeInfo* ConvertLiteralTypeInfo(LiteralTypes Type);
-        string TypeToString(TypeKind Type);
-        bool TypesEqual(TypeInfo* A, TypeInfo* B);
+        void LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
 
-        // ===== VISIT-FUNCTIONS =====
+        void LookUpProgram(ProgramNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        void LookUpBody(BodyNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
 
-        // VISIT
-        void Visit(ASTNode* Node);
-        void EnterScope(BodyTypes Kind);
-        void LeaveScope(BodyTypes Kind);
+        //void LookUpLiteral(LiteralNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        void LookUpIdentifier(IdentifierNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        //void LookUpUnary(UnaryNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        //void LookUpBinary(BinaryNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        //void LookUpAssignment(AssignmentNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        //void LookUpMemberAccess(MemberAccessNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        //void LookUpIndexAccess(IndexAccessNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        //void LookUpRange(RangeNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        //void LookUpFunctionCall(FunctionCall& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        //void LookUpArray(ArrayValue& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        //void LookUpTable(TableValue& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
 
-        // PROGRAM
-        void VisitProgram(ProgramNode* Node);
-        void VisitBody(BodyNode* Node);
+        //void LookUpVarDecl(VarDeclNode& Node);
+        //void LookUpFunction(FnDecl& Node);
 
-        // DECLARATIONS
-        void VisitVarDecl(VarDeclNode* Node);
-        // void VisitFnDecl(FnDecl* Node);
-
-        // CONTROL
-        void VisitIf(IfNode* Node);
-        void VisitElse(ElseNode* Node);
-        void VisitElif(ElifNode* Node);
-
-        // void VisitWhile(WhileNode* Node);
-        // void VisitFor(ForNode* Node);
-        // void VisitForEach(ForEachNode* Node);
-        // void VisitForDef(ForDefNode* Node);
-
-        // void VisitReturn(ReturnNode* Node);
-
-        // EXPRESSIONS
-        void VisitExpression(ExpressionNode* Node);
-        void VisitLiteral(LiteralNode* Node);
-        void VisitIdentifier(IdentifierNode* Node);
-
-        void VisitUnary(UnaryNode* Node);
-        void VisitBinary(BinaryNode* Node);
-        void VisitAssignment(AssignmentNode* Node);
-
-        void VisitMemberAccess(MemberAccessNode* Node, bool isBase=true);
-        void VisitIndexAccess(IndexAccessNode* Node, bool isAssign=false);
-        // void VisitFunctionCall(FunctionCall* Node);
-
-        void VisitArray(ArrayValue* Node);
-        void VisitTable(TableValue* Node);
-
-        // void VisitRange(RangeNode* Node);
-
-        // ERRORS
-        // void VisitErrorExpr(ErrorExprNode* Node);
-        // void VisitErrorDecl(ErrorDeclNode* Node);
-        // void VisitErrorStmt(ErrorStmtNode* Node);
+        //void LookUpIf(IfNode& Node);
+        //void LookUpElif(ElifNode& Node);
+        //void LookUpElse(ElseNode& Node);
+        //void LookUpWhile(WhileNode& Node);
+        //void LookUpFor(ForNode& Node);
+        //void LookUpForEach(ForEachNode& Node);
+        //void LookUpForDef(ForDefNode& Node);
+        //void LookUpReturn(ReturnNode& Node);
 };
-
-// EOF

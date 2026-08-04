@@ -527,10 +527,9 @@ struct VarDeclNode : DeclarationNode
 struct FnDecl : DeclarationNode
 {
     string Name;
+    bool haveReturn=false;
     BodyNode* Body;
     ExpressionNode* Args;
-
-    ReturnNode* ReturnValue;
 
     // CONSTRUCTOR | CONSTRUTOR
     FnDecl(NodePos P)

@@ -15,6 +15,9 @@
 #include <algorithm>
 #include <new>
 
+size_t constexpr _1KB = 1024;
+size_t constexpr _1MB = _1KB * _1KB;
+
 // =========== CORE ========== //
 
 // Base-Block for Memory | Bloco Base Para Memoria
@@ -71,7 +74,7 @@ class Arena
 
 
     // CONSTRUCTOR | CONSTRUTOR
-    Arena(size_t size = 1024 * 1024);
+    Arena(size_t size = _1MB);
 
 
     // DESTRUCTOR | DESTRUTOR

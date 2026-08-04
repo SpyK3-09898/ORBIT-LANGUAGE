@@ -194,13 +194,7 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
             {
                 file << Indent << "Arguments:\n";
                 DumbNode(*N.Args, file, Data, Depth + 1);
-            }
-
-            if (N.ReturnValue)
-            {
-                file << Indent << "Return:\n";
-                DumbNode(*N.ReturnValue, file, Data, Depth + 1);
-            }
+            } 
 
             if (N.Body)
             {

@@ -85,7 +85,7 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
     if (fs::file_size(Path) is 0)
         throw runt_err("\nEmpty File Recived");
 
-    Arena Memory;
+    Arena Memory(_1MB);
 
     Lexer L;
     Tokenizer T;

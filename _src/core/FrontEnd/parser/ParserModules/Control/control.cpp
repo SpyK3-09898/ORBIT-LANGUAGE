@@ -526,7 +526,7 @@ namespace ControlUtils {
     )
     {
         // ERROR PREV | PREVENÇÃO DE ERROS.
-        if (State.CurrBody->Type != BodyTypes::FUNCTION)
+        if (State.HaveTypeInBodyStack(BodyTypes::FUNCTION))
         {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",
@@ -564,6 +564,9 @@ namespace ControlUtils {
         ExpressionNode* CondNode = ExprParser.
             ParseExpression(ICond, State,Res, Data, Memory);
         
+        FnDecl* F = static_cast<FnDecl*>(State.Bodys[State.HaveTypeInBodyStack(BodyTypes::FUNCTION)]->Father);
+        F->haveReturn=true;
+
         // SET NODE | DEFINE O NODE
         ReturnNode* Cntrl = ParserUtils::
             MakeNode<ReturnNode>(State, Res, Memory);
