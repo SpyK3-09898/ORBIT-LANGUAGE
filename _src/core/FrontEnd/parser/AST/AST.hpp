@@ -522,12 +522,11 @@ struct VarDeclNode : DeclarationNode
         : DeclarationNode(NodeType::VAR_DECL, P) {}
 };
 
-
 // Functions Decl | Declaração de Função.
 struct FnDecl : DeclarationNode
 {
-    string Name;
     bool haveReturn=false;
+    string Name;
     BodyNode* Body;
     ExpressionNode* Args;
 
@@ -656,6 +655,7 @@ struct ReturnNode : ControlNode
 {
     // DATA
     ExpressionNode* Value;
+    bool isIf=false;
 
     // CONSTRUCTOR | CONSTRUTOR
     ReturnNode(NodePos P)

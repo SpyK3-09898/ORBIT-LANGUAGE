@@ -66,7 +66,7 @@ namespace DeclUtils {
                 Decl->MutType = MutableTypes::CONST;
             else
             {
-                OrbitLog::SyntaxLog::SyntaxError(
+                OrbitLog::SyntaxLog::SyntaxWarn(
                     "Parsing",
                     "Unexpected <MODIFIER>",
                     "This Mod: " + argLexeme + " Is Not Allowed Here",
@@ -79,11 +79,6 @@ namespace DeclUtils {
                 {
                     OrbitLog::SyntaxLog::ThrowLog(Data);
                 }
-                return ParserUtils::MakeNode<ErrorDeclNode>(
-                    State,
-                    Res,
-                    Memory
-                );
             }
         }
 

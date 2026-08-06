@@ -38,6 +38,33 @@ enum class SymbolTypes: ui8
     LIBRARIE 
 };
 
+// Kindof Types | kindo dos Tipos.
+enum class TypeKind
+{
+    // UNKNOW | DESCONHECIDO
+    UNK,
+    MONO_STATE,
+
+    // LIT
+    INT,
+    FLOAT,
+    STRING,
+    BOOL,
+    _NULL,
+    NONE,
+
+    // LISTS | LISTAS.
+    ARRAY,
+    TABLE,
+
+    // OBJ
+    STRUCT,
+    CLASS,
+
+    // OTHERS | OUTROS.
+    FN
+};
+
 // Scope Repr | Representação de Escopos.
 struct Scope
 {
@@ -74,36 +101,37 @@ struct Scope
 // Type Informations | Infos dos Tipos.
 struct TypeInfo
 {
-
+    TypeKind Kind = TypeKind::MONO_STATE;
 };
 
 // Symbol Repr | Representação dos Simbolos.
 struct Symbol
 {
-    str_view Name;
-    SymbolTypes Type = SymbolTypes::UNK;
     TypeInfo* TInfo;
-
-    NodePos Pos;
     Scope* DeclaredScope;
 
-    MutableTypes Mut;
+    str_view Name;
+    NodePos Pos;
 
-    bool inited = false;
+    SymbolTypes Type = SymbolTypes::UNK;
+    MutableTypes Mut = MutableTypes::MUT;
+
     ui32 read_count  = 0;
     ui32 write_count = 0;
+    bool inited = false;
 };
 
 // STATE & RESULT | ESTADO E RESULTADO.
 struct SAState 
 {
-    vec<Scope*> ScopeStack = {};
     Scope* CurrScope = nullptr;
+    vec<Scope*> ScopeStack = {};
 };
 
 struct SAResult 
 {
     Scope* GlobalScope = nullptr;
+    unord_map<ASTNode*, TypeInfo> ExpressionTypes;
     unord_map<str_view, Symbol*> SymbolTable;
 };
 
@@ -119,24 +147,25 @@ class SemanticAnalizer
         void LookUpProgram(ProgramNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         void LookUpBody(BodyNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
 
-        //void LookUpLiteral(LiteralNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        void LookUpLiteral(LiteralNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         void LookUpIdentifier(IdentifierNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         //void LookUpUnary(UnaryNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         //void LookUpBinary(BinaryNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
-        //void LookUpAssignment(AssignmentNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        void LookUpAssignment(AssignmentNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         //void LookUpMemberAccess(MemberAccessNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         //void LookUpIndexAccess(IndexAccessNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         //void LookUpRange(RangeNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         //void LookUpFunctionCall(FunctionCall& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         //void LookUpArray(ArrayValue& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         //void LookUpTable(TableValue& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        void LookUpIValue(ExpressionNode* Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
 
-        //void LookUpVarDecl(VarDeclNode& Node);
+        void LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         //void LookUpFunction(FnDecl& Node);
 
-        //void LookUpIf(IfNode& Node);
-        //void LookUpElif(ElifNode& Node);
-        //void LookUpElse(ElseNode& Node);
+        void LookUpIf(IfNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        void LookUpElif(ElifNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        void LookUpElse(ElseNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         //void LookUpWhile(WhileNode& Node);
         //void LookUpFor(ForNode& Node);
         //void LookUpForEach(ForEachNode& Node);

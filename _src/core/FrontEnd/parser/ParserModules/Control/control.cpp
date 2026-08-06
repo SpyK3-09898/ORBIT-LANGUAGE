@@ -522,7 +522,8 @@ namespace ControlUtils {
         RunTimeData& Data, 
         DeclarationParser& DeclParser,
         ExpressionParser& ExprParser,
-        Arena& Memory        
+        Arena& Memory,
+        bool IsIf=false 
     )
     {
         // ERROR PREV | PREVENÇÃO DE ERROS.
@@ -571,6 +572,7 @@ namespace ControlUtils {
         ReturnNode* Cntrl = ParserUtils::
             MakeNode<ReturnNode>(State, Res, Memory);
         Cntrl->Value = CondNode;
+        Cntrl->isIf = IsIf;
 
         return Cntrl;
     }
@@ -603,7 +605,10 @@ ControlNode* ControlParser::ParseControl(
             else if (Lexeme == "for") 
                 return ControlUtils::ParseForLoop(Inst, State, Res, Data, DeclParser, ExprParser, Memory);
             else if (Lexeme == "return")
-                return ControlUtils::ParseReturn(Inst, State, Res, Data, DeclParser, ExprParser, Memory);
+                return ControlUtils::ParseReturn(Inst, State, Res, Data, DeclParser, ExprParser, Memory, false);
+            else if (Lexeme == "return_if")
+                return ControlUtils::ParseReturn(Inst, State, Res, Data, DeclParser, ExprParser, Memory, true);
+    
             else if (Lexeme == "end")
                 {
                     ParserUtils::PopBodyStack(State, Data); 
