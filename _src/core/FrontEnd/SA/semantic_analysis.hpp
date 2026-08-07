@@ -79,7 +79,7 @@ struct Scope
     // Encontra o Simbolo APENAS NESTE Escopo.
     Symbol* FindSymLocal(string& sym)
     {
-        for (pair<str_view, Symbol*> P : Symbols)
+        for (auto& P : Symbols)
             if (P.first == sym)
                 return P.second;
         return nullptr;
@@ -88,12 +88,11 @@ struct Scope
     // Find Symbol in Scopes | Encontra Simbolo no Escopo.
     Symbol* FindSym(string& sym)
     {
-        for (pair<str_view, Symbol*> P : Symbols)
+        for (auto& P : Symbols)
             if (P.first == sym)
                 return P.second;
-            else
-                if (Parent) return Parent->FindSym(sym);
-                else return nullptr;
+        if (Parent)
+            return Parent->FindSym(sym);
         return nullptr;
     }
 };

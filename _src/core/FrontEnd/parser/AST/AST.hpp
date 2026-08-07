@@ -598,6 +598,7 @@ struct WhileNode : ControlNode
     ExpressionNode* Cond;
     BodyNode* Body;
     LoopTypes Type;
+    bool alwaysExecuteFirst=false;
 
     // CONSTRUCTOR | CONSTRUTOR
     WhileNode(NodePos P)

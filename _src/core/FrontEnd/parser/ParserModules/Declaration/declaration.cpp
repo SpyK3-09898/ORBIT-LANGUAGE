@@ -76,9 +76,7 @@ namespace DeclUtils {
                 );
 
                 if (!Data.flags.debugMode)
-                {
                     OrbitLog::SyntaxLog::ThrowLog(Data);
-                }
             }
         }
 

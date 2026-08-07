@@ -324,6 +324,28 @@ namespace ControlUtils {
             Memory
         );
         
+        // MODIFIERS | MODIFICADORES.
+        for (Token* Arg : Inst.Modifiers)
+        {
+            if (Arg->Lexeme(Data) == "do")
+                Cntrl->alwaysExecuteFirst=true;
+            else {
+
+                string argLexeme = Arg->Lexeme(Data);
+                OrbitLog::SyntaxLog::SyntaxWarn(
+                    "Parsing",
+                    "Unexpected <MODIFIER>",
+                    "This Mod: " + argLexeme + " Is Not Allowed Here",
+                    "Remove",
+                    Arg->pos.line,
+                    Arg->pos.collumn
+                );
+
+                if (!Data.flags.debugMode)
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+            }
+        }
+
         // CREATE A NEW BODY | CRIA UM NOVO BODY
         BodyNode* Body = ParserUtils::
             MakeNode<BodyNode>(State, Res, Memory);

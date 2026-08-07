@@ -15,6 +15,7 @@
 #include "tools/console.hpp"
 #include "../../RunTimeData.hpp"
 #include <algorithm>
+#include <cstddef>
 #include <string>
 
 // ===== UTILS ===== //
@@ -60,14 +61,16 @@ namespace SAUtils {
     }
 
     // Create A New Symbol | Cria um Novo Simbolo.
-    Symbol* CreateSymbol(string Name, SymbolTypes Type, ASTNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+    Symbol* CreateSymbol(const string& Name, SymbolTypes Type, ASTNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
     {
         // Create the Symbol | Cria o Simbolo.
         Symbol* S = Memory.New<Symbol>();
-    
+        TypeInfo* TInfo = Memory.New<TypeInfo>();
+
         // Define Sym | Define o Simbolo.
         S->Pos = Node.pos;
         S->DeclaredScope = State.CurrScope;
+        S->TInfo = TInfo;
         S->Type = Type;
 
         // Finalize | Finaliza
@@ -114,6 +117,11 @@ void SemanticAnalizer::LookUpNode(
             LookUpBody(static_cast<BodyNode&>(Node), State, Res, Data, Memory);
             break;
 
+        // CONTROL
+        case NodeType::IF_CONTROL:
+            LookUpIf(static_cast<IfNode&>(Node), State, Res, Data, Memory);
+            break;
+        
         // DECLARATIONS
         case NodeType::VAR_DECL:
             LookUpVarDecl(static_cast<VarDeclNode&>(Node), State, Res, Data, Memory);
@@ -128,8 +136,7 @@ void SemanticAnalizer::LookUpNode(
             LookUpAssignment(static_cast<AssignmentNode&>(Node), State, Res, Data, Memory);
             break;
 
-        default:
-            break;
+        default: { break; }
     }
 }
 
@@ -169,7 +176,7 @@ TypeInfo GetExpressionType(ASTNode& Node, SAState& State, SAResult& Res, RunTime
         case NodeType::IDENTIFIER:
         {
             Symbol* Sym = 
-                State.CurrScope->FindSym(static_cast<IdentifierNode&>(Node).Name);
+                State.CurrScope->FindSym(static_cast<IdentifierNode&>(Node).Name);    
             if (!Sym)
             {
                 OrbitLog::SyntaxLog::SyntaxError(
@@ -471,8 +478,8 @@ void SemanticAnalizer::LookUpBody(
 )
 {
     SAUtils::EntryScope(Node,State, Res, Data, Memory); 
-    for (ASTNode* Node : Node.Data)
-        LookUpNode(*Node, State, Res, Data, Memory);
+    for (ASTNode* Child : Node.Data)
+        LookUpNode(*Child, State, Res, Data, Memory);
     SAUtils::LeaveScope(State, Res, Data, Memory);
 }
 
@@ -521,7 +528,7 @@ void SemanticAnalizer::LookUpAssignment(AssignmentNode& Node, SAState& State, SA
     // Data
     LookUpIValue(Node.Left, State, Res, Data, Memory);
     string n = SAUtils::GetIValueName(Node.Left);
-    
+
     // Error Prev | Prevenção de Erros.
     if (!State.CurrScope->FindSym(n))
         return; // Data:
@@ -608,13 +615,19 @@ void SemanticAnalizer::LookUpVarDecl(
     TypeKind InfType = GetLiteralTypeKind(Node.InferType);
     Symbol* Sym = // Take Symbol | Pega o Simbolo.
         SAUtils::CreateSymbol(Node.Name, SymbolTypes::VAR, Node, State, Res, Data, Memory);
-    
+    // Set Symbol | Define o Simbolo
+    Sym->Name = Node.Name;
+    Sym->Pos = Node.pos;
+    Sym->Mut = Node.MutType;
+
+    Sym->TInfo->Kind = GetExpressionType(*Node.Val, State, Res, Data).Kind;
+
     // Error Prev | Prevenção de Erros.
-    if (InfType != TypeKind::MONO_STATE and GetExpressionType(*Node.Val, State, Res, Data).Kind != InfType)
+    if (InfType != TypeKind::MONO_STATE and Sym->TInfo->Kind != InfType)
     {
         OrbitLog::SyntaxLog::SyntaxError(
             "Semantic",
-            GetStringOfKind(InfType)+" Expected, But Got: "+GetStringOfKind(GetExpressionType(*Node.Val, State, Res, Data).Kind),
+            GetStringOfKind(InfType)+" Expected, But Got: "+GetStringOfKind(Sym->TInfo->Kind),
             "Infered Type Does Not Match Whit Recived Type",
             "Change To A Valid Type or Convert",
             Node.Val->pos.line, Node.Val->pos.collumn
@@ -622,13 +635,28 @@ void SemanticAnalizer::LookUpVarDecl(
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
     }
 
-    LookUpNode(*Node.Val, State, Res, Data, Memory);
+    if (Node.Val)
+    {
+        Sym->inited=true;
+        LookUpNode(*Node.Val, State, Res, Data, Memory);
+    }
 }
 
 // --- CONTROL --- //
 
-void SemanticAnalizer::LookUpIf(
-    IfNode& Node, 
+// LookUp Else Control Nodes | Checa os Elses.
+void SemanticAnalizer::LookUpElse(
+    ElseNode& Node, 
+    SAState& State, 
+    SAResult& Res, 
+    RunTimeData& Data, 
+    Arena& Memory
+)
+{ LookUpBody(*Node.Body, State, Res, Data, Memory); }
+
+// LookUp Elif Control Nodes | Checa os Elifs.
+void SemanticAnalizer::LookUpElif(
+    ElifNode& Node, 
     SAState& State, 
     SAResult& Res, 
     RunTimeData& Data, 
@@ -650,10 +678,40 @@ void SemanticAnalizer::LookUpIf(
         );
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
     }
+    LookUpBody(*Node.Body, State, Res, Data, Memory);
+}
+
+// LookUp If Control Nodes | Checa os Ifs
+void SemanticAnalizer::LookUpIf(
+    IfNode& Node, 
+    SAState& State, 
+    SAResult& Res, 
+    RunTimeData& Data, 
+    Arena& Memory
+)
+{
+    // Error Prev.
+    if (
+        GetExpressionType(*Node.Cond, State, Res, Data).Kind 
+        != 
+        TypeKind::BOOL
+    )
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            "Expected <BOOLEAN> Condition",
+            "Ifs need a <BOOLEAN> Condition, But Got: "+GetStringOfKind(GetExpressionType(*Node.Cond, State, Res, Data).Kind ),
+            "Convert to <BOOLEAN> If Possible",
+            Node.Cond->pos.line, Node.Cond->pos.collumn
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+    }
+    // LookUp | Checa.
     LookUpBody(*Node.IfBody, State, Res, Data, Memory);
-    LookUpElse(*Node.ElseBody, State, Res, Data, Memory);
     for (ElifNode* Elif : Node.ElifBodyStack)
         LookUpElif(*Elif, State, Res, Data, Memory);
+    if (Node.ElseBody != nullptr)
+        LookUpElse(*Node.ElseBody, State, Res, Data, Memory);
 }
 
 // ======= ENTRY-POINT | PONTO-DE-ENTRADA ======= //
