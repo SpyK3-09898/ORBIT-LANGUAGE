@@ -340,9 +340,6 @@ namespace ControlUtils {
                     Arg->pos.line,
                     Arg->pos.collumn
                 );
-
-                if (!Data.flags.debugMode)
-                    OrbitLog::SyntaxLog::ThrowLog(Data);
             }
         }
 

@@ -13,7 +13,6 @@
 #include "tools/console.hpp"
 #include "../../../../RunTimeData.hpp"
 
-// ======= STATE ======= //
 
 // MAIN CLASS | CLASSE PRINCIPAL
 class ExpressionParser

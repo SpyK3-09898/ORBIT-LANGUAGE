@@ -528,7 +528,7 @@ struct FnDecl : DeclarationNode
     bool haveReturn=false;
     string Name;
     BodyNode* Body;
-    ExpressionNode* Args;
+    vec<ExpressionNode*> Params;
 
     // CONSTRUCTOR | CONSTRUTOR
     FnDecl(NodePos P)

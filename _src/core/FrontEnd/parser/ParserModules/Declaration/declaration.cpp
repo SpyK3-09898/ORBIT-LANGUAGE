@@ -74,9 +74,6 @@ namespace DeclUtils {
                     Arg->pos.line,
                     Arg->pos.collumn
                 );
-
-                if (!Data.flags.debugMode)
-                    OrbitLog::SyntaxLog::ThrowLog(Data);
             }
         }
 
@@ -291,7 +288,6 @@ namespace DeclUtils {
                 ::MakeNode<ErrorDeclNode>(State, Res, Memory);
         }
 
-        // consome '('
         E = Inst.Advance();
         ParserUtils::UpdateStatePos(E, State);
 
@@ -353,21 +349,48 @@ namespace DeclUtils {
         }
 
         // REMOVE THE '):' | REMOVE O '):'.
-        Cond.pop_back(); // :
         Cond.pop_back(); // )
+        Cond.pop_back(); // :
 
         FnDecl* Decl = ParserUtils::MakeNode<FnDecl>(State, Res, Memory);
 
-        // args vazios são válidos (func foo():)
         if (!Cond.empty())
         {
-            Instruction CondInst{{}, Cond};
-            Decl->Args = 
-                ExprParser.ParseExpression(CondInst, State, Res, Data, Memory);
+            int level = 0;
+            int i=0;
+            for (Token* Tok : Cond)
+            {
+                switch (Tok->Type) {
+                
+                    case TokenType::LPARENT:
+                    case TokenType::LBRACE:
+                    case TokenType::LBRACKET:  
+                        level++; break;
+
+                    case TokenType::RPARENT:
+                    case TokenType::RBRACE:
+                    case TokenType::RBRACKET:  
+                        level--; break;
+
+                    case TokenType::COMMA:
+                        if (level is 0)
+                        {
+                            Instruction CondInst(
+                                {},
+                                vec<Token*>(Cond.begin(), Cond.begin() + i)
+                            );
+                            Decl->Params.push_back
+                                (ExprParser.ParseExpression
+                                    (CondInst, State, Res, Data, Memory));
+                        }
+                    default: {};
+                }
+                i++;
+            }
         }
         else
         {
-            Decl->Args = nullptr; // ou um nó vazio, conforme sua AST
+            Decl->Params = {nullptr};
         }
 
         // CREATE BODY | CRIA O BODY.

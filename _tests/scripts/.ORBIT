@@ -1,0 +1,12 @@
+
+_extends ORBIT;
+_library __MAIN__;
+
+_import RunTime as rt;
+_import StdLib.* as standart;
+using std=standart.*;
+
+func Main(argc, argv):
+    return 0;
+
+rt.set_standart_entrypoint(Main);

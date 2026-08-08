@@ -189,12 +189,18 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
 
             file << Indent << "Function\n";
             file << Indent << "Name: " << N.Name << '\n';
+            file << Indent << "Have Return: " << (N.haveReturn ? "true" : "false") << '\n';
 
-            if (N.Args)
+            if (!N.Params.empty())
             {
-                file << Indent << "Arguments:\n";
-                DumbNode(*N.Args, file, Data, Depth + 1);
-            } 
+                file << Indent << "Parameters:\n";
+
+                for (auto* Param : N.Params)
+                {
+                    if (Param)
+                        DumbNode(*Param, file, Data, Depth + 1);
+                }
+            }
 
             if (N.Body)
             {

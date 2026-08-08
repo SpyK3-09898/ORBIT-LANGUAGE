@@ -18,481 +18,246 @@
 #include <cstddef>
 #include <string>
 
-// ===== UTILS ===== //
+// ========= UTILS ========== //
 
+// Semantic Analysis Utils | Utilidades do Analisador.
 namespace SAUtils {
 
-    // Create A New Scope | Cria Um Novo Escopo.
-    Scope* EntryScope(ASTNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+    // Create A New Symbol | Cria um Novo Simbolo.
+    Symbol* CreateSymbol(const string& Name, ASTNode& Node, SAState& State, SAResult& Res, Arena& Memory)
     {
-        // Create Scope | Cria o Escopo
-        Scope* S = Memory.New<Scope>();
-        S->Owner = &Node;
-        
-        // Set Scope | Define o Escopo.
-        State.CurrScope = S;
-        State.ScopeStack.back()->Next = S;
-        S->Parent = State.ScopeStack.back();
-        State.ScopeStack.push_back(S);
+        Symbol* Sym = Memory.New<Symbol>();
+        TypeInfo* TInfo = Memory.New<TypeInfo>();
 
-        // Return.
-        return S;
+        Sym->Name = Name;
+        Sym->DeclaredScope = State.CurrScope;
+        Sym->TInfo = TInfo;
+
+        return Sym;
     }
 
-    // Remove The Last Scope | Remove o Ultimo Escopo.
-    Scope* LeaveScope(SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+    string GetStringOfKind(TypeKind K)
     {
-
-        // Take Last | Pega o Ultimo.
-        Scope* S = State.CurrScope;
-        if (S->Owner->Type == NodeType::PROGRAM)
+        switch (K)
         {
-            OrbitLog::Warn("semantic_analysis.cpp", "Try To Close the <GLOBAL> Scope");
-            return S;
+            case TypeKind::UNK:			return "<UNK>";
+            case TypeKind::MONO_STATE:	return "<MONO_STATE>";
+
+            case TypeKind::NUMBER:		return "<NUMBER>";
+            case TypeKind::STRING:		return "<STRING>";
+            case TypeKind::BOOL:		return "<BOOL>";
+            case TypeKind::ANY:			return "<ANY>";
+            case TypeKind::_NULL:		return "<NULL>";
+            case TypeKind::NONE:		return "<NONE>";
+
+            case TypeKind::ARRAY:		return "<ARRAY>";
+            case TypeKind::TABLE:		return "<TABLE>";
+
+            case TypeKind::TABLE_INT:	return "<TABLE_INT>";
+            case TypeKind::TABLE_FLOAT:	return "<TABLE_FLOAT>";
+            case TypeKind::TABLE_STRING:return "<TABLE_STRING>";
+            case TypeKind::TABLE_BOOL:	return "<TABLE_BOOL>";
+            case TypeKind::TABLE_ANY:	return "<TABLE_ANY>";
+            case TypeKind::TABLE_NULL:	return "<TABLE_NULL>";
+            case TypeKind::TABLE_NONE:	return "<TABLE_NONE>";
+
+            case TypeKind::STRUCT:		return "<STRUCT>";
+            case TypeKind::CLASS:		return "<CLASS>";
+
+            case TypeKind::FN:			return "<FN>";
+
+            default:					return "<UNKNOWN>";
         }
-        S->Next = nullptr;
+    }
+}
 
-        // Updt Stack | Atualiza a Stack.
-        State.ScopeStack.pop_back();
-        State.CurrScope = State.ScopeStack.back();
+// ========== CORE ========== //
 
-        // Return.
+// ===== PROGRAM ===== //
+
+// Entry In A New Scope | Entra em um novo Escopo.
+Scope* EntryScope(BodyNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Mem)
+{
+    Scope* S = Mem.New<Scope>();
+    
+    S->Parent = State.CurrScope;
+    S->Type = Node.Type;
+    S->Owner = &Node;
+
+    State.CurrScope->Next = S;
+    State.ScopeStack.push_back(S);
+
+    return S;
+}
+
+// Leave The Current Scope | Sai do Escopo Atual.
+Scope* LeaveScope(SAState& State, SAResult& Res, RunTimeData& Data)
+{
+    if (State.CurrScope->Type == BodyTypes::PROGRAM)
+    {
+        OrbitLog::Warn(
+            "semantic_analisys.cpp", 
+            "Trying to Close the GlobalScope In(line/index): ~/~"
+        );
         return State.CurrScope;
     }
 
-    // Create A New Symbol | Cria um Novo Simbolo.
-    Symbol* CreateSymbol(const string& Name, SymbolTypes Type, ASTNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
-    {
-        // Create the Symbol | Cria o Simbolo.
-        Symbol* S = Memory.New<Symbol>();
-        TypeInfo* TInfo = Memory.New<TypeInfo>();
+    State.CurrScope = State.ScopeStack.back();
+    State.ScopeStack.pop_back();
 
-        // Define Sym | Define o Simbolo.
-        S->Pos = Node.pos;
-        S->DeclaredScope = State.CurrScope;
-        S->TInfo = TInfo;
-        S->Type = Type;
-
-        // Finalize | Finaliza
-        State.CurrScope->Symbols[Name] = S;
-        Res.SymbolTable[Name] = S;
-        return S;
-    }
-
-    // Get IValue Names | Pega o Nome de IValues
-    string GetIValueName(ExpressionNode* Node)
-    {
-        if (Node->Type == NodeType::IDENTIFIER)
-        {
-            IdentifierNode* N = static_cast<IdentifierNode*>(Node);
-            return N->Name;
-        } else {
-            return "UNKNOW";
-        }
-        return "UNKNOW";
-    }
+    return State.CurrScope;
 }
 
-// ===== NODES ====== //
-
-// --- PROGRAM --- //
-
-// LookUp Any Node Type | Checa Qualquer Tipo de Nó.
-void SemanticAnalizer::LookUpNode(
-    ASTNode& Node, 
-    SAState& State, 
-    SAResult& Res,
-    RunTimeData& Data,
-    Arena& Memory    
-)
+// LookUp A General Node | Olha Um Node Geral.
+void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
     switch (Node.Type) {
-
-        // PROGRAM
-        case NodeType::PROGRAM:
-            LookUpProgram(static_cast<ProgramNode&>(Node), State, Res, Data, Memory);
-            break;
-
-        case NodeType::BODY:
-            LookUpBody(static_cast<BodyNode&>(Node), State, Res, Data, Memory);
-            break;
-
-        // CONTROL
-        case NodeType::IF_CONTROL:
-            LookUpIf(static_cast<IfNode&>(Node), State, Res, Data, Memory);
-            break;
         
-        // DECLARATIONS
-        case NodeType::VAR_DECL:
-            LookUpVarDecl(static_cast<VarDeclNode&>(Node), State, Res, Data, Memory);
+        // PROGRAM
+        case NodeType::PROGRAM:  
+            LookUpProgram
+            (static_cast<ProgramNode&>(Node), State, Res, Data, Memory);
+            break;
+        case NodeType::BODY:
+            LookUpNode
+            (static_cast<BodyNode&>(Node), State, Res, Data, Memory);
             break;
 
         // EXPRESSIONS
+
         case NodeType::IDENTIFIER:
-            LookUpIdentifier(static_cast<IdentifierNode&>(Node), State, Res, Data, Memory);
+            LookUpIdentifier
+            (static_cast<IdentifierNode&>(Node), State, Res, Data, Memory);
             break;
-
-        case NodeType::ASSIGNMENT:
-            LookUpAssignment(static_cast<AssignmentNode&>(Node), State, Res, Data, Memory);
+        case NodeType::ARRAY_VALUE:
+            LookUpArray
+            (static_cast<ArrayValue&>(Node), State, Res, Data, Memory);
             break;
-
-        default: { break; }
+        case NodeType::TABLE_VALUE:
+            LookUpTable
+            (static_cast<TableValue&>(Node), State, Res, Data, Memory);
+            break;             
+        default: {};
     }
 }
 
-// LookUp Entry Point | Checa o Ponto de Entrada.
-void SemanticAnalizer::LookUpProgram(
-    ProgramNode& Node, 
-    SAState& State, 
-    SAResult& Res,
-    RunTimeData& Data,
-    Arena& Memory
-)
+// LookUp A ProgramNode | Olha um ProgramNode.
+void SemanticAnalizer::LookUpProgram(ProgramNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
-    // Create Global Scope | Cria o Escopo Global.
-    Res.GlobalScope = Memory.New<Scope>();
-    Res.GlobalScope->Owner = &Node; // Define State | Define o Estado:
-    State.ScopeStack.push_back(Res.GlobalScope);
-    State.CurrScope = Res.GlobalScope;
+    Scope* GlobalScope = Memory.New<Scope>();
+    
+    GlobalScope->Owner = nullptr;
+    GlobalScope->Type = BodyTypes::PROGRAM;
 
-    // LookUp AST
-    for (ASTNode* N : Node.Node->Data)
-        LookUpNode(*N, State, Res, Data, Memory);
+    State.ScopeStack.push_back(GlobalScope);
+    State.CurrScope = GlobalScope;
 }
 
-// --- EXPRESSION --- //
-
-// Returns Expression Types | Retorna Tipo das Expressoes.
-TypeInfo GetExpressionType(ASTNode& Node, SAState& State, SAResult& Res, RunTimeData& Data)
+// LookUp BodyNode | Olha um BodyBode.
+void SemanticAnalizer::LookUpBody(BodyNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
-    // Cache
-    if (Res.ExpressionTypes.contains(&Node))
-        return Res.ExpressionTypes[&Node];
+    EntryScope(Node, State, Res, Data, Memory);
+    for (ASTNode* N : Node.Data)
+        LookUpNode(*N, State, Res, Data, Memory);
+    LeaveScope(State, Res, Data);
+}
 
-    // Main Switch | Switch Principal.
-    TypeInfo TInfo;
+// ===== EXPRESSIONS ===== //
+
+// Get Expression Types | Pega o Tipo das Expressoes.
+TypeInfo*GetExpressionType(ExpressionNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+{
+    TypeInfo* TInfo = Memory.New<TypeInfo>();
     switch (Node.Type) {
-        
-        case NodeType::IDENTIFIER:
-        {
-            Symbol* Sym = 
-                State.CurrScope->FindSym(static_cast<IdentifierNode&>(Node).Name);    
-            if (!Sym)
-            {
-                OrbitLog::SyntaxLog::SyntaxError(
-                    "Semantic",
-                    "Used of Undeclared Identifier",
-                    "Identifier: "+static_cast<IdentifierNode&>(Node).Name+" Dont Exists",
-                    "Create the Identifier",
-                    Node.pos.line, Node.pos.collumn
-                );
-                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-                
-                TInfo.Kind = TypeKind::UNK;
-                break;
-            }
-
-            TInfo.Kind = Sym->TInfo->Kind;
-            break;
-        }
     
         case NodeType::LITERAL:
         {
-            LiteralValue& Val = static_cast<LiteralNode&>(Node).Value;
+            LiteralNode& Lit = static_cast<LiteralNode&>(Node);
 
-            if (holds_alt<i64>(Val))
-                TInfo.Kind = TypeKind::INT;
-            else if (holds_alt<float>(Val))
-                TInfo.Kind = TypeKind::FLOAT;
-            else if (holds_alt<str_view>(Val))
-                TInfo.Kind = TypeKind::STRING;
-            else if (holds_alt<bool>(Val))
-                TInfo.Kind = TypeKind::BOOL;
-            else if (holds_alt<NoneLitVal>(Val))
-                TInfo.Kind = TypeKind::NONE;
-            else if (holds_alt<NullLitVal>(Val))
-                TInfo.Kind = TypeKind::_NULL;
-            else
-                TInfo.Kind = TypeKind::UNK;
-
-            break;
-        }
-
-        case NodeType::BINARY:
-        {
-            BinaryNode& B = static_cast<BinaryNode&>(Node);
-
-            TypeInfo L = GetExpressionType(*B.L, State, Res, Data);
-            TypeInfo R = GetExpressionType(*B.R, State,Res, Data);
-
-            switch (B.Op)
+            if (holds_alt<i64>(Lit.Value))
             {
-                case Operator::ADD:
-                {
-                    if (L.Kind == TypeKind::BOOL || R.Kind == TypeKind::BOOL)
-                    {
-                        OrbitLog::SyntaxLog::SyntaxError(
-                            "Semantic",
-                            "Invalid Binary Operation",
-                            "Cannot use BOOL in arithmetic expressions",
-                            "Remove the BOOL operand",
-                            Node.pos.line, Node.pos.collumn
-                        );
-                        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-                        TInfo.Kind = TypeKind::UNK;
-                        break;
-                    }
-
-                    if (L.Kind == TypeKind::NONE || L.Kind == TypeKind::_NULL ||
-                        R.Kind == TypeKind::NONE || R.Kind == TypeKind::_NULL)
-                    {
-                        OrbitLog::SyntaxLog::SyntaxError(
-                            "Semantic",
-                            "Invalid Binary Operation",
-                            "NONE and NULL cannot be used in arithmetic expressions",
-                            "Compare them instead",
-                            Node.pos.line, Node.pos.collumn
-                        );
-                        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-                        TInfo.Kind = TypeKind::UNK;
-                        break;
-                    }
-
-                    if (L.Kind == TypeKind::STRING || R.Kind == TypeKind::STRING)
-                        TInfo.Kind = TypeKind::STRING;
-                    else if (L.Kind == TypeKind::FLOAT || R.Kind == TypeKind::FLOAT)
-                        TInfo.Kind = TypeKind::FLOAT;
-                    else if (L.Kind == TypeKind::INT && R.Kind == TypeKind::INT)
-                        TInfo.Kind = TypeKind::INT;
-                    else
-                        TInfo.Kind = TypeKind::UNK;
-
-                    break;
-                }
-
-                case Operator::SUB:
-                case Operator::MUL:
-                case Operator::DIV:
-                case Operator::MOD:
-                case Operator::POWER:
-                {
-                    if ((L.Kind == TypeKind::INT || L.Kind == TypeKind::FLOAT) &&
-                        (R.Kind == TypeKind::INT || R.Kind == TypeKind::FLOAT))
-                    {
-                        if (L.Kind == TypeKind::FLOAT || R.Kind == TypeKind::FLOAT)
-                            TInfo.Kind = TypeKind::FLOAT;
-                        else
-                            TInfo.Kind = TypeKind::INT;
-                    }
-                    else
-                    {
-                        OrbitLog::SyntaxLog::SyntaxError(
-                            "Semantic",
-                            "Invalid Binary Operation",
-                            "Arithmetic operators require numeric operands",
-                            "Use INT or FLOAT values",
-                            Node.pos.line, Node.pos.collumn
-                        );
-                        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-                        TInfo.Kind = TypeKind::UNK;
-                    }
-
-                    break;
-                }
-
-                case Operator::EQUAL:
-                case Operator::NOT_EQUAL:
-                {
-                    if ((L.Kind == TypeKind::NONE && R.Kind == TypeKind::_NULL) ||
-                        (L.Kind == TypeKind::_NULL && R.Kind == TypeKind::NONE))
-                    {
-                        TInfo.Kind = TypeKind::BOOL;
-                    }
-                    else if (L.Kind == R.Kind)
-                    {
-                        TInfo.Kind = TypeKind::BOOL;
-                    }
-                    else if ((L.Kind == TypeKind::INT && R.Kind == TypeKind::FLOAT) ||
-                             (L.Kind == TypeKind::FLOAT && R.Kind == TypeKind::INT))
-                    {
-                        TInfo.Kind = TypeKind::BOOL;
-                    }
-                    else
-                    {
-                        OrbitLog::SyntaxLog::SyntaxError(
-                            "Semantic",
-                            "Invalid Comparison",
-                            "Cannot compare these types",
-                            "Compare compatible types",
-                            Node.pos.line, Node.pos.collumn
-                        );
-                        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-                        TInfo.Kind = TypeKind::UNK;
-                    }
-
-                    break;
-                }
-
-                case Operator::LESS:
-                case Operator::GREATER:
-                case Operator::LESS_EQUAL:
-                case Operator::GREATER_EQUAL:
-                {
-                    if ((L.Kind == TypeKind::INT || L.Kind == TypeKind::FLOAT) &&
-                        (R.Kind == TypeKind::INT || R.Kind == TypeKind::FLOAT))
-                    {
-                        TInfo.Kind = TypeKind::BOOL;
-                    }
-                    else
-                    {
-                        OrbitLog::SyntaxLog::SyntaxError(
-                            "Semantic",
-                            "Invalid Comparison",
-                            "Comparison operators require numeric operands",
-                            "Use INT or FLOAT values",
-                            Node.pos.line, Node.pos.collumn
-                        );
-                        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-                        TInfo.Kind = TypeKind::UNK;
-                    }
-
-                    break;
-                }
-
-                case Operator::AND:
-                case Operator::OR:
-                {
-                    if (L.Kind == TypeKind::BOOL && R.Kind == TypeKind::BOOL)
-                    {
-                        TInfo.Kind = TypeKind::BOOL;
-                    }
-                    else
-                    {
-                        OrbitLog::SyntaxLog::SyntaxError(
-                            "Semantic",
-                            "Invalid Logical Operation",
-                            "Logical operators require BOOL operands",
-                            "Use BOOL values",
-                            Node.pos.line, Node.pos.collumn
-                        );
-                        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-                        TInfo.Kind = TypeKind::UNK;
-                    }
-
-                    break;
-                }
-
-                default:
-                    TInfo.Kind = TypeKind::UNK;
-                    break;
+                TInfo->Kind = TypeKind::NUMBER;
+                TInfo->SubKind = SybTypeKind::INT;
+            }
+            else if (holds_alt<float>(Lit.Value))
+            {
+                TInfo->Kind = TypeKind::NUMBER;
+                TInfo->SubKind = SybTypeKind::FLOAT;
+            }
+            else if (holds_alt<str_view>(Lit.Value))
+            {
+                TInfo->Kind = TypeKind::STRING;
+            }
+            else if (holds_alt_value<bool>(Lit.Value, true))
+            {
+                TInfo->Kind = TypeKind::BOOL;
+                TInfo->SubKind = SybTypeKind::TRUE;
+            }
+            else if (holds_alt_value<bool>(Lit.Value, false))
+            {
+                TInfo->Kind = TypeKind::BOOL;
+                TInfo->SubKind = SybTypeKind::FALSE;
+            }
+            else if (holds_alt<NoneLitVal>(Lit.Value))
+            {
+                TInfo->Kind = TypeKind::NONE;
+            }
+            else if (holds_alt<NullLitVal>(Lit.Value))
+            {
+                TInfo->Kind = TypeKind::_NULL;
+            }
+            else if (holds_alt<nullptr_t>(Lit.Value))
+            {
+                TInfo->Kind = TypeKind::MONO_STATE;
             }
 
-            break;
+            return TInfo;
         }
 
-        case NodeType::UNARY:
+        case NodeType::ARRAY_VALUE:
+            TInfo->Kind = TypeKind::ARRAY;
+            break;
+            
+        case NodeType::IDENTIFIER:
         {
-            UnaryNode& U = static_cast<UnaryNode&>(Node);
-            
-            switch (U.Operator) {
-            
-                case Operator::NOT:
-                    
-                    TInfo = GetExpressionType(*U.Operand, State, Res, Data);
-                    if (TInfo.Kind != TypeKind::BOOL) //!10(Ex) Error | !10(Ex) Erro:
-                    {
-                        OrbitLog::SyntaxLog::SyntaxError(
-                            "Semantic",
-                            "Invalid <UNARY>",
-                            "<NOT> Operator ONLY Accept Bool Expressions",
-                            "Convert to Bool if Possible",
-                            U.pos.line, U.pos.collumn
-                        );
-                        TInfo.Kind = TypeKind::UNK;
-                        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-                        return TInfo;
-                    }
-                default:
-                    OrbitLog::SyntaxLog::SyntaxError(
-                        "Semantic",
-                        "Unknow <UNARY_OPERATOR>",
-                        "Operator is not supported to Unary Operations",
-                        "Add a Valid Operator Before LITERAL",
-                        U.pos.line, U.pos.collumn
-                    );
-                    if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-                    TInfo.Kind = TypeKind::UNK;
-                    return TInfo;
+            IdentifierNode& Id = static_cast<IdentifierNode&>(Node);
+            if (!State.CurrScope->FindSym(Id.Name))
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+                "Used a Undeclared <IDENTIFIER>",
+                "Ident: "+Id.Name+" Dont Exists",
+                "Declare Ident or Use a Valid Identifier",
+                Node.pos.line, Node.pos.collumn
+                );
+                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+                    { TInfo->Kind = TypeKind::UNK; return TInfo; };
             }
 
-            break;
+            Symbol* Sym = State.CurrScope->FindSym(Id.Name);
+            if (!Sym->inited)
+                { TInfo->Kind = TypeKind::NONE; return TInfo; };
+            
+            Sym->read_count++;
+            return Sym->TInfo;
         }
 
         default: {};
     }
-
-    // Finalize | Finaliza.
-    Res.ExpressionTypes[&Node] = TInfo; // Set Cache | Define Cache.
     return TInfo;
 }
 
-// Get Kindof Literal Values Type | Pega o Kind do Tipo Literal.
-TypeKind GetLiteralTypeKind(LiteralTypes Type)
-{
-    switch (Type) {
-    
-        case LiteralTypes::INT: return TypeKind::INT;
-        case LiteralTypes::FLOAT: return TypeKind::FLOAT;
-        case LiteralTypes::BOOL: return TypeKind::BOOL;
-        case LiteralTypes::STRING: return TypeKind::STRING;
-        case LiteralTypes::NONE: return TypeKind::NONE;
-        case LiteralTypes::_NULL: return TypeKind::_NULL;
-        case LiteralTypes::MONO_STATE: return TypeKind::MONO_STATE;
-        default: return TypeKind::UNK;
-    }
-}
-
-// Get String of Kind | Pega A <STRING> Com Base No Tipo.
-string GetStringOfKind(TypeKind K)
-{
-    switch (K) {
-    
-        case TypeKind::INT: return "<INT>";
-        case TypeKind::FLOAT: return "<FLOAT>";
-        case TypeKind::BOOL: return "<BOOL>";
-        case TypeKind::STRING: return "<STRING>";
-        case TypeKind::NONE: return "<NONE>";
-        case TypeKind::_NULL: return "<_NULL>";
-        case TypeKind::MONO_STATE: return "<UND>";
-        default: return "<UNK>";
-    }
-}
-
-// LookUp Body Nodes | Checa os BodyNodes.
-void SemanticAnalizer::LookUpBody(
-    BodyNode& Node, 
-    SAState& State, 
-    SAResult& Res,
-    RunTimeData& Data,
-    Arena& Memory    
-)
-{
-    SAUtils::EntryScope(Node,State, Res, Data, Memory); 
-    for (ASTNode* Child : Node.Data)
-        LookUpNode(*Child, State, Res, Data, Memory);
-    SAUtils::LeaveScope(State, Res, Data, Memory);
-}
-
-// LookUp Identifiers | Checa Identificadores.
+// LookUp IdentifierNode | Olha um IdentifierNode.
 void SemanticAnalizer::LookUpIdentifier(IdentifierNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
-    if (!State.CurrScope->FindSym(Node.Name)) 
+    // Error Prev | Prevenção de Erros.
+    if (!State.CurrScope->FindSym(Node.Name))
     {
         OrbitLog::SyntaxLog::SyntaxError(
             "Semantic",
-            "Unknown <IDENTIFIER>",
-            "Used of Undeclared <IDENTIFIER>: "+Node.Name,
-            "Create Or Change Identifier Name",
+            "Used a Undeclared <IDENTIFIER>",
+            "Ident: "+Node.Name+" Dont Exists",
+            "Declare Ident or Use a Valid Identifier",
             Node.pos.line, Node.pos.collumn
         );
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
@@ -500,221 +265,44 @@ void SemanticAnalizer::LookUpIdentifier(IdentifierNode& Node, SAState& State, SA
     }
 }
 
-// LookUp I-Values | Checa os I-Values.
-void SemanticAnalizer::LookUpIValue(ExpressionNode* Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory
-)
+// LookUp Array Values | Olha um ArrayValue.
+void SemanticAnalizer::LookUpArray(ArrayValue& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
-    if (Node->Type == NodeType::IDENTIFIER)
-    {
-        IdentifierNode* N = static_cast<IdentifierNode*>(Node);
-        LookUpIdentifier(*N, State, Res, Data, Memory);
-    } else {
-
-        OrbitLog::SyntaxLog::SyntaxError(
-            "Semantic",
-            "Expected <I-VALUE>",
-            "Expected <I-VALUE>, But Got: "+Node->GetNodeType(),
-            "~",
-            Node->pos.line, Node->pos.collumn
-        );
-        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-        return;
-    }
+    for (ExpressionNode* Val : Node.Args)
+        LookUpNode(*Val, State, Res, Data, Memory);
 }
 
-// LooKupAssignments | Checa As Atribuições. 
-void SemanticAnalizer::LookUpAssignment(AssignmentNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+// LookUp Table Values | Olha um TableValue.
+void SemanticAnalizer::LookUpTable(TableValue& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
-    // Data
-    LookUpIValue(Node.Left, State, Res, Data, Memory);
-    string n = SAUtils::GetIValueName(Node.Left);
-
-    // Error Prev | Prevenção de Erros.
-    if (!State.CurrScope->FindSym(n))
-        return; // Data:
-    Symbol* Sym = State.CurrScope->FindSym(n);
-    Sym->inited = true;
-
-    // Error Prev | Prevenção de Erros
-    if (Sym->Mut == MutableTypes::CONST)
+    for (ArrayEntry E : Node.Args)
     {
-        OrbitLog::SyntaxLog::SyntaxError(
-            "Semantic",
-            "Try to Assign a CONST <I-VALUE>",
-            string(Sym->Name)+" Is Declarated as <CONST>",
-            "~",
-            Sym->Pos.line, Sym->Pos.collumn
-        );
-        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-        return;
-    }
-    if (
-        Sym->TInfo->Kind != TypeKind::MONO_STATE && 
-        Sym->TInfo->Kind != GetExpressionType
-        (*Node.Right, State, Res, Data).Kind
-    )
-    {
-        OrbitLog::SyntaxLog::SyntaxError(
-            "Semantic",
-            "Infer Type is Diff of Expression Type",
-            GetStringOfKind
-            (GetExpressionType
-            (*Node.Right, State, Res, Data).Kind)+" Is Diff of: "+GetStringOfKind(Sym->TInfo->Kind),
-            "Change Type or Convert",
-            Node.Right->pos.line, Node.Right->pos.collumn
-        );
-        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-        return;
-    }
-    
-    // Finalize
-    Sym->write_count++;
-}
-
-// --- DECLARATION --- //
-
-// LookUp Var Declaration Nodes | Checa os varDecl.
-void SemanticAnalizer::LookUpVarDecl(
-    VarDeclNode& Node, 
-    SAState& State, 
-    SAResult& Res, 
-    RunTimeData& Data, 
-    Arena& Memory
-)
-{
-    // Error Prev | Prevenção De Erros.
-    if (State.CurrScope->FindSymLocal(Node.Name))
-    {
-        char c = Node.Name.back();
-
-        if (std::isdigit(c))
-        {
-            int last = c - '0';
-
-            OrbitLog::SyntaxLog::SyntaxError(
-                "Semantic",
-                "Try to Create A New Var Whit A Invalid Name",
-                "Identifier: "+Node.Name+" Already Exists, Shadowing NOT Is Allowed In Same Scope",
-                "Add a Diff Name, Ex: "+Node.Name.substr(0, Node.Name.length() - 1)+std::to_string(last + 1),
-                Node.pos.line, Node.pos.collumn
-            );
-        }
-        else
+        // Error Prev | Prevenção de Erros:
+        if 
+        (
+            GetExpressionType
+            (*E.Key, State, Res, Data, Memory)
+            ->Kind != TypeKind::STRING
+        )
         {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Semantic",
-                "Try to Create A New Var Whit A Invalid Name",
-                "Identifier: "+Node.Name+" Already Exists, Shadowing NOT Is Allowed In Same Scope",
-                "Add a Diff Name, Ex: "+Node.Name+"2",
-                Node.pos.line, Node.pos.collumn
+                "Expected <STRING>, But Got: "+SAUtils::GetStringOfKind
+                (GetExpressionType
+                (*E.Key, State, Res, Data, Memory)
+                ->Kind),
+                "<ARRAY>s Need a <STRING> To Refer a Value",
+                "Add a Valid Type or Convert",
+                E.Key->pos.line, E.Key->pos.collumn
             );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
         }
-    }
-
-    // Take Data | Pega os Dados.
-    TypeKind InfType = GetLiteralTypeKind(Node.InferType);
-    Symbol* Sym = // Take Symbol | Pega o Simbolo.
-        SAUtils::CreateSymbol(Node.Name, SymbolTypes::VAR, Node, State, Res, Data, Memory);
-    // Set Symbol | Define o Simbolo
-    Sym->Name = Node.Name;
-    Sym->Pos = Node.pos;
-    Sym->Mut = Node.MutType;
-
-    Sym->TInfo->Kind = GetExpressionType(*Node.Val, State, Res, Data).Kind;
-
-    // Error Prev | Prevenção de Erros.
-    if (InfType != TypeKind::MONO_STATE and Sym->TInfo->Kind != InfType)
-    {
-        OrbitLog::SyntaxLog::SyntaxError(
-            "Semantic",
-            GetStringOfKind(InfType)+" Expected, But Got: "+GetStringOfKind(Sym->TInfo->Kind),
-            "Infered Type Does Not Match Whit Recived Type",
-            "Change To A Valid Type or Convert",
-            Node.Val->pos.line, Node.Val->pos.collumn
-        );
-        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-    }
-
-    if (Node.Val)
-    {
-        Sym->inited=true;
-        LookUpNode(*Node.Val, State, Res, Data, Memory);
+        LookUpNode(*E.Value, State, Res, Data, Memory);
     }
 }
 
-// --- CONTROL --- //
-
-// LookUp Else Control Nodes | Checa os Elses.
-void SemanticAnalizer::LookUpElse(
-    ElseNode& Node, 
-    SAState& State, 
-    SAResult& Res, 
-    RunTimeData& Data, 
-    Arena& Memory
-)
-{ LookUpBody(*Node.Body, State, Res, Data, Memory); }
-
-// LookUp Elif Control Nodes | Checa os Elifs.
-void SemanticAnalizer::LookUpElif(
-    ElifNode& Node, 
-    SAState& State, 
-    SAResult& Res, 
-    RunTimeData& Data, 
-    Arena& Memory
-)
-{
-    if (
-        GetExpressionType(*Node.Cond, State, Res, Data).Kind 
-        != 
-        TypeKind::BOOL
-    )
-    {
-        OrbitLog::SyntaxLog::SyntaxError(
-            "Semantic",
-            "Expected <BOOLEAN> Condition",
-            "Ifs need a <BOOLEAN> Condition, But Got: "+GetStringOfKind(GetExpressionType(*Node.Cond, State, Res, Data).Kind ),
-            "Convert to <BOOLEAN> If Possible",
-            Node.Cond->pos.line, Node.Cond->pos.collumn
-        );
-        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-    }
-    LookUpBody(*Node.Body, State, Res, Data, Memory);
-}
-
-// LookUp If Control Nodes | Checa os Ifs
-void SemanticAnalizer::LookUpIf(
-    IfNode& Node, 
-    SAState& State, 
-    SAResult& Res, 
-    RunTimeData& Data, 
-    Arena& Memory
-)
-{
-    // Error Prev.
-    if (
-        GetExpressionType(*Node.Cond, State, Res, Data).Kind 
-        != 
-        TypeKind::BOOL
-    )
-    {
-        OrbitLog::SyntaxLog::SyntaxError(
-            "Semantic",
-            "Expected <BOOLEAN> Condition",
-            "Ifs need a <BOOLEAN> Condition, But Got: "+GetStringOfKind(GetExpressionType(*Node.Cond, State, Res, Data).Kind ),
-            "Convert to <BOOLEAN> If Possible",
-            Node.Cond->pos.line, Node.Cond->pos.collumn
-        );
-        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-    }
-    // LookUp | Checa.
-    LookUpBody(*Node.IfBody, State, Res, Data, Memory);
-    for (ElifNode* Elif : Node.ElifBodyStack)
-        LookUpElif(*Elif, State, Res, Data, Memory);
-    if (Node.ElseBody != nullptr)
-        LookUpElse(*Node.ElseBody, State, Res, Data, Memory);
-}
-
-// ======= ENTRY-POINT | PONTO-DE-ENTRADA ======= //
+// ========== ENTRY-POINT ========== //
+// Entry-Point of SA Program | Ponto-de-Entrada do programa do SA.
 SAResult SemanticAnalizer::InitSA(ParseResult& PRes, RunTimeData& Data, Arena& Memory)
 {
     if (Data.flags.debugMode)
@@ -722,11 +310,11 @@ SAResult SemanticAnalizer::InitSA(ParseResult& PRes, RunTimeData& Data, Arena& M
 
     SAResult Res;
     SAState State;
-    
+
     LookUpNode(*PRes.AST, State, Res, Data, Memory);
 
     if (Data.flags.debugMode)
         PrintIn("ENDOF TASK: SemanticAnalysis. .. ...");
     
-    return Res;
+    return std::move(Res);
 }
