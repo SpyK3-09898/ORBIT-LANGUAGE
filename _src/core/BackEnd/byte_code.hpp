@@ -59,7 +59,13 @@ enum class OpCode
 struct ByteInstruction
 {
     OpCode C; // Operation Code | Codigo Operacional.
-    ui32 R1; ui32 R2; // Registers | Registradores
+
+    // REGISTERS | REGISTRADORES:
+    ui32 R1; ui32 R2;      // Operation Principal Registeres | Registradores Principais da Operação.
+    ui32* L1; ui32 L2;    //  Locals .
+
+    ui8 RX1; ui8 RX2;   // Extras.
+    ui8 LX1; ui8 LX2;  //  Extras.
 };
 
 // ByteCode Chunks | Chunks de ByteCode

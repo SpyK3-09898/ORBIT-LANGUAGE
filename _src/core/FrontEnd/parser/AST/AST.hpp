@@ -713,6 +713,7 @@ struct ParseResult
 
 // ========== NAMESPACES ========= //
 
+// Utils of Parser | Utilidades do Parser.
 namespace ParserUtils {
 
     // Add A New Elem in BodyStack | Adiciona um Novo Elemento na Pilha de Bodys.
