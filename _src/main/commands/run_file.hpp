@@ -87,16 +87,21 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
 
     Arena Memory(_1MB);
 
+    // --- FRONT-END --- //
+
+    // INSTANCES
     Lexer L;
     Tokenizer T;
     Parser P;
     SemanticAnalizer AS;
 
-    LexResult LRes = L.InitL(file, Data, Memory);
-    LRes = T.InitT(LRes, Data, Memory);
-    ParseResult PRes = P.InitP(LRes, Data, Memory);
-    SAResult SARes = AS.InitSA(PRes, Data, Memory);
+    // FUNCTIONS
+    LexResult LRes = L.InitL(file, Data, Memory); // LEXER
+    LRes = T.InitT(LRes, Data, Memory); // TOK...
+    ParseResult PRes = P.InitP(LRes, Data, Memory); // PARSER
+    SAResult SARes = AS.InitSA(PRes, Data, Memory); // SEMANTIC
 
+    // For Debug | Para Debug
     if (Data.flags.debugMode)
     {
         PrintInLn("[DRIVER] ENDOF TASK: Build ORBIT. .. ..."); 
@@ -104,7 +109,12 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
         PrintOut("");
     }
 
-    OrbitLog::SyntaxLog::ThrowLog(Data);
+    // Finalize | Fializa: 
+    OrbitLog::SyntaxLog::ThrowLog(Data); // Throw | Chamada.
+
+    // --- BACK-END --- //
+
+    
 
     // GENERATE MEMORY LOG | GERA LOG DE MEMORIA
     if (Data.flags.generateLog)
