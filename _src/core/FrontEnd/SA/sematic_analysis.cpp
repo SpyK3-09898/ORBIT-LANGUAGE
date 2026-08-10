@@ -1050,6 +1050,72 @@ void SemanticAnalizer::LookUpWhile(WhileNode& Node, SAState& State, SAResult& Re
     LookUpBody(*Node.Body, State, Res, Data, Memory);
 }
 
+// LookUp Else Nodes | Olha um IfNode.
+void SemanticAnalizer::LookUpElse(ElseNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+{ LookUpBody(*Node.Body, State, Res, Data, Memory); }
+
+// LookUp Elif Nodes | Olha um IfNode.
+void SemanticAnalizer::LookUpElif(ElifNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+{
+    // Error & Warn Prev | Prevenção de Erros de Avisos.
+    TypeInfo* TInfo = 
+        GetExpressionType(Node.Cond, State, Res, Data, Memory);
+    if (TInfo->Kind != TypeKind::BOOL)
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            "Expected <BOOLEAN> Condition",
+            "While Needs a <BOOL> Condition to Check",
+            "Add a Valid Type or Convert",
+            Node.Cond->pos.line,
+            Node.Cond->pos.collumn
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;
+    } else if (TInfo->SubKind ==  SubTypeKind::TRUE)
+        OrbitLog::SyntaxLog::SyntaxWarn(
+            "Semantic",
+            "Condition Maybe Always is <TRUE>",
+            "Semantic Analizer Check <TRUE> In All Ways, Skiping...",
+            "~", Node.Cond->pos.line, Node.Cond->pos.collumn
+        );
+
+    LookUpBody(*Node.Body, State, Res, Data, Memory);
+}
+
+// LookUp If Nodes | Olha um IfNode.
+void SemanticAnalizer::LookUpIf(IfNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+{
+    // Error & Warn Prev | Prevenção de Erros de Avisos.
+    TypeInfo* TInfo = 
+        GetExpressionType(Node.Cond, State, Res, Data, Memory);
+    if (TInfo->Kind != TypeKind::BOOL)
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            "Expected <BOOLEAN> Condition",
+            "While Needs a <BOOL> Condition to Check",
+            "Add a Valid Type or Convert",
+            Node.Cond->pos.line,
+            Node.Cond->pos.collumn
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;
+    } else if (TInfo->SubKind ==  SubTypeKind::TRUE)
+        OrbitLog::SyntaxLog::SyntaxWarn(
+            "Semantic",
+            "Condition Maybe Always is <TRUE>",
+            "Semantic Analizer Check <TRUE> In All Ways, Skiping...",
+            "~", Node.Cond->pos.line, Node.Cond->pos.collumn
+        );
+
+    LookUpBody(*Node.IfBody, State, Res, Data, Memory);
+    for (ElifNode* Elif : Node.ElifBodyStack)
+        LookUpElif(*Elif, State, Res, Data, Memory);
+    if (Node.ElseBody)
+        LookUpElse(*Node.ElseBody, State, Res, Data, Memory);
+}
+
 // ===== DECLARATIONS ===== //
 
 // LookUp Var Decl Node | Olha um VarDeclNode.
@@ -2146,7 +2212,7 @@ void GenerateSALog(SAState& State, SAResult& Res, RunTimeData& Data)
 SAResult SemanticAnalizer::InitSA(ParseResult& PRes, RunTimeData& Data, Arena& Memory)
 {
     if (Data.flags.debugMode)
-        PrintInLn("STARTING TASK: SemanticAnalysis");
+        PrintIn("STARTING TASK: SemanticAnalysis");
 
     SAResult Res;
     SAState State;
@@ -2177,3 +2243,5 @@ SAResult SemanticAnalizer::InitSA(ParseResult& PRes, RunTimeData& Data, Arena& M
 
     return Res;
 }
+
+// EOF

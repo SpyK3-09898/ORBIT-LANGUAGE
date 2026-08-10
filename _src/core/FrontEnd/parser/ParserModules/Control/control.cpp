@@ -268,8 +268,6 @@ namespace ControlUtils {
         return Else;
     }
 
-    // For Loop Controls | 
-
     // While Loop Controls | Loops de Controle 'While'
     ControlNode* ParseWhileLoop(
         Instruction& Inst, 
@@ -349,6 +347,7 @@ namespace ControlUtils {
 
         // SET BODY
         Body->Father = Cntrl;
+        Body->Type = BodyTypes::LOOP_WHILE;
         Cntrl->Body = Body;
 
         // UPDATE STACK | ATUALIZA A PILHA.

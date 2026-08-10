@@ -103,6 +103,9 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
         PrintOut("");
     }
+
+    OrbitLog::SyntaxLog::ThrowLog(Data);
+
     // GENERATE MEMORY LOG | GERA LOG DE MEMORIA
     if (Data.flags.generateLog)
     {
@@ -123,7 +126,6 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
     }
 
     Memory.Finalize();
-    OrbitLog::SyntaxLog::ThrowLog(Data);
 
     return 0;
 }

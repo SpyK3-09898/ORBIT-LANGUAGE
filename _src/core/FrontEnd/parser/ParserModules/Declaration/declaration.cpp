@@ -474,7 +474,7 @@ DeclarationNode* DeclarationParser::ParseDeclaration(
                     Memory,
                     true
                 );
-            else if (Lexeme == "fn")
+            else if (Lexeme == "func" or Lexeme == "fn")
                 return DeclUtils::ParseFnDecl(
                     Entry, 
                     Inst, 
