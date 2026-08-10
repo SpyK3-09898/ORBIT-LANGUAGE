@@ -513,7 +513,7 @@ struct VarDeclNode : DeclarationNode
 {
     // DATA
     string Name;
-    LiteralTypes InferType;
+    LiteralTypes InferType = LiteralTypes::MONO_STATE;
     MutableTypes MutType;
     ExpressionNode* Val;
 
@@ -779,7 +779,7 @@ namespace ParserUtils {
         // Retorna o Tipo dos Tipos Explicitamente Infernidos
         inline pair<LiteralTypes, int> InferType(vec<Token*>& Tokens, RunTimeData& Data)
         {
-            pair<LiteralTypes, int> DEF_RET = {LiteralTypes::_NULL, 1};
+            pair<LiteralTypes, int> DEF_RET = {LiteralTypes::MONO_STATE, 1};
 
             if (Tokens.size() == 0)
                 return DEF_RET;

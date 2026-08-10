@@ -14,10 +14,10 @@
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../../RunTimeData.hpp"
-#include <algorithm>
-#include <cstddef>
-#include <cwchar>
+#include <fstream>
+#include <format>
 #include <string>
+#include <utility>
 
 // ========= UTILS ========== //
 
@@ -29,47 +29,108 @@ namespace SAUtils {
     {
         Symbol* Sym = Memory.New<Symbol>();
         TypeInfo* TInfo = Memory.New<TypeInfo>();
+        TypeInfo* InferType = Memory.New<TypeInfo>();
 
         Sym->Name = Name;
         Sym->DeclaredScope = State.CurrScope;
         Sym->TInfo = TInfo;
+        Sym->InferType = InferType;
         Sym->Pos = Node.pos;
+
+        Sym->TInfo->Kind = TypeKind::_NULL;
+        Sym->TInfo->SubKind = SubTypeKind::NONE;
+
+        Sym->InferType->Kind = TypeKind::_NULL;
+        Sym->InferType->SubKind = SubTypeKind::NONE;
+
+        if (State.CurrScope)
+            State.CurrScope->Symbols[Sym->Name] = Sym;
+
+        Res.SymbolTable[Sym->Name] = Sym;
 
         return Sym;
     }
 
-    // Return String Version of Kind.
+    // Return Kind Version of Literal | Retorna a Versão Kind do Literal.
+    TypeInfo* GetKindOfLiteral(const LiteralTypes& Type)
+    {
+        TypeInfo* TInfo = new TypeInfo();
+
+        switch (Type)
+        {
+            case LiteralTypes::INT:
+                TInfo->Kind = TypeKind::NUMBER;
+                TInfo->SubKind = SubTypeKind::INT;
+                break;
+
+            case LiteralTypes::FLOAT:
+                TInfo->Kind = TypeKind::NUMBER;
+                TInfo->SubKind = SubTypeKind::FLOAT;
+                break;
+
+            case LiteralTypes::STRING:
+                TInfo->Kind = TypeKind::STRING;
+                TInfo->SubKind = SubTypeKind::NONE;
+                break;
+
+            case LiteralTypes::BOOL:
+                TInfo->Kind = TypeKind::BOOL;
+                TInfo->SubKind = SubTypeKind::NONE;
+                break;
+
+            case LiteralTypes::NONE:
+                TInfo->Kind = TypeKind::NONE;
+                TInfo->SubKind = SubTypeKind::NONE;
+                break;
+
+            case LiteralTypes::_NULL:
+                TInfo->Kind = TypeKind::_NULL;
+                TInfo->SubKind = SubTypeKind::NONE;
+                break;
+
+            default:
+                TInfo->Kind = TypeKind::MONO_STATE;
+                TInfo->SubKind = SubTypeKind::NONE;
+                break;
+        }
+
+        return TInfo;
+    }
+
+    // Return String Version of Kind | Retorna a Versão de String do kind.
     string GetStringOfKind(TypeKind K)
     {
         switch (K)
         {
-            case TypeKind::UNK:			return "<UNK>";
-            case TypeKind::MONO_STATE:	return "<MONO_STATE>";
+            case TypeKind::UNK:             return "<UNK>";
+            case TypeKind::MONO_STATE:      return "<MONO_STATE>";
 
-            case TypeKind::NUMBER:		return "<NUMBER>";
-            case TypeKind::STRING:		return "<STRING>";
-            case TypeKind::BOOL:		return "<BOOL>";
-            case TypeKind::ANY:			return "<ANY>";
-            case TypeKind::_NULL:		return "<NULL>";
-            case TypeKind::NONE:		return "<NONE>";
+            case TypeKind::NUMBER:          return "<NUMBER>";
+            case TypeKind::STRING:          return "<STRING>";
+            case TypeKind::BOOL:            return "<BOOL>";
+            case TypeKind::ANY:             return "<ANY>";
+            case TypeKind::_NULL:           return "<NULL>";
+            case TypeKind::NONE:            return "<NONE>";
 
-            case TypeKind::ARRAY:		return "<ARRAY>";
-            case TypeKind::TABLE:		return "<TABLE>";
+            case TypeKind::ARRAY:           return "<ARRAY>";
+            case TypeKind::TABLE:           return "<TABLE>";
 
-            case TypeKind::TABLE_INT:	return "<TABLE_INT>";
-            case TypeKind::TABLE_FLOAT:	return "<TABLE_FLOAT>";
-            case TypeKind::TABLE_STRING:return "<TABLE_STRING>";
-            case TypeKind::TABLE_BOOL:	return "<TABLE_BOOL>";
-            case TypeKind::TABLE_ANY:	return "<TABLE_ANY>";
-            case TypeKind::TABLE_NULL:	return "<TABLE_NULL>";
-            case TypeKind::TABLE_NONE:	return "<TABLE_NONE>";
+            case TypeKind::TABLE_INT:       return "<TABLE_INT>";
+            case TypeKind::TABLE_FLOAT:     return "<TABLE_FLOAT>";
+            case TypeKind::TABLE_STRING:    return "<TABLE_STRING>";
+            case TypeKind::TABLE_BOOL:      return "<TABLE_BOOL>";
+            case TypeKind::TABLE_ANY:       return "<TABLE_ANY>";
+            case TypeKind::TABLE_NULL:      return "<TABLE_NULL>";
+            case TypeKind::TABLE_NONE:      return "<TABLE_NONE>";
 
-            case TypeKind::STRUCT:		return "<STRUCT>";
-            case TypeKind::CLASS:		return "<CLASS>";
+            case TypeKind::STRUCT:           return "<STRUCT>";
+            case TypeKind::CLASS:            return "<CLASS>";
 
-            case TypeKind::FN:			return "<FN>";
+            case TypeKind::ITERATOR:         return "<ITERATOR>";
 
-            default:					return "<UNKNOWN>";
+            case TypeKind::FN:               return "<FN>";
+
+            default:                         return "<UNKNOWN>";
         }
     }
 
@@ -79,8 +140,8 @@ namespace SAUtils {
         if (!Node)
             return "UNKNOW";
 
-        switch (Node->Type) {
-        
+        switch (Node->Type)
+        {
             case NodeType::IDENTIFIER:
             {
                 IdentifierNode* Id = static_cast<IdentifierNode*>(Node);
@@ -90,7 +151,13 @@ namespace SAUtils {
             case NodeType::MEMBER_ACCESS:
             {
                 MemberAccessNode* Ma = static_cast<MemberAccessNode*>(Node);
-                return GetIValueName(Ma->Object);
+
+                string ObjectName = GetIValueName(Ma->Object);
+
+                if (ObjectName == "UNKNOW")
+                    return "UNKNOW";
+
+                return ObjectName;
             }
 
             default:
@@ -108,37 +175,66 @@ namespace SAUtils {
             return true;
         else if (Node->Type == NodeType::MEMBER_ACCESS)
             return true;
+        else if (Node->Type == NodeType::INDEX_ACCESS)
+            return true;
 
         return false;
     }
-
 }
 
 // ========== CORE ========== //
 
-// ===== PROGRAM ===== //
+// Return if L and R Is Same Type | Retoran se E e D Sao do Mesmo Tipo.
+bool TypesEqual(TypeInfo& L, TypeInfo& R)
+{
+    if (L.Kind != R.Kind)
+        return false;
+
+    if (L.Kind == TypeKind::NUMBER)
+        return L.SubKind == R.SubKind;
+
+    return true;
+}
+
+// Return if L-KIND and R-KIND Is Same Type | Retoran se E-KIND e D-KIND Sao do Mesmo Tipo.
+bool TypesKindEqual(TypeKind L, TypeKind R)
+{ return L == R; }
 
 // Get Expression Types | Pega o Tipo das Expressoes.
-TypeInfo* GetExpressionType(ExpressionNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
-    TypeInfo* TInfo = Memory.New<TypeInfo>();
-
-    switch (Node.Type) 
+    if (!Node)
     {
-    
+        TypeInfo* TInfo = Memory.New<TypeInfo>();
+        TInfo->Kind = TypeKind::_NULL;
+        TInfo->SubKind = SubTypeKind::NONE;
+        return TInfo;
+    }
+
+    auto Cached = Res.ExpressionTypes.find(Node);
+
+    if (Cached != Res.ExpressionTypes.end())
+        return &Cached->second;
+
+    TypeInfo* TInfo = Memory.New<TypeInfo>();
+    TInfo->Kind = TypeKind::MONO_STATE;
+    TInfo->SubKind = SubTypeKind::NONE;
+
+    switch (Node->Type)
+    {
         case NodeType::LITERAL:
         {
-            LiteralNode& Lit = static_cast<LiteralNode&>(Node);
+            LiteralNode& Lit = static_cast<LiteralNode&>(*Node);
 
             if (holds_alt<i64>(Lit.Value))
             {
                 TInfo->Kind = TypeKind::NUMBER;
-                TInfo->SubKind = SybTypeKind::INT;
+                TInfo->SubKind = SubTypeKind::INT;
             }
             else if (holds_alt<float>(Lit.Value))
             {
                 TInfo->Kind = TypeKind::NUMBER;
-                TInfo->SubKind = SybTypeKind::FLOAT;
+                TInfo->SubKind = SubTypeKind::FLOAT;
             }
             else if (holds_alt<str_view>(Lit.Value))
             {
@@ -147,12 +243,12 @@ TypeInfo* GetExpressionType(ExpressionNode& Node, SAState& State, SAResult& Res,
             else if (holds_alt_value<bool>(Lit.Value, true))
             {
                 TInfo->Kind = TypeKind::BOOL;
-                TInfo->SubKind = SybTypeKind::TRUE;
+                TInfo->SubKind = SubTypeKind::TRUE;
             }
             else if (holds_alt_value<bool>(Lit.Value, false))
             {
                 TInfo->Kind = TypeKind::BOOL;
-                TInfo->SubKind = SybTypeKind::FALSE;
+                TInfo->SubKind = SubTypeKind::FALSE;
             }
             else if (holds_alt<NoneLitVal>(Lit.Value))
             {
@@ -167,46 +263,66 @@ TypeInfo* GetExpressionType(ExpressionNode& Node, SAState& State, SAResult& Res,
                 TInfo->Kind = TypeKind::MONO_STATE;
             }
 
-            Res.ExpressionTypes[&Node] = *TInfo;
-            return TInfo;
+            Res.ExpressionTypes[Node] = *TInfo;
+            return &Res.ExpressionTypes[Node];
         }
 
         case NodeType::ARRAY_VALUE:
         {
             TInfo->Kind = TypeKind::ARRAY;
 
-            Res.ExpressionTypes[&Node] = *TInfo;
-            return TInfo;
+            Res.ExpressionTypes[Node] = *TInfo;
+            return &Res.ExpressionTypes[Node];
         }
 
         case NodeType::TABLE_VALUE:
         {
             TInfo->Kind = TypeKind::TABLE;
 
-            Res.ExpressionTypes[&Node] = *TInfo;
-            return TInfo;
+            Res.ExpressionTypes[Node] = *TInfo;
+            return &Res.ExpressionTypes[Node];
         }
 
         case NodeType::MEMBER_ACCESS:
-            TInfo->Kind = TypeKind::MONO_STATE;
-            break;
+        {
+            MemberAccessNode& Ma = static_cast<MemberAccessNode&>(*Node);
+
+            TypeInfo* ObjInfo = GetExpressionType
+            (Ma.Object, State, Res, Data, Memory);
+
+            if (
+                ObjInfo->Kind == TypeKind::MONO_STATE ||
+                ObjInfo->Kind == TypeKind::UNK
+            )
+            {
+                TInfo->Kind = TypeKind::MONO_STATE;
+            }
+            else
+            {
+                TInfo->Kind = TypeKind::MONO_STATE;
+            }
+
+            Res.ExpressionTypes[Node] = *TInfo;
+            return &Res.ExpressionTypes[Node];
+        }
 
         case NodeType::INDEX_ACCESS:
         {
-            IndexAccessNode& Index = static_cast<IndexAccessNode&>(Node);
+            IndexAccessNode& Index = static_cast<IndexAccessNode&>(*Node);
 
             TypeInfo* ObjInfo = GetExpressionType
-            (*Index.Object, State, Res, Data, Memory);
+            (Index.Object, State, Res, Data, Memory);
 
             TypeInfo* IndexInfo = GetExpressionType
-            (*Index.Index, State, Res, Data, Memory);
+            (Index.Index, State, Res, Data, Memory);
 
             if (ObjInfo->Kind == TypeKind::ARRAY)
             {
-                if (
-                    IndexInfo->Kind != TypeKind::NUMBER ||
-                    IndexInfo->SubKind != SybTypeKind::INT
-                )
+                TypeInfo ExpectedIndex;
+                ExpectedIndex.Kind = TypeKind::NUMBER;
+                ExpectedIndex.SubKind = SubTypeKind::INT;
+
+                if (!TypesEqual(*IndexInfo, ExpectedIndex))
                 {
                     OrbitLog::SyntaxLog::SyntaxError(
                         "Semantic",
@@ -220,24 +336,29 @@ TypeInfo* GetExpressionType(ExpressionNode& Node, SAState& State, SAResult& Res,
                         OrbitLog::SyntaxLog::ThrowLog(Data);
 
                     TInfo->Kind = TypeKind::UNK;
-                    Res.ExpressionTypes[&Node] = *TInfo;
-                    return TInfo;
+                    Res.ExpressionTypes[Node] = *TInfo;
+                    return &Res.ExpressionTypes[Node];
                 }
 
                 TInfo->Kind = TypeKind::MONO_STATE;
 
-                Res.ExpressionTypes[&Node] = *TInfo;
-                return TInfo;
+                Res.ExpressionTypes[Node] = *TInfo;
+                return &Res.ExpressionTypes[Node];
             }
 
             if (ObjInfo->Kind == TypeKind::TABLE)
             {
+                TypeInfo StringIndex;
+                StringIndex.Kind = TypeKind::STRING;
+                StringIndex.SubKind = SubTypeKind::NONE;
+
+                TypeInfo IntIndex;
+                IntIndex.Kind = TypeKind::NUMBER;
+                IntIndex.SubKind = SubTypeKind::INT;
+
                 if (
-                    IndexInfo->Kind != TypeKind::STRING &&
-                    (
-                        IndexInfo->Kind != TypeKind::NUMBER ||
-                        IndexInfo->SubKind != SybTypeKind::INT
-                    )
+                    !TypesEqual(*IndexInfo, StringIndex) &&
+                    !TypesEqual(*IndexInfo, IntIndex)
                 )
                 {
                     OrbitLog::SyntaxLog::SyntaxError(
@@ -252,14 +373,24 @@ TypeInfo* GetExpressionType(ExpressionNode& Node, SAState& State, SAResult& Res,
                         OrbitLog::SyntaxLog::ThrowLog(Data);
 
                     TInfo->Kind = TypeKind::UNK;
-                    Res.ExpressionTypes[&Node] = *TInfo;
-                    return TInfo;
+                    Res.ExpressionTypes[Node] = *TInfo;
+                    return &Res.ExpressionTypes[Node];
                 }
 
                 TInfo->Kind = TypeKind::MONO_STATE;
 
-                Res.ExpressionTypes[&Node] = *TInfo;
-                return TInfo;
+                Res.ExpressionTypes[Node] = *TInfo;
+                return &Res.ExpressionTypes[Node];
+            }
+
+            if (
+                ObjInfo->Kind == TypeKind::MONO_STATE ||
+                ObjInfo->Kind == TypeKind::UNK
+            )
+            {
+                TInfo->Kind = TypeKind::MONO_STATE;
+                Res.ExpressionTypes[Node] = *TInfo;
+                return &Res.ExpressionTypes[Node];
             }
 
             OrbitLog::SyntaxLog::SyntaxError(
@@ -274,13 +405,13 @@ TypeInfo* GetExpressionType(ExpressionNode& Node, SAState& State, SAResult& Res,
                 OrbitLog::SyntaxLog::ThrowLog(Data);
 
             TInfo->Kind = TypeKind::UNK;
-            Res.ExpressionTypes[&Node] = *TInfo;
-            return TInfo;
+            Res.ExpressionTypes[Node] = *TInfo;
+            return &Res.ExpressionTypes[Node];
         }
-        
+
         case NodeType::IDENTIFIER:
         {
-            IdentifierNode& Id = static_cast<IdentifierNode&>(Node);
+            IdentifierNode& Id = static_cast<IdentifierNode&>(*Node);
 
             Symbol* Sym = State.CurrScope
                 ? State.CurrScope->FindSym(Id.Name)
@@ -293,398 +424,400 @@ TypeInfo* GetExpressionType(ExpressionNode& Node, SAState& State, SAResult& Res,
                     "Used a Undeclared <IDENTIFIER>",
                     "Ident: "+Id.Name+" Dont Exists",
                     "Declare Ident or Use a Valid Identifier",
-                    Node.pos.line, Node.pos.collumn
+                    Node->pos.line, Node->pos.collumn
                 );
 
                 if (!Data.flags.debugMode)
                     OrbitLog::SyntaxLog::ThrowLog(Data);
 
                 TInfo->Kind = TypeKind::UNK;
-                Res.ExpressionTypes[&Node] = *TInfo;
-                return TInfo;
+                Res.ExpressionTypes[Node] = *TInfo;
+                return &Res.ExpressionTypes[Node];
             }
 
             if (!Sym->inited)
             {
-                TInfo->Kind = TypeKind::NONE;
-                Res.ExpressionTypes[&Node] = *TInfo;
-                return TInfo;
+                TInfo->Kind = TypeKind::_NULL;
+                Res.ExpressionTypes[Node] = *TInfo;
+                return &Res.ExpressionTypes[Node];
             }
-            
+
             Sym->read_count++;
 
-            Res.ExpressionTypes[&Node] = *Sym->TInfo;
-            return Sym->TInfo;
+            Res.ExpressionTypes[Node] = *Sym->TInfo;
+            return &Res.ExpressionTypes[Node];
         }
 
         case NodeType::BINARY:
-		{
-			BinaryNode& Binary = static_cast<BinaryNode&>(Node);
-
-			TypeInfo* LInfo = GetExpressionType
-			(*Binary.L, State, Res, Data, Memory);
-
-			TypeInfo* RInfo = GetExpressionType
-			(*Binary.R, State, Res, Data, Memory);
-
-			TypeKind LKind = LInfo->Kind;
-			TypeKind RKind = RInfo->Kind;
-
-			auto IsComparable = [](TypeKind Kind) -> bool
-			{
-				return Kind != TypeKind::UNK &&
-					Kind != TypeKind::MONO_STATE &&
-					Kind != TypeKind::NONE &&
-					Kind != TypeKind::FN;
-			};
-
-			auto InvalidOperation = [&]()
-			{
-				OrbitLog::SyntaxLog::SyntaxError(
-					"Semantic",
-					"Invalid Operation",
-					"Trying to Make A Expr Whit Invalid Operands: " +
-					SAUtils::GetStringOfKind(LKind) +
-					" And: " +
-					SAUtils::GetStringOfKind(RKind),
-					"Add a Valid Type or Convert",
-					Node.pos.line, Node.pos.collumn
-				);
-
-				if (!Data.flags.debugMode)
-					OrbitLog::SyntaxLog::ThrowLog(Data);
-			};
-
-			auto SetNumberResult = [&]()
-			{
-				TInfo->Kind = TypeKind::NUMBER;
-
-				if (
-					LInfo->SubKind == SybTypeKind::FLOAT ||
-					RInfo->SubKind == SybTypeKind::FLOAT
-				)
-				{
-					TInfo->SubKind = SybTypeKind::FLOAT;
-				}
-				else
-				{
-					TInfo->SubKind = SybTypeKind::INT;
-				}
-			};
-
-			switch (Binary.Op)
-			{
-				// ARITHMETIC | ARITMETICOS.
-				case Operator::ADD:
-				{
-					if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER)
-					{
-						SetNumberResult();
-					}
-					else if (LKind == TypeKind::STRING && RKind == TypeKind::STRING)
-					{
-						TInfo->Kind = TypeKind::STRING;
-					}
-					else
-					{
-						InvalidOperation();
-						TInfo->Kind = TypeKind::UNK;
-					}
-
-					break;
-				}
-
-				case Operator::SUB:
-				case Operator::MUL:
-				case Operator::DIV:
-				case Operator::MOD:
-				case Operator::POWER:
-				{
-					if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER)
-					{
-						SetNumberResult();
-					}
-					else
-					{
-						InvalidOperation();
-						TInfo->Kind = TypeKind::UNK;
-					}
-
-					break;
-				}
-
-				// COMPARISON | COMPARAÇOES.
-				case Operator::EQUAL:
-				case Operator::NOT_EQUAL:
-				{
-					if (IsComparable(LKind) && IsComparable(RKind))
-					{
-						TInfo->Kind = TypeKind::BOOL;
-					}
-					else
-					{
-						InvalidOperation();
-						TInfo->Kind = TypeKind::UNK;
-					}
-
-					break;
-				}
-
-				case Operator::LESS:
-				case Operator::GREATER:
-				case Operator::LESS_EQUAL:
-				case Operator::GREATER_EQUAL:
-				{
-					if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER)
-					{
-						TInfo->Kind = TypeKind::BOOL;
-					}
-					else
-					{
-						InvalidOperation();
-						TInfo->Kind = TypeKind::UNK;
-					}
-
-					break;
-				}
-
-				// LOGICAL | LOGICOS.
-				case Operator::AND:
-				case Operator::OR:
-				{
-					if (LKind == TypeKind::BOOL && RKind == TypeKind::BOOL)
-					{
-						TInfo->Kind = TypeKind::BOOL;
-					}
-					else
-					{
-						InvalidOperation();
-						TInfo->Kind = TypeKind::UNK;
-					}
-
-					break;
-				}
-
-				case Operator::NOT:
-				{
-					if (LKind == TypeKind::BOOL)
-					{
-						TInfo->Kind = TypeKind::BOOL;
-					}
-					else
-					{
-						InvalidOperation();
-						TInfo->Kind = TypeKind::UNK;
-					}
-
-					break;
-				}
-
-				// ASSIGN | ASSIGNAÇÃO.
-				case Operator::ASSIGN:
-				{
-					if (IsComparable(LKind) && IsComparable(RKind))
-					{
-						TInfo->Kind = LInfo->Kind;
-						TInfo->SubKind = LInfo->SubKind;
-					}
-					else
-					{
-						InvalidOperation();
-						TInfo->Kind = TypeKind::UNK;
-					}
-
-					break;
-				}
-
-				case Operator::ADD_ASSIGN:
-				{
-					if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER)
-					{
-						SetNumberResult();
-					}
-					else if (LKind == TypeKind::STRING && RKind == TypeKind::STRING)
-					{
-						TInfo->Kind = TypeKind::STRING;
-					}
-					else
-					{
-						InvalidOperation();
-						TInfo->Kind = TypeKind::UNK;
-					}
-
-					break;
-				}
-
-				case Operator::SUB_ASSIGN:
-				case Operator::MUL_ASSIGN:
-				case Operator::DIV_ASSIGN:
-				case Operator::MOD_ASSIGN:
-				case Operator::POWER_ASSIGN:
-				{
-					if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER)
-					{
-						SetNumberResult();
-					}
-					else
-					{
-						InvalidOperation();
-						TInfo->Kind = TypeKind::UNK;
-					}
-
-					break;
-				}
-
-				case Operator::NONE:
-				{
-					TInfo->Kind = TypeKind::MONO_STATE;
-					break;
-				}
-			}
-
-			Res.ExpressionTypes[&Node] = *TInfo;
-			return TInfo;
-		}
-
-        case NodeType::UNARY:
         {
-            UnaryNode& Un = static_cast<UnaryNode&>(Node);
-            switch (Un.Operator) {
-            
-                case Operator::NOT:
-                    TInfo = GetExpressionType(*Un.Operand, State, Res, Data, Memory);
-                    if (TInfo->SubKind == SybTypeKind::TRUE)
-                        TInfo->SubKind = SybTypeKind::FALSE;
-                    else TInfo->SubKind = SybTypeKind::TRUE;
-                default: TInfo->Kind = TypeKind::UNK;
-            }
-            break;
-        }
+            BinaryNode& Binary = static_cast<BinaryNode&>(*Node);
 
-        case NodeType::RANGE:
-            TInfo->Kind = TypeKind::ITERATOR; break;
+            TypeInfo* LInfo = GetExpressionType
+            (Binary.L, State, Res, Data, Memory);
 
-        case NodeType::FN_CALL:
-            TInfo->Kind = TypeKind::MONO_STATE; break;
+            TypeInfo* RInfo = GetExpressionType
+            (Binary.R, State, Res, Data, Memory);
 
-        case NodeType::MEMBER_ACCESS:
-        {
-            MemberAccessNode& Ma = static_cast<MemberAccessNode&>(Node);
+            TypeKind LKind = LInfo->Kind;
+            TypeKind RKind = RInfo->Kind;
 
-            if (!SAUtils::IsIValue(Ma.Object))
+            auto IsComparable = [](TypeKind Kind) -> bool
+            {
+                return Kind != TypeKind::UNK &&
+                    Kind != TypeKind::MONO_STATE &&
+                    Kind != TypeKind::NONE &&
+                    Kind != TypeKind::FN;
+            };
+
+            auto InvalidOperation = [&]()
             {
                 OrbitLog::SyntaxLog::SyntaxError(
                     "Semantic",
-                    "<I-VALUE> Expected, But Got: "+Ma.GetNodeType(),
-                    "<MEMBER_CESS> Need a VALID Thing to Acess",
-                    "~", Ma.pos.line, Ma.pos.collumn
+                    "Invalid Operation",
+                    "Trying to Make A Expr Whit Invalid Operands: " +
+                    SAUtils::GetStringOfKind(LKind) +
+                    " And: " +
+                    SAUtils::GetStringOfKind(RKind),
+                    "Add a Valid Type or Convert",
+                    Node->pos.line, Node->pos.collumn
                 );
 
                 if (!Data.flags.debugMode)
                     OrbitLog::SyntaxLog::ThrowLog(Data);
+            };
 
-                TInfo->Kind = TypeKind::UNK;
-                Res.ExpressionTypes[&Node] = *TInfo;
-                return TInfo;
-            }
-
-            TypeInfo* ObjInfo = GetExpressionType
-            (*Ma.Object, State, Res, Data, Memory);
-
-            if (ObjInfo->Kind == TypeKind::UNK)
+            auto SetNumberResult = [&]()
             {
-                TInfo->Kind = TypeKind::UNK;
-                Res.ExpressionTypes[&Node] = *TInfo;
-                return TInfo;
-            }
+                TInfo->Kind = TypeKind::NUMBER;
 
-            string N = SAUtils::GetIValueName(Ma.Object);
-
-            Symbol* Sym = nullptr;
-
-            if (Ma.Object->Type == NodeType::IDENTIFIER)
-            {
-                Sym = State.CurrScope
-                    ? State.CurrScope->FindSym(N)
-                    : nullptr;
-
-                if (!Sym)
+                if (
+                    LInfo->SubKind == SubTypeKind::FLOAT ||
+                    RInfo->SubKind == SubTypeKind::FLOAT
+                )
                 {
-                    OrbitLog::SyntaxLog::SyntaxError(
-                        "Semantic",
-                        "Used of Undeclared Identifier: "+N,
-                        "Member Acess Need a <I-VALUE> To Acess",
-                        "~", Ma.Object->pos.line, Ma.Object->pos.collumn
-                    );
-
-                    if (!Data.flags.debugMode)
-                        OrbitLog::SyntaxLog::ThrowLog(Data);
-
-                    TInfo->Kind = TypeKind::UNK;
-                    Res.ExpressionTypes[&Node] = *TInfo;
-                    return TInfo;
+                    TInfo->SubKind = SubTypeKind::FLOAT;
                 }
-            }
-
-            if (Ma.Object->Type == NodeType::MEMBER_ACCESS)
-            {
-                for (pair<string, TypeInfo*> P : Sym ? Sym->Objs : vec<pair<string, TypeInfo*>>{})
+                else
                 {
-                    string MemberName = SAUtils::GetIValueName(Ma.Member);
-                    if (P.first == MemberName)
+                    TInfo->SubKind = SubTypeKind::INT;
+                }
+            };
+
+            switch (Binary.Op)
+            {
+                // ARITHMETIC | ARITMETICOS.
+                case Operator::ADD:
+                {
+                    if (LKind == TypeKind::MONO_STATE || RKind == TypeKind::MONO_STATE)
                     {
-                        TInfo->Kind = P.second->Kind;
-                        TInfo->SubKind = P.second->SubKind;
-
-                        Res.ExpressionTypes[&Node] = *TInfo;
-                        return TInfo;
+                        TInfo->Kind = TypeKind::MONO_STATE;
                     }
-                }
-            }
-            else if (Sym)
-            {
-                for (pair<string, TypeInfo*> P : Sym->Objs)
-                {
-                    string MemberName = SAUtils::GetIValueName(Ma.Member);
-                    if (P.first == MemberName)
+                    else if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER)
                     {
-                        TInfo->Kind = P.second->Kind;
-                        TInfo->SubKind = P.second->SubKind;
-
-                        Res.ExpressionTypes[&Node] = *TInfo;
-                        return TInfo;
+                        SetNumberResult();
                     }
+                    else if (LKind == TypeKind::STRING && RKind == TypeKind::STRING)
+                    {
+                        TInfo->Kind = TypeKind::STRING;
+                    }
+                    else
+                    {
+                        InvalidOperation();
+                        TInfo->Kind = TypeKind::UNK;
+                    }
+
+                    break;
+                }
+
+                case Operator::SUB:
+                case Operator::MUL:
+                case Operator::DIV:
+                case Operator::MOD:
+                case Operator::POWER:
+                {
+                    if (LKind == TypeKind::MONO_STATE || RKind == TypeKind::MONO_STATE)
+                    {
+                        TInfo->Kind = TypeKind::MONO_STATE;
+                    }
+                    else if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER)
+                    {
+                        SetNumberResult();
+                    }
+                    else
+                    {
+                        InvalidOperation();
+                        TInfo->Kind = TypeKind::UNK;
+                    }
+
+                    break;
+                }
+
+                // COMPARISON | COMPARAÇOES.
+                case Operator::EQUAL:
+                case Operator::NOT_EQUAL:
+                {
+                    if (
+                        LKind == TypeKind::MONO_STATE ||
+                        RKind == TypeKind::MONO_STATE
+                    )
+                    {
+                        TInfo->Kind = TypeKind::BOOL;
+                    }
+                    else if (IsComparable(LKind) && IsComparable(RKind))
+                    {
+                        TInfo->Kind = TypeKind::BOOL;
+                    }
+                    else
+                    {
+                        InvalidOperation();
+                        TInfo->Kind = TypeKind::UNK;
+                    }
+
+                    break;
+                }
+
+                case Operator::LESS:
+                case Operator::GREATER:
+                case Operator::LESS_EQUAL:
+                case Operator::GREATER_EQUAL:
+                {
+                    if (
+                        LKind == TypeKind::MONO_STATE ||
+                        RKind == TypeKind::MONO_STATE
+                    )
+                    {
+                        TInfo->Kind = TypeKind::BOOL;
+                    }
+                    else if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER)
+                    {
+                        TInfo->Kind = TypeKind::BOOL;
+                    }
+                    else
+                    {
+                        InvalidOperation();
+                        TInfo->Kind = TypeKind::UNK;
+                    }
+
+                    break;
+                }
+
+                // LOGICAL | LOGICOS.
+                case Operator::AND:
+                case Operator::OR:
+                {
+                    if (
+                        LKind == TypeKind::MONO_STATE ||
+                        RKind == TypeKind::MONO_STATE
+                    )
+                    {
+                        TInfo->Kind = TypeKind::BOOL;
+                    }
+                    else if (LKind == TypeKind::BOOL && RKind == TypeKind::BOOL)
+                    {
+                        TInfo->Kind = TypeKind::BOOL;
+                    }
+                    else
+                    {
+                        InvalidOperation();
+                        TInfo->Kind = TypeKind::UNK;
+                    }
+
+                    break;
+                }
+
+                case Operator::NOT:
+                {
+                    if (LKind == TypeKind::MONO_STATE)
+                    {
+                        TInfo->Kind = TypeKind::BOOL;
+                    }
+                    else if (LKind == TypeKind::BOOL)
+                    {
+                        TInfo->Kind = TypeKind::BOOL;
+                    }
+                    else
+                    {
+                        InvalidOperation();
+                        TInfo->Kind = TypeKind::UNK;
+                    }
+
+                    break;
+                }
+
+                // ASSIGN | ASSIGNAÇÃO.
+                case Operator::ASSIGN:
+                {
+                    if (
+                        LKind == TypeKind::MONO_STATE ||
+                        RKind == TypeKind::MONO_STATE
+                    )
+                    {
+                        TInfo->Kind = LKind;
+                        TInfo->SubKind = LInfo->SubKind;
+                    }
+                    else if (TypesEqual(*LInfo, *RInfo))
+                    {
+                        TInfo->Kind = LInfo->Kind;
+                        TInfo->SubKind = LInfo->SubKind;
+                    }
+                    else
+                    {
+                        InvalidOperation();
+                        TInfo->Kind = TypeKind::UNK;
+                    }
+
+                    break;
+                }
+
+                case Operator::ADD_ASSIGN:
+                {
+                    if (
+                        LKind == TypeKind::MONO_STATE ||
+                        RKind == TypeKind::MONO_STATE
+                    )
+                    {
+                        TInfo->Kind = LKind;
+                        TInfo->SubKind = LInfo->SubKind;
+                    }
+                    else if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER)
+                    {
+                        SetNumberResult();
+                    }
+                    else if (LKind == TypeKind::STRING && RKind == TypeKind::STRING)
+                    {
+                        TInfo->Kind = TypeKind::STRING;
+                    }
+                    else
+                    {
+                        InvalidOperation();
+                        TInfo->Kind = TypeKind::UNK;
+                    }
+
+                    break;
+                }
+
+                case Operator::SUB_ASSIGN:
+                case Operator::MUL_ASSIGN:
+                case Operator::DIV_ASSIGN:
+                case Operator::MOD_ASSIGN:
+                case Operator::POWER_ASSIGN:
+                {
+                    if (
+                        LKind == TypeKind::MONO_STATE ||
+                        RKind == TypeKind::MONO_STATE
+                    )
+                    {
+                        TInfo->Kind = LKind;
+                        TInfo->SubKind = LInfo->SubKind;
+                    }
+                    else if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER)
+                    {
+                        SetNumberResult();
+                    }
+                    else
+                    {
+                        InvalidOperation();
+                        TInfo->Kind = TypeKind::UNK;
+                    }
+
+                    break;
+                }
+
+                case Operator::NONE:
+                {
+                    TInfo->Kind = TypeKind::MONO_STATE;
+                    break;
                 }
             }
 
-            string MemberName = SAUtils::GetIValueName(Ma.Member);
-            OrbitLog::SyntaxLog::SyntaxError(
-                "Semantic",
-                "Cannot Find Member: "+MemberName,
-                "Member does not Exist in: "+N,
-                "~", Ma.pos.line, Ma.pos.collumn
-            );
-
-            if (!Data.flags.debugMode)
-                OrbitLog::SyntaxLog::ThrowLog(Data);
-
-            TInfo->Kind = TypeKind::UNK;
-            Res.ExpressionTypes[&Node] = *TInfo;
-            return TInfo;
+            Res.ExpressionTypes[Node] = *TInfo;
+            return &Res.ExpressionTypes[Node];
         }
 
-        default: {};
+        case NodeType::UNARY:
+        {
+            UnaryNode& Un = static_cast<UnaryNode&>(*Node);
+
+            TypeInfo* OperandInfo = GetExpressionType
+            (Un.Operand, State, Res, Data, Memory);
+
+            switch (Un.Operator)
+            {
+                case Operator::NOT:
+                {
+                    if (
+                        OperandInfo->Kind != TypeKind::BOOL &&
+                        OperandInfo->Kind != TypeKind::MONO_STATE
+                    )
+                    {
+                        OrbitLog::SyntaxLog::SyntaxError(
+                            "Semantic",
+                            "Invalid Unary Operation",
+                            "Expected <BOOL> For <NOT>, But Got: "
+                            +SAUtils::GetStringOfKind(OperandInfo->Kind),
+                            "Add a Valid Type or Convert",
+                            Node->pos.line, Node->pos.collumn
+                        );
+
+                        if (!Data.flags.debugMode)
+                            OrbitLog::SyntaxLog::ThrowLog(Data);
+
+                        TInfo->Kind = TypeKind::UNK;
+                        break;
+                    }
+
+                    TInfo->Kind = TypeKind::BOOL;
+                    TInfo->SubKind = SubTypeKind::NONE;
+                    break;
+                }
+
+                default:
+                {
+                    TInfo->Kind = TypeKind::UNK;
+                    break;
+                }
+            }
+
+            Res.ExpressionTypes[Node] = *TInfo;
+            return &Res.ExpressionTypes[Node];
+        }
+
+        case NodeType::RANGE:
+        {
+            TInfo->Kind = TypeKind::ITERATOR;
+            break;
+        }
+
+        case NodeType::FN_CALL:
+        {
+            TInfo->Kind = TypeKind::MONO_STATE;
+            break;
+        }
+
+        case NodeType::ASSIGNMENT:
+        {
+            TInfo->Kind = TypeKind::MONO_STATE;
+            break;
+        }
+
+        default:
+        {
+            TInfo->Kind = TypeKind::UNK;
+            break;
+        }
     }
 
-    Res.ExpressionTypes[&Node] = *TInfo;
-    return TInfo;
+    Res.ExpressionTypes[Node] = *TInfo;
+    return &Res.ExpressionTypes[Node];
 }
+
+// ===== PROGRAM ===== //
 
 // Entry In A New Scope | Entra em um novo Escopo.
 Scope* EntryScope(BodyNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Mem)
 {
     Scope* S = Mem.New<Scope>();
-    
+
     S->Parent = State.CurrScope;
     S->Type = Node.Type;
     S->Owner = &Node;
@@ -707,7 +840,7 @@ Scope* LeaveScope(SAState& State, SAResult& Res, RunTimeData& Data)
     if (State.CurrScope->Type == BodyTypes::PROGRAM)
     {
         OrbitLog::Warn(
-            "semantic_analisys.cpp", 
+            "semantic_analisys.cpp",
             "Trying to Close the GlobalScope In(line/index): ~/~"
         );
         return State.CurrScope;
@@ -735,10 +868,10 @@ void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, 
     if (Data.flags.generateLog)
         State.NodesChecked.push_back({++State.logInd, &Node});
 
-    switch (Node.Type) {
-        
+    switch (Node.Type)
+    {
         // PROGRAM
-        case NodeType::PROGRAM:  
+        case NodeType::PROGRAM:
             LookUpProgram
             (static_cast<ProgramNode&>(Node), State, Res, Data, Memory);
             break;
@@ -746,6 +879,27 @@ void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, 
         case NodeType::BODY:
             LookUpBody
             (static_cast<BodyNode&>(Node), State, Res, Data, Memory);
+            break;
+
+        // CONTROLS
+        case NodeType::WHILE:
+            LookUpWhile
+            (static_cast<WhileNode&>(Node), State, Res, Data, Memory);
+            break;
+        case NodeType::FOR:
+            LookUpFor
+            (static_cast<ForNode&>(Node), State, Res, Data, Memory);
+            break;
+
+        // DECLARATIONS
+        case NodeType::VAR_DECL:
+            LookUpVarDecl
+            (static_cast<VarDeclNode&>(Node), State, Res, Data, Memory);
+            break;
+
+        case NodeType::FN_DECL:
+            LookUpFunction
+            (static_cast<FnDecl&>(Node), State, Res, Data, Memory);
             break;
 
         // EXPRESSIONS
@@ -759,19 +913,39 @@ void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, 
             (static_cast<IdentifierNode&>(Node), State, Res, Data, Memory);
             break;
 
-        case NodeType::MEMBER_ACCESS:
-        {
-            MemberAccessNode& Ma = static_cast<MemberAccessNode&>(Node);
-
-            GetExpressionType
-            (Ma, State, Res, Data, Memory);
-
+        case NodeType::UNARY:
+            LookUpUnary
+            (static_cast<UnaryNode&>(Node), State, Res, Data, Memory);
             break;
-        }
+
+        case NodeType::BINARY:
+            LookUpBinary
+            (static_cast<BinaryNode&>(Node), State, Res, Data, Memory);
+            break;
+
+        case NodeType::ASSIGNMENT:
+            LookUpAssignment
+            (static_cast<AssignmentNode&>(Node), State, Res, Data, Memory);
+            break;
+
+        case NodeType::MEMBER_ACCESS:
+            LookUpMemberAccess
+            (static_cast<MemberAccessNode&>(Node), State, Res, Data, Memory);
+            break;
 
         case NodeType::INDEX_ACCESS:
             LookUpIndexAccess
             (static_cast<IndexAccessNode&>(Node), State, Res, Data, Memory);
+            break;
+
+        case NodeType::RANGE:
+            LookUpRange
+            (static_cast<RangeNode&>(Node), State, Res, Data, Memory);
+            break;
+
+        case NodeType::FN_CALL:
+            LookUpFunctionCall
+            (static_cast<FunctionCall&>(Node), State, Res, Data, Memory);
             break;
 
         case NodeType::ARRAY_VALUE:
@@ -782,7 +956,7 @@ void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, 
         case NodeType::TABLE_VALUE:
             LookUpTable
             (static_cast<TableValue&>(Node), State, Res, Data, Memory);
-            break;             
+            break;
 
         default: {};
     }
@@ -791,13 +965,13 @@ void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, 
 // LookUp a ProgramNode | Olha um ProgramNode.
 void SemanticAnalizer::LookUpProgram(ProgramNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
-	Scope* GlobalScope = Memory.New<Scope>();
+    Scope* GlobalScope = Memory.New<Scope>();
 
-	GlobalScope->Owner = nullptr;
-	GlobalScope->Type = BodyTypes::PROGRAM;
+    GlobalScope->Owner = nullptr;
+    GlobalScope->Type = BodyTypes::PROGRAM;
 
-	State.ScopeStack.push_back(GlobalScope);
-	State.CurrScope = GlobalScope;
+    State.ScopeStack.push_back(GlobalScope);
+    State.CurrScope = GlobalScope;
 
     Res.GlobalScope = GlobalScope;
 
@@ -809,9 +983,10 @@ void SemanticAnalizer::LookUpProgram(ProgramNode& Node, SAState& State, SAResult
 }
 
 // LookUp BodyNode | Olha um BodyBode.
-void SemanticAnalizer::LookUpBody(BodyNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpBody(BodyNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Scope* S)
 {
-    EntryScope(Node, State, Res, Data, Memory);
+    if (!S)
+        EntryScope(Node, State, Res, Data, Memory);
 
     for (ASTNode* N : Node.Data)
     {
@@ -822,12 +997,422 @@ void SemanticAnalizer::LookUpBody(BodyNode& Node, SAState& State, SAResult& Res,
     LeaveScope(State, Res, Data);
 }
 
+// ===== CONTROLS ===== //
+
+// LookUp For Nodes | Olha um ForNode.
+void SemanticAnalizer::LookUpFor(ForNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+{
+    // Init | Inicio
+    LookUpRange(*Node.End, State, Res, Data, Memory);
+    
+    Scope* S = EntryScope(*Node.Body, State, Res, Data, Memory);
+    Symbol* Sym = SAUtils::CreateSymbol
+        (Node.Identifier->Name, Node, State, Res, Memory);
+
+    // Set Symbol Def Config | Define a Configuração Padrao dos Simbolos.    
+    Sym->InferType->Kind = TypeKind::NUMBER;    
+    Sym->InferType->SubKind = SubTypeKind::INT;    
+    Sym->Mut=MutableTypes::MUT;
+    Sym->inited=true;
+
+    LookUpBody(*Node.Body, State, Res, Data, Memory, S);
+}
+
+// LookUp While Nodes | Olha um WhileNode.
+void SemanticAnalizer::LookUpWhile(WhileNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+{
+    // Error & Warn Prev | Prevenção de Erros de Avisos.
+    TypeInfo* TInfo = 
+        GetExpressionType(Node.Cond, State, Res, Data, Memory);
+    if (TInfo->Kind != TypeKind::BOOL)
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            "Expected <BOOLEAN> Condition",
+            "While Needs a <BOOL> Condition to Check",
+            "Add a Valid Type or Convert",
+            Node.Cond->pos.line,
+            Node.Cond->pos.collumn
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;
+    } else if (TInfo->SubKind ==  SubTypeKind::TRUE) {
+
+        Node.alwaysExecuteFirst=true;
+        OrbitLog::SyntaxLog::SyntaxWarn(
+            "Semantic",
+            "Condition Maybe Always is <TRUE>",
+            "Semantic Analizer Check <TRUE> In All Ways, Skiping...",
+            "~", Node.Cond->pos.line, Node.Cond->pos.collumn
+        );
+    }
+
+    LookUpBody(*Node.Body, State, Res, Data, Memory);
+}
+
+// ===== DECLARATIONS ===== //
+
+// LookUp Var Decl Node | Olha um VarDeclNode.
+void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+{
+    // Shadowing Error Prev | Prevenção de Erros de Sombreamento.
+    if (!State.CurrScope)
+        return;
+
+    if (State.CurrScope->FindSymLocal(Node.Name))
+    {
+        try {
+
+            int i = Node.Name.back() - '0';
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                Node.Name+" Already Exists",
+                "Shadowing Is ONLY Allowed In Diff Scopes",
+                "Change Name, Ex: "+Node.Name+std::to_string(++i),
+                Node.pos.line, Node.pos.collumn
+            );
+        } catch (...) {
+            OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            Node.Name+" Already Exists",
+            "Shadowing Is ONLY Allowed In Diff Scopes",
+            "Change Name, Ex: "+Node.Name+"2",
+            Node.pos.line, Node.pos.collumn
+            );
+        }
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;
+    }
+
+    // ERROR PREV | PREVENÇÃO DE ERROS.
+    if (Node.Val)
+        LookUpNode(*Node.Val, State, Res, Data, Memory);
+
+    TypeInfo* ValTInfo = Node.Val
+        ? GetExpressionType(Node.Val, State, Res, Data, Memory)
+        : nullptr;
+
+    {
+        auto err = [&]()
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                SAUtils::GetStringOfKind(SAUtils::GetKindOfLiteral(Node.InferType)->Kind)+" Expected, But Got: "
+                +SAUtils::GetStringOfKind(ValTInfo ? ValTInfo->Kind : TypeKind::UNK),
+                "Have Diff BeetWeen <INFER_TYPE> And <RECIVED_TYPE>",
+                "Add a Valid Type or Convert",
+                Node.pos.line, Node.pos.collumn
+            );
+
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        };
+
+        if (Node.InferType != LiteralTypes::MONO_STATE && ValTInfo)
+        {
+            TypeInfo* ExpectedTInfo = SAUtils::GetKindOfLiteral(Node.InferType);
+
+            if (
+                Node.InferType >= LiteralTypes::ARRAY_INT &&
+                Node.InferType <= LiteralTypes::ARRAY_NULL
+            )
+            {
+                if (ValTInfo->Kind != TypeKind::ARRAY)
+                {
+                    err();
+                }
+                else if (Node.Val->Type == NodeType::ARRAY_VALUE)
+                {
+                    ArrayValue& Array = static_cast<ArrayValue&>(*Node.Val);
+
+                    TypeInfo ExpectedElementType;
+                    ExpectedElementType.Kind = TypeKind::UNK;
+                    ExpectedElementType.SubKind = SubTypeKind::NONE;
+
+                    switch (Node.InferType)
+                    {
+                        case LiteralTypes::ARRAY_INT:
+                        {
+                            ExpectedElementType.Kind = TypeKind::NUMBER;
+                            ExpectedElementType.SubKind = SubTypeKind::INT;
+                            break;
+                        }
+
+                        case LiteralTypes::ARRAY_FLOAT:
+                        {
+                            ExpectedElementType.Kind = TypeKind::NUMBER;
+                            ExpectedElementType.SubKind = SubTypeKind::FLOAT;
+                            break;
+                        }
+
+                        case LiteralTypes::ARRAY_STRING:
+                        {
+                            ExpectedElementType.Kind = TypeKind::STRING;
+                            break;
+                        }
+
+                        case LiteralTypes::ARRAY_BOOL:
+                        {
+                            ExpectedElementType.Kind = TypeKind::BOOL;
+                            break;
+                        }
+
+                        case LiteralTypes::ARRAY_NONE:
+                        {
+                            ExpectedElementType.Kind = TypeKind::NONE;
+                            break;
+                        }
+
+                        case LiteralTypes::ARRAY_NULL:
+                        {
+                            ExpectedElementType.Kind = TypeKind::_NULL;
+                            break;
+                        }
+
+                        default:
+                            break;
+                    }
+
+                    for (ExpressionNode* Arg : Array.Args)
+                    {
+                        if (!Arg)
+                            continue;
+
+                        TypeInfo* ArgTInfo = GetExpressionType
+                        (Arg, State, Res, Data, Memory);
+
+                        if (ArgTInfo->Kind == TypeKind::MONO_STATE)
+                            continue;
+
+                        if (!TypesEqual(*ArgTInfo, ExpectedElementType))
+                        {
+                            err();
+                            break;
+                        }
+                    }
+                }
+            }
+            else if (
+                Node.InferType >= LiteralTypes::TABLE_INT &&
+                Node.InferType <= LiteralTypes::TABLE_NULL
+            )
+            {
+                if (ValTInfo->Kind != TypeKind::TABLE)
+                {
+                    err();
+                }
+                else if (Node.Val->Type == NodeType::TABLE_VALUE)
+                {
+                    TableValue& Table = static_cast<TableValue&>(*Node.Val);
+
+                    TypeInfo ExpectedValueType;
+                    ExpectedValueType.Kind = TypeKind::UNK;
+                    ExpectedValueType.SubKind = SubTypeKind::NONE;
+
+                    switch (Node.InferType)
+                    {
+                        case LiteralTypes::TABLE_INT:
+                        {
+                            ExpectedValueType.Kind = TypeKind::NUMBER;
+                            ExpectedValueType.SubKind = SubTypeKind::INT;
+                            break;
+                        }
+
+                        case LiteralTypes::TABLE_FLOAT:
+                        {
+                            ExpectedValueType.Kind = TypeKind::NUMBER;
+                            ExpectedValueType.SubKind = SubTypeKind::FLOAT;
+                            break;
+                        }
+
+                        case LiteralTypes::TABLE_STRING:
+                        {
+                            ExpectedValueType.Kind = TypeKind::STRING;
+                            break;
+                        }
+
+                        case LiteralTypes::TABLE_BOOL:
+                        {
+                            ExpectedValueType.Kind = TypeKind::BOOL;
+                            break;
+                        }
+
+                        case LiteralTypes::TABLE_NONE:
+                        {
+                            ExpectedValueType.Kind = TypeKind::NONE;
+                            break;
+                        }
+
+                        case LiteralTypes::TABLE_NULL:
+                        {
+                            ExpectedValueType.Kind = TypeKind::_NULL;
+                            break;
+                        }
+
+                        default:
+                            break;
+                    }
+
+                    for (ArrayEntry& Entry : Table.Args)
+                    {
+                        if (!Entry.Value)
+                            continue;
+
+                        TypeInfo* ValueTInfo = GetExpressionType
+                        (Entry.Value, State, Res, Data, Memory);
+
+                        if (ValueTInfo->Kind == TypeKind::MONO_STATE)
+                            continue;
+
+                        if (!TypesEqual(*ValueTInfo, ExpectedValueType))
+                        {
+                            err();
+                            break;
+                        }
+                    }
+                }
+            }
+            else if (ValTInfo)
+            {
+                if (
+                    ValTInfo->Kind != TypeKind::MONO_STATE &&
+                    !TypesEqual(*ValTInfo, *ExpectedTInfo)
+                )
+                {
+                    err();
+                }
+            }
+        }
+    }
+
+    // Symbol | Simbolo.
+    Symbol* Sym = SAUtils::CreateSymbol(Node.Name, Node, State, Res, Memory);
+
+    Sym->Mut = Node.MutType;
+    Sym->Type = SymbolTypes::VAR;
+
+    TypeInfo* InferType = SAUtils::GetKindOfLiteral(Node.InferType);
+
+    // Take Kind
+    Sym->InferType->Kind = InferType->Kind;
+    Sym->InferType->SubKind = InferType->SubKind;
+
+    // Type Prev | Prevenção de Tipos.
+    if (!Node.Val)
+    {
+        Sym->TInfo->Kind = TypeKind::_NULL;
+        Sym->TInfo->SubKind = SubTypeKind::NONE;
+        Sym->inited = false;
+
+        // Se veio como NONE (default do parser) ou MONO_STATE, força NULL
+        if (Node.InferType == LiteralTypes::NONE || Node.InferType == LiteralTypes::MONO_STATE)
+        {
+            Sym->InferType->Kind = TypeKind::_NULL;
+            Sym->InferType->SubKind = SubTypeKind::NONE;
+        }
+    }
+    else if (Node.InferType == LiteralTypes::MONO_STATE)
+    {
+        Sym->TInfo->Kind = ValTInfo->Kind;
+        Sym->TInfo->SubKind = ValTInfo->SubKind;
+        Sym->inited = true;
+    }
+    else
+    {
+        Sym->TInfo->Kind = Sym->InferType->Kind;
+        Sym->TInfo->SubKind = Sym->InferType->SubKind;
+        Sym->inited = true;
+    }
+}
+
+// LookUp Fn Decl Node | Olha um FunctionDeclNode.
+void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+{
+    if (!State.CurrScope)
+        return;
+
+    if (State.CurrScope->FindSymbol(Node.Name, SymbolTypes::FN))
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            "<FN> Name Already Exists",
+            "Fn: "+Node.Name+" Has Been Declared",
+            "Add a Diff Name",
+            Node.pos.line, Node.pos.collumn
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;
+    }
+
+    Symbol* FnSym = SAUtils::CreateSymbol(Node.Name, Node, State, Res, Memory);
+
+    FnSym->Type = SymbolTypes::FN;
+    FnSym->TInfo->Kind = TypeKind::FN;
+    FnSym->TInfo->SubKind = SubTypeKind::NONE;
+    FnSym->InferType->Kind = TypeKind::FN;
+    FnSym->InferType->SubKind = SubTypeKind::NONE;
+    FnSym->inited = true;
+
+    Scope* PreviousScope = State.CurrScope;
+    BodyNode* Body = Node.Body;
+
+    if (!Body)
+        return;
+
+    Scope* S = EntryScope(*Body, State, Res, Data, Memory);
+
+
+    for (ExpressionNode* Parm : Node.Params)
+    {
+        if (!Parm)
+            continue;
+
+        if (Parm->Type == NodeType::IDENTIFIER)
+        {
+            IdentifierNode& Id = static_cast<IdentifierNode&>(*Parm);
+            if (State.CurrScope->FindSymLocal(Id.Name))
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Semantic",
+                    "Parameter Already Exists",
+                    "Param: '"+Id.Name+"' Has Been Declared",
+                    "Add a Diff Name",
+                    Parm->pos.line, Parm->pos.collumn
+                );
+
+                if (!Data.flags.debugMode)
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+
+                continue;
+            }
+
+            Symbol* ParamSym = SAUtils::CreateSymbol
+            (Id.Name, *Parm, State, Res, Memory);
+
+            ParamSym->Type = SymbolTypes::PARAM;
+            ParamSym->Mut = MutableTypes::MUT;
+            ParamSym->TInfo->Kind = TypeKind::MONO_STATE;
+            ParamSym->TInfo->SubKind = SubTypeKind::NONE;
+            ParamSym->InferType->Kind = TypeKind::MONO_STATE;
+            ParamSym->InferType->SubKind = SubTypeKind::NONE;
+            ParamSym->inited = true;
+        }
+        else
+        {
+            LookUpNode(*Parm, State, Res, Data, Memory);
+        }
+    }
+
+    LookUpBody(*Body, State, Res, Data, Memory, S);
+
+    State.CurrScope = PreviousScope;
+}
+
 // ===== EXPRESSIONS ===== //
 
 // LookUp LiteralNode | Olha um LiteralNode.
 void SemanticAnalizer::LookUpLiteral(LiteralNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
-    GetExpressionType(Node, State, Res, Data, Memory);
+    GetExpressionType(&Node, State, Res, Data, Memory);
 }
 
 // LookUp IdentifierNode | Olha um IdentifierNode.
@@ -838,7 +1423,7 @@ void SemanticAnalizer::LookUpIdentifier(IdentifierNode& Node, SAState& State, SA
     {
         OrbitLog::SyntaxLog::SyntaxError(
             "Semantic",
-            "Used a Undeclared <IDENTIFIER>",
+            "Used a Undeclared ",
             "Ident: "+Node.Name+" Dont Exists",
             "Declare Ident or Use a Valid Identifier",
             Node.pos.line, Node.pos.collumn
@@ -849,185 +1434,238 @@ void SemanticAnalizer::LookUpIdentifier(IdentifierNode& Node, SAState& State, SA
 
         return;
     }
+
+    // Data
+    Symbol* Sym = State.CurrScope->FindSym(Node.Name);
+
+    if (Sym)
+        Sym->read_count++;
 }
 
 // LookUp Binary Node | Olha um BinaryNode.
 void SemanticAnalizer::LookUpBinary(BinaryNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
-	LookUpNode(*Node.L, State, Res, Data, Memory);
-	LookUpNode(*Node.R, State, Res, Data, Memory);
+    LookUpNode(*Node.L, State, Res, Data, Memory);
+    LookUpNode(*Node.R, State, Res, Data, Memory);
 
-	TypeKind LKind = GetExpressionType(*Node.L, State, Res, Data, Memory)->Kind;
-	TypeKind RKind = GetExpressionType(*Node.R, State, Res, Data, Memory)->Kind;
+    TypeInfo* LInfo = GetExpressionType(Node.L, State, Res, Data, Memory);
+    TypeInfo* RInfo = GetExpressionType(Node.R, State, Res, Data, Memory);
 
-	auto IsComparable = [](TypeKind Kind) -> bool
-	{
-		return Kind != TypeKind::UNK &&
-			Kind != TypeKind::MONO_STATE &&
-			Kind != TypeKind::NONE &&
-			Kind != TypeKind::FN;
-	};
+    TypeKind LKind = LInfo->Kind;
+    TypeKind RKind = RInfo->Kind;
 
-	auto InvalidOperation = [&]()
-	{
-		OrbitLog::SyntaxLog::SyntaxError(
-			"Semantic",
-			"Invalid Operation",
-			"Trying to Make A Expr Whit Invalid Operands: " +
-			SAUtils::GetStringOfKind(LKind) +
-			" And: " +
-			SAUtils::GetStringOfKind(RKind),
-			"Add a Valid Type or Convert",
-			Node.pos.line, Node.pos.collumn
-		);
+    auto IsComparable = [](TypeKind Kind) -> bool
+    {
+        return Kind != TypeKind::UNK &&
+            Kind != TypeKind::MONO_STATE &&
+            Kind != TypeKind::NONE &&
+            Kind != TypeKind::FN;
+    };
 
-		if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-	};
+    auto InvalidOperation = [&]()
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            "Invalid Operation",
+            "Trying to Make A Expr Whit Invalid Operands: " +
+            SAUtils::GetStringOfKind(LKind) +
+            " And: " +
+            SAUtils::GetStringOfKind(RKind),
+            "Add a Valid Type or Convert",
+            Node.pos.line, Node.pos.collumn
+        );
 
-	switch (Node.Op)
-	{
-		// ARITHMETIC | ARITMETICOS.
-		case Operator::ADD:
-		{
-			if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) {}
-			else if (LKind == TypeKind::STRING && RKind == TypeKind::STRING) {}
-			else
-			{
-				InvalidOperation();
-				return;
-			}
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+    };
 
-			break;
-		}
+    switch (Node.Op)
+    {
+        // ARITHMETIC | ARITMETICOS.
+        case Operator::ADD:
+        {
+            if (
+                LKind == TypeKind::MONO_STATE ||
+                RKind == TypeKind::MONO_STATE
+            ) {}
+            else if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) {}
+            else if (LKind == TypeKind::STRING && RKind == TypeKind::STRING) {}
+            else
+            {
+                InvalidOperation();
+                return;
+            }
 
-		case Operator::SUB:
-		case Operator::MUL:
-		case Operator::DIV:
-		case Operator::MOD:
-		case Operator::POWER:
-		{
-			if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) {}
-			else
-			{
-				InvalidOperation();
-				return;
-			}
+            break;
+        }
 
-			break;
-		}
+        case Operator::SUB:
+        case Operator::MUL:
+        case Operator::DIV:
+        case Operator::MOD:
+        case Operator::POWER:
+        {
+            if (
+                LKind == TypeKind::MONO_STATE ||
+                RKind == TypeKind::MONO_STATE ||
+                (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER)
+            ) {}
+            else
+            {
+                InvalidOperation();
+                return;
+            }
 
-		// COMPARISON | COMPARAÇOES.
-		case Operator::EQUAL:
-		case Operator::NOT_EQUAL:
-		{
-			if (IsComparable(LKind) && IsComparable(RKind)) {}
-			else
-			{
-				InvalidOperation();
-				return;
-			}
+            break;
+        }
 
-			break;
-		}
+        // COMPARISON | COMPARAÇOES.
+        case Operator::EQUAL:
+        case Operator::NOT_EQUAL:
+        {
+            if (
+                LKind == TypeKind::MONO_STATE ||
+                RKind == TypeKind::MONO_STATE ||
+                (IsComparable(LKind) && IsComparable(RKind))
+            ) {}
+            else
+            {
+                InvalidOperation();
+                return;
+            }
 
-		case Operator::LESS:
-		case Operator::GREATER:
-		case Operator::LESS_EQUAL:
-		case Operator::GREATER_EQUAL:
-		{
-			if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) {}
-			else
-			{
-				InvalidOperation();
-				return;
-			}
+            break;
+        }
 
-			break;
-		}
+        case Operator::LESS:
+        case Operator::GREATER:
+        case Operator::LESS_EQUAL:
+        case Operator::GREATER_EQUAL:
+        {
+            if (
+                LKind == TypeKind::MONO_STATE ||
+                RKind == TypeKind::MONO_STATE ||
+                (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER)
+            ) {}
+            else
+            {
+                InvalidOperation();
+                return;
+            }
 
-		// LOGICAL | LOGICOS.
-		case Operator::AND:
-		case Operator::OR:
-		{
-			if (LKind == TypeKind::BOOL && RKind == TypeKind::BOOL) {}
-			else
-			{
-				InvalidOperation();
-				return;
-			}
+            break;
+        }
 
-			break;
-		}
+        // LOGICAL | LOGICOS.
+        case Operator::AND:
+        case Operator::OR:
+        {
+            if (
+                LKind == TypeKind::MONO_STATE ||
+                RKind == TypeKind::MONO_STATE ||
+                (LKind == TypeKind::BOOL && RKind == TypeKind::BOOL)
+            ) {}
+            else
+            {
+                InvalidOperation();
+                return;
+            }
 
-		case Operator::NOT:
-		{
-			if (LKind == TypeKind::BOOL) {}
-			else
-			{
-				InvalidOperation();
-				return;
-			}
+            break;
+        }
 
-			break;
-		}
+        case Operator::NOT:
+        {
+            if (
+                LKind == TypeKind::MONO_STATE ||
+                LKind == TypeKind::BOOL
+            ) {}
+            else
+            {
+                InvalidOperation();
+                return;
+            }
 
-		// ASSIGN | ASSIGNAÇÃO.
-		case Operator::ASSIGN:
-		{
-			if (IsComparable(LKind) && IsComparable(RKind)) {}
-			else
-			{
-				InvalidOperation();
-				return;
-			}
+            break;
+        }
 
-			break;
-		}
+        // ASSIGN | ASSIGNAÇÃO.
+        case Operator::ASSIGN:
+        {
+            if (
+                LKind == TypeKind::MONO_STATE ||
+                RKind == TypeKind::MONO_STATE ||
+                TypesEqual(*LInfo, *RInfo)
+            ) {}
+            else
+            {
+                InvalidOperation();
+                return;
+            }
 
-		case Operator::ADD_ASSIGN:
-		{
-			if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) {}
-			else if (LKind == TypeKind::STRING && RKind == TypeKind::STRING) {}
-			else
-			{
-				InvalidOperation();
-				return;
-			}
+            break;
+        }
 
-			break;
-		}
+        case Operator::ADD_ASSIGN:
+        {
+            if (
+                LKind == TypeKind::MONO_STATE ||
+                RKind == TypeKind::MONO_STATE ||
+                (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) ||
+                (LKind == TypeKind::STRING && RKind == TypeKind::STRING)
+            ) {}
+            else
+            {
+                InvalidOperation();
+                return;
+            }
 
-		case Operator::SUB_ASSIGN:
-		case Operator::MUL_ASSIGN:
-		case Operator::DIV_ASSIGN:
-		case Operator::MOD_ASSIGN:
-		case Operator::POWER_ASSIGN:
-		{
-			if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) {}
-			else
-			{
-				InvalidOperation();
-				return;
-			}
+            break;
+        }
 
-			break;
-		}
+        case Operator::SUB_ASSIGN:
+        case Operator::MUL_ASSIGN:
+        case Operator::DIV_ASSIGN:
+        case Operator::MOD_ASSIGN:
+        case Operator::POWER_ASSIGN:
+        {
+            if (
+                LKind == TypeKind::MONO_STATE ||
+                RKind == TypeKind::MONO_STATE ||
+                (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER)
+            ) {}
+            else
+            {
+                InvalidOperation();
+                return;
+            }
 
-		case Operator::NONE:
-		{
-			break;
-		}
-	}
+            break;
+        }
+
+        case Operator::NONE:
+        {
+            break;
+        }
+    }
 }
 
 // LookUp Unary Nodes | Olha um UnaryNode.
 void SemanticAnalizer::LookUpUnary(UnaryNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
-    switch (Node.Operator) {
-    
-        case Operator::NOT:
+    if (Node.Operand)
+        LookUpNode(*Node.Operand, State, Res, Data, Memory);
 
-            if (GetExpressionType(*Node.Operand, State, Res, Data, Memory)->Kind != TypeKind::BOOL)
+    switch (Node.Operator) {
+
+        case Operator::NOT:
+        {
+            TypeKind Kind = GetExpressionType
+            (Node.Operand, State, Res, Data, Memory)->Kind;
+
+            if (
+                Kind != TypeKind::BOOL &&
+                Kind != TypeKind::MONO_STATE
+            )
             {
                 OrbitLog::SyntaxLog::SyntaxError(
                     "Semantic",
@@ -1036,9 +1674,16 @@ void SemanticAnalizer::LookUpUnary(UnaryNode& Node, SAState& State, SAResult& Re
                     "Add a Valid Type or Convert",
                     Node.pos.line, Node.pos.collumn
                 );
-                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+
+                if (!Data.flags.debugMode)
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+
                 return;
             }
+
+            return;
+        }
+
         default:
             OrbitLog::SyntaxLog::SyntaxError(
                 "Semantic",
@@ -1046,7 +1691,11 @@ void SemanticAnalizer::LookUpUnary(UnaryNode& Node, SAState& State, SAResult& Re
                 "Operator DONT Can be a Unary Operator",
                 "~", Node.pos.line, Node.pos.collumn
             );
-            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+
+            return;
     }
 }
 
@@ -1058,19 +1707,101 @@ void SemanticAnalizer::LookUpAssignment(AssignmentNode& Node, SAState& State, SA
     {
         OrbitLog::SyntaxLog::SyntaxError(
             "Semantic",
-            "<I-VALUE> Expected",
-            "Trying To Assign A Non <I-VALUE> Value",
+            " Expected",
+            "Trying To Assign A Non  Value",
             "~", Node.pos.line, Node.pos.collumn
         );
-        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+
+        if (!Data.flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(Data);
+
         return;
     }
+
     // Data
     LookUpNode(*Node.Left, State, Res, Data, Memory);
-    string N = SAUtils::GetIValueName(Node.Left);
-    Symbol* Sym = State.CurrScope->FindSym(N);
-    if (!Sym) // <- Error Prevention | Prevenção de Erros.
+
+    if (Node.Left->Type == NodeType::INDEX_ACCESS)
+    {
+        IndexAccessNode& Index = static_cast<IndexAccessNode&>(*Node.Left);
+
+        LookUpNode(*Node.Right, State, Res, Data, Memory);
+
+        TypeInfo* ObjInfo = GetExpressionType
+        (Index.Object, State, Res, Data, Memory);
+
+        TypeInfo* RightInfo = GetExpressionType
+        (Node.Right, State, Res, Data, Memory);
+
+        if (
+            ObjInfo->Kind != TypeKind::ARRAY &&
+            ObjInfo->Kind != TypeKind::TABLE &&
+            ObjInfo->Kind != TypeKind::MONO_STATE
+        )
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                "Invalid Index Assignment Object",
+                "Expected <ARRAY>/<TABLE>, But Got: "+SAUtils::GetStringOfKind(ObjInfo->Kind),
+                "Use an <ARRAY> or <TABLE> to Assign an Index",
+                Index.Object->pos.line, Index.Object->pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+
+            return;
+        }
+
+        if (ObjInfo->Kind == TypeKind::ARRAY)
+        {
+            TypeInfo ExpectedIndex;
+            ExpectedIndex.Kind = TypeKind::NUMBER;
+            ExpectedIndex.SubKind = SubTypeKind::INT;
+
+            TypeInfo* IndexInfo = GetExpressionType
+            (Index.Index, State, Res, Data, Memory);
+
+            if (!TypesEqual(*IndexInfo, ExpectedIndex))
+                return;
+        }
+
+        if (ObjInfo->Kind == TypeKind::TABLE)
+        {
+            TypeInfo StringIndex;
+            StringIndex.Kind = TypeKind::STRING;
+            StringIndex.SubKind = SubTypeKind::NONE;
+
+            TypeInfo IntIndex;
+            IntIndex.Kind = TypeKind::NUMBER;
+            IntIndex.SubKind = SubTypeKind::INT;
+
+            TypeInfo* IndexInfo = GetExpressionType
+            (Index.Index, State, Res, Data, Memory);
+
+            if (
+                !TypesEqual(*IndexInfo, StringIndex) &&
+                !TypesEqual(*IndexInfo, IntIndex)
+            )
+                return;
+        }
+
+        (void)RightInfo;
         return;
+    }
+
+    string N = SAUtils::GetIValueName(Node.Left);
+
+    if (N == "UNKNOW")
+        return;
+
+    Symbol* Sym = State.CurrScope
+        ? State.CurrScope->FindSym(N)
+        : nullptr;
+
+    if (!Sym)
+        return;
+
     if (Sym->Mut == MutableTypes::CONST)
     {
         OrbitLog::SyntaxLog::SyntaxError(
@@ -1079,129 +1810,179 @@ void SemanticAnalizer::LookUpAssignment(AssignmentNode& Node, SAState& State, SA
             N+" Is Declared as Constant in(line/index): "+std::to_string(Sym->Pos.line)+"/"+std::to_string(Sym->Pos.collumn),
             "~", Node.pos.line, Node.pos.collumn
         );
-        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-        return;
-    }
-    if (
-        Sym->InferType->Kind 
-        != 
-        TypeKind::MONO_STATE 
-        and
-        ( 
-            GetExpressionType(*Node.Right, State, Res, Data, Memory)->Kind
-            !=
-            Sym->InferType->Kind 
-            or
-            Sym->InferType->SubKind != GetExpressionType(*Node.Right, State, Res, Data, Memory)->SubKind
-        )
-    )
-    {
-        OrbitLog::SyntaxLog::SyntaxError(
-            "Semantic",
-            SAUtils::GetStringOfKind(GetExpressionType(*Node.Right, State, Res, Data, Memory)->Kind)+" Expected",
-            "Have A Difference BeetWeen Type and Expected",
-            "Add a Valid Type or Convert",
-            Node.pos.line, Node.pos.collumn
-        );
-        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+
+        if (!Data.flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(Data);
+
         return;
     }
 
-    Sym->inited=true;
+    LookUpNode(*Node.Right, State, Res, Data, Memory);
+
+    TypeInfo* RightInfo = GetExpressionType
+    (Node.Right, State, Res, Data, Memory);
+
+    if (
+        Sym->InferType &&
+        Sym->InferType->Kind != TypeKind::MONO_STATE &&
+        RightInfo->Kind != TypeKind::MONO_STATE
+    )
+    {
+        if (!TypesEqual(*RightInfo, *Sym->InferType))
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                SAUtils::GetStringOfKind(Sym->InferType->Kind)+" Expected",
+                "Have A Difference BeetWeen Type and Expected",
+                "Add a Valid Type or Convert",
+                Node.pos.line, Node.pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+
+            return;
+        }
+    }
+
+    if (
+        Sym->InferType &&
+        Sym->InferType->Kind == TypeKind::MONO_STATE &&
+        RightInfo->Kind != TypeKind::MONO_STATE
+    )
+    {
+        Sym->TInfo->Kind = RightInfo->Kind;
+        Sym->TInfo->SubKind = RightInfo->SubKind;
+    }
+
+    Sym->inited = true;
     Sym->write_count++;
 }
 
 // LookUp Member Acess Node | Olha um Member Acess Node.
 void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
+    if (!Node.Object)
+        return;
+
     LookUpNode(*Node.Object, State, Res, Data, Memory);
+
+    string N = SAUtils::GetIValueName(Node.Object);
+
+    if (N == "UNKNOW")
+        return;
+
+    Symbol* Sym = State.CurrScope
+        ? State.CurrScope->FindSym(N)
+        : nullptr;
+
+    if (Sym)
+        Sym->read_count++;
 }
 
 // LookUp IndexAcessNode | Olha um IndexAcessNode.
 void SemanticAnalizer::LookUpIndexAccess(IndexAccessNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
-	// Error Prev | Prevenção de Erros.
-	if (!Node.Object || !Node.Index)
+    // Error Prev | Prevenção de Erros.
+    if (!Node.Object || !Node.Index)
         return;
 
     LookUpNode(*Node.Object, State, Res, Data, Memory);
     LookUpNode(*Node.Index, State, Res, Data, Memory);
 
-	TypeInfo* ObjInfo = GetExpressionType(*Node.Object, State, Res, Data, Memory);
-	TypeInfo* IndexInfo = GetExpressionType(*Node.Index, State, Res, Data, Memory);
+    TypeInfo* ObjInfo = GetExpressionType(Node.Object, State, Res, Data, Memory);
+    TypeInfo* IndexInfo = GetExpressionType(Node.Index, State, Res, Data, Memory);
 
-	if (ObjInfo->Kind == TypeKind::ARRAY)
-	{
-		if (
-			IndexInfo->Kind != TypeKind::NUMBER ||
-			IndexInfo->SubKind != SybTypeKind::INT
-		)
-		{
-			OrbitLog::SyntaxLog::SyntaxError(
-				"Semantic",
-				"Invalid Index value Type",
-				"Expected <INT> For <ARRAY>, But Got: "+SAUtils::GetStringOfKind(IndexInfo->Kind),
-				"Add a Valid Type Or Convert",
-				Node.Index->pos.line, Node.Index->pos.collumn
-			);
+    if (
+        ObjInfo->Kind == TypeKind::MONO_STATE ||
+        IndexInfo->Kind == TypeKind::MONO_STATE
+    )
+        return;
 
-			if (!Data.flags.debugMode)
-				OrbitLog::SyntaxLog::ThrowLog(Data);
+    if (ObjInfo->Kind == TypeKind::ARRAY)
+    {
+        TypeInfo ExpectedIndex;
+        ExpectedIndex.Kind = TypeKind::NUMBER;
+        ExpectedIndex.SubKind = SubTypeKind::INT;
 
-			return;
-		}
-	}
-	else if (ObjInfo->Kind == TypeKind::TABLE)
-	{
-		if (
-			IndexInfo->Kind != TypeKind::STRING &&
-			(
-				IndexInfo->Kind != TypeKind::NUMBER ||
-				IndexInfo->SubKind != SybTypeKind::INT
-			)
-		)
-		{
-			OrbitLog::SyntaxLog::SyntaxError(
-				"Semantic",
-				"Invalid Index value Type",
-				"Expected <STRING/INT> For <TABLE>, But Got: "+SAUtils::GetStringOfKind(IndexInfo->Kind),
-				"Add a Valid Type Or Convert",
-				Node.Index->pos.line, Node.Index->pos.collumn
-			);
+        if (!TypesEqual(*IndexInfo, ExpectedIndex))
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                "Invalid Index value Type",
+                "Expected <INT> For <ARRAY>, But Got: "+SAUtils::GetStringOfKind(IndexInfo->Kind),
+                "Add a Valid Type Or Convert",
+                Node.Index->pos.line, Node.Index->pos.collumn
+            );
 
-			if (!Data.flags.debugMode)
-				OrbitLog::SyntaxLog::ThrowLog(Data);
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
 
-			return;
-		}
-	}
-	else
-	{
-		OrbitLog::SyntaxLog::SyntaxError(
-			"Semantic",
-			"Invalid Index Object",
-			"Expected <ARRAY>/<TABLE>, But Got: "+SAUtils::GetStringOfKind(ObjInfo->Kind),
-			"Use an <ARRAY> or <TABLE> to Access an Index",
-			Node.Object->pos.line, Node.Object->pos.collumn
-		);
+            return;
+        }
+    }
+    else if (ObjInfo->Kind == TypeKind::TABLE)
+    {
+        TypeInfo StringIndex;
+        StringIndex.Kind = TypeKind::STRING;
+        StringIndex.SubKind = SubTypeKind::NONE;
 
-		if (!Data.flags.debugMode)
-			OrbitLog::SyntaxLog::ThrowLog(Data);
+        TypeInfo IntIndex;
+        IntIndex.Kind = TypeKind::NUMBER;
+        IntIndex.SubKind = SubTypeKind::INT;
 
-		return;
-	}
+        if (
+            !TypesEqual(*IndexInfo, StringIndex) &&
+            !TypesEqual(*IndexInfo, IntIndex)
+        )
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                "Invalid Index value Type",
+                "Expected <STRING/INT> For <TABLE>, But Got: "+SAUtils::GetStringOfKind(IndexInfo->Kind),
+                "Add a Valid Type Or Convert",
+                Node.Index->pos.line, Node.Index->pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+
+            return;
+        }
+    }
+    else
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            "Invalid Index Object",
+            "Expected <ARRAY>/<TABLE>, But Got: "+SAUtils::GetStringOfKind(ObjInfo->Kind),
+            "Use an <ARRAY> or <TABLE> to Access an Index",
+            Node.Object->pos.line, Node.Object->pos.collumn
+        );
+
+        if (!Data.flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(Data);
+
+        return;
+    }
 }
 
 // LookUp Range Nodes | Olha os RangeNodes.
 void SemanticAnalizer::LookUpRange(RangeNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
+    TypeInfo* BeginInfo = GetExpressionType
+    (Node.Begin, State, Res, Data, Memory);
+
+    TypeInfo* EndInfo = GetExpressionType
+    (Node.End, State, Res, Data, Memory);
+
+    TypeInfo ExpectedInt;
+    ExpectedInt.Kind = TypeKind::NUMBER;
+    ExpectedInt.SubKind = SubTypeKind::INT;
+
     if (
-        GetExpressionType(*Node.Begin, State, Res, Data, Memory)->Kind
-        != TypeKind::MONO_STATE
-        or
-        GetExpressionType(*Node.Begin, State, Res, Data, Memory)->SubKind 
-        != SybTypeKind::
-        INT
+        BeginInfo->Kind != TypeKind::MONO_STATE &&
+        !TypesEqual(*BeginInfo, ExpectedInt)
     )
     {
         OrbitLog::SyntaxLog::SyntaxError(
@@ -1211,16 +1992,16 @@ void SemanticAnalizer::LookUpRange(RangeNode& Node, SAState& State, SAResult& Re
             "Add a Valid Type or Convert",
             Node.pos.line, Node.pos.collumn
         );
-        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+
+        if (!Data.flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(Data);
+
         return;
     }
+
     if (
-        GetExpressionType(*Node.End, State, Res, Data, Memory)->Kind
-        != TypeKind::MONO_STATE
-        or
-        GetExpressionType(*Node.End, State, Res, Data, Memory)->SubKind 
-        != SybTypeKind::
-        INT
+        EndInfo->Kind != TypeKind::MONO_STATE &&
+        !TypesEqual(*EndInfo, ExpectedInt)
     )
     {
         OrbitLog::SyntaxLog::SyntaxError(
@@ -1230,7 +2011,10 @@ void SemanticAnalizer::LookUpRange(RangeNode& Node, SAState& State, SAResult& Re
             "Add a Valid Type or Convert",
             Node.pos.line, Node.pos.collumn
         );
-        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+
+        if (!Data.flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(Data);
+
         return;
     }
 }
@@ -1239,8 +2023,12 @@ void SemanticAnalizer::LookUpRange(RangeNode& Node, SAState& State, SAResult& Re
 void SemanticAnalizer::LookUpFunctionCall(FunctionCall& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
     LookUpNode(*Node.Callee, State, Res, Data, Memory);
+
     for (ExpressionNode* Arg : Node.Args)
-        LookUpNode(*Arg, State, Res, Data, Memory);
+    {
+        if (Arg)
+            LookUpNode(*Arg, State, Res, Data, Memory);
+    }
 }
 
 // LookUp Array Values | Olha um ArrayValue.
@@ -1256,22 +2044,30 @@ void SemanticAnalizer::LookUpArray(ArrayValue& Node, SAState& State, SAResult& R
 // LookUp Table Values | Olha um TableValue.
 void SemanticAnalizer::LookUpTable(TableValue& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
-    for (ArrayEntry E : Node.Args)
+    for (ArrayEntry& E : Node.Args)
     {
         // Error Prev | Prevenção de Erros:
         if (!E.Key || !E.Value)
             continue;
 
-        TypeInfo* KeyInfo = GetExpressionType
-        (*E.Key, State, Res, Data, Memory);
+        LookUpNode(*E.Key, State, Res, Data, Memory);
+        LookUpNode(*E.Value, State, Res, Data, Memory);
 
-        if
-        (
-            KeyInfo->Kind != TypeKind::STRING &&
-            (
-                KeyInfo->Kind != TypeKind::NUMBER ||
-                KeyInfo->SubKind != SybTypeKind::INT
-            )
+        TypeInfo* KeyInfo = GetExpressionType
+        (E.Key, State, Res, Data, Memory);
+
+        TypeInfo StringKey;
+        StringKey.Kind = TypeKind::STRING;
+        StringKey.SubKind = SubTypeKind::NONE;
+
+        TypeInfo IntKey;
+        IntKey.Kind = TypeKind::NUMBER;
+        IntKey.SubKind = SubTypeKind::INT;
+
+        if (
+            KeyInfo->Kind != TypeKind::MONO_STATE &&
+            !TypesEqual(*KeyInfo, StringKey) &&
+            !TypesEqual(*KeyInfo, IntKey)
         )
         {
             OrbitLog::SyntaxLog::SyntaxError(
@@ -1285,9 +2081,6 @@ void SemanticAnalizer::LookUpTable(TableValue& Node, SAState& State, SAResult& R
             if (!Data.flags.debugMode)
                 OrbitLog::SyntaxLog::ThrowLog(Data);
         }
-
-        LookUpNode(*E.Key, State, Res, Data, Memory);
-        LookUpNode(*E.Value, State, Res, Data, Memory);
     }
 }
 
@@ -1296,30 +2089,55 @@ void SemanticAnalizer::LookUpTable(TableValue& Node, SAState& State, SAResult& R
 // Generate Log of SA Program | Gera o Log da Analise Semantica
 void GenerateSALog(SAState& State, SAResult& Res, RunTimeData& Data)
 {
-	fstream file(Data.LogDir, std::ios::out | std::ios::app);
-    string t1 = "\n\n// ========== SEMANTIC ANALYSIS ========= //\n";
+    fstream file(Data.LogDir, std::ios::out | std::ios::app);
+    string t1 = "\n\n// ========== SEMANTIC ANALYSIS ========= //\n\n";
     file << t1;
 
-	int Spaces = 0;
-	for (pair<int, ASTNode*>& N : State.NodesChecked)
-		if (N.second && N.second->GetNodeType().size() > Spaces)
-			Spaces = N.second->GetNodeType().size();
+    int Spaces = 0;
 
-	for (pair<int, ASTNode*>& N : State.NodesChecked)
-	{
+    for (pair<int, ASTNode*>& N : State.NodesChecked)
+        if (N.second && N.second->GetNodeType().size() > Spaces)
+            Spaces = N.second->GetNodeType().size();
+
+    for (pair<int, ASTNode*>& N : State.NodesChecked)
+    {
         if (!N.second)
             continue;
 
-		string text = "Node["+std::to_string(N.first)+"]: "+N.second->GetNodeType();
+        string text = "Node["+std::to_string(N.first)+"]: "+N.second->GetNodeType();
 
-		for (int i = N.second->GetNodeType().size(); i < Spaces; i++)
-			text += " ";
+        for (int i = N.second->GetNodeType().size(); i < Spaces; i++)
+            text += " ";
 
-		text += "  | Pos(line, index): "+std::to_string(N.second->pos.line)+":"+std::to_string(N.second->pos.collumn);
-		file << text << "\n";
-	}
+        text += "  | Pos(line, index): "+std::to_string(N.second->pos.line)+":"+std::to_string(N.second->pos.collumn);
+        file << text << "\n";
+    }
 
-    string t2 = "\n\n// ========== ENDOF: 'SEMANTIC ANALYSIS' ========= //\n";
+    file << "\n\nSYMBOLS: \n\n";
+
+    int i=0;
+
+    if (Res.SymbolTable.size() > 0)
+        for (auto Sym : Res.SymbolTable)
+        {
+            string text = "SYM["+std::to_string(i)+"]: \n";
+            
+            text += "NAME: "+string(Sym.second->Name);
+            text += "\n\tKIND: ";
+            text += "\n\t\t|  Kind: "+std::to_string(static_cast<int>(Sym.second->TInfo->Kind));
+            text += "\n\t\t|_ Kind: "+std::to_string(static_cast<int>(Sym.second->TInfo->SubKind));
+            text += "\tSCOPE: " + std::format("{:p}", static_cast<void*>(Sym.second->DeclaredScope));
+            text += "\n\tDATA: \n\t\t|  RA: "+std::to_string(Sym.second->read_count);
+            text += "\n\t\t|  WA: "+std::to_string(Sym.second->write_count);
+            text += "\n\t\t|_ INIT: "+std::to_string(Sym.second->inited)+"\n\n";
+            
+            file << text;
+            i++;
+        }
+    else
+        file << "~ NONE ~";
+
+    string t2 = "\n// ========== ENDOF: 'SEMANTIC ANALYSIS' ========= //\n";
     file << t2;
     file.close();
 }
@@ -1328,7 +2146,7 @@ void GenerateSALog(SAState& State, SAResult& Res, RunTimeData& Data)
 SAResult SemanticAnalizer::InitSA(ParseResult& PRes, RunTimeData& Data, Arena& Memory)
 {
     if (Data.flags.debugMode)
-        PrintIn("STARTING TASK: SemanticAnalysis");
+        PrintInLn("STARTING TASK: SemanticAnalysis");
 
     SAResult Res;
     SAState State;

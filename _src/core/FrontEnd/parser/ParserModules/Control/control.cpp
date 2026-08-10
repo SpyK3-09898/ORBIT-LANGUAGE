@@ -546,7 +546,7 @@ namespace ControlUtils {
     )
     {
         // ERROR PREV | PREVENÇÃO DE ERROS.
-        if (State.HaveTypeInBodyStack(BodyTypes::FUNCTION))
+        if (!State.HaveTypeInBodyStack(BodyTypes::FUNCTION))
         {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",

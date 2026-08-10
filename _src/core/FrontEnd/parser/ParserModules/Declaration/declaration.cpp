@@ -177,7 +177,7 @@ namespace DeclUtils {
                 LiteralNode(State.Pos)
             );
 
-            ValueNode->Value = NoneLitVal{};
+            ValueNode->Value = NullLitVal{};
             Decl->Val = ValueNode;
         }
         if (Decl->Val->Type == NodeType::ARRAY_VALUE or Decl->Val->Type == NodeType::TABLE_VALUE)
@@ -357,40 +357,64 @@ namespace DeclUtils {
         if (!Cond.empty())
         {
             int level = 0;
-            int i=0;
+            int start = 0;          // Start of Current Param | Início do Parâmetro Atual.
+            int i = 0;
+
             for (Token* Tok : Cond)
             {
-                switch (Tok->Type) {
-                
+                switch (Tok->Type)
+                {
                     case TokenType::LPARENT:
                     case TokenType::LBRACE:
-                    case TokenType::LBRACKET:  
-                        level++; break;
+                    case TokenType::LBRACKET:
+                        level++;
+                        break;
 
                     case TokenType::RPARENT:
                     case TokenType::RBRACE:
-                    case TokenType::RBRACKET:  
-                        level--; break;
+                    case TokenType::RBRACKET:
+                        level--;
+                        break;
 
                     case TokenType::COMMA:
-                        if (level is 0)
+                        if (level == 0)
                         {
+                            // Take Only The Current Param Slice | Pega Apenas o Pedaço do Parâmetro Atual.
                             Instruction CondInst(
                                 {},
-                                vec<Token*>(Cond.begin(), Cond.begin() + i)
+                                vec<Token*>(Cond.begin() + start, Cond.begin() + i)
                             );
-                            Decl->Params.push_back
-                                (ExprParser.ParseExpression
-                                    (CondInst, State, Res, Data, Memory));
+
+                            Decl->Params.push_back(
+                                ExprParser.ParseExpression(CondInst, State, Res, Data, Memory)
+                            );
+
+                            start = i + 1;   // Next Param Starts After Comma | Próximo Parâmetro Começa Depois da Vírgula.
                         }
-                    default: {};
+                        break;
+
+                    default:
+                        break;
                 }
                 i++;
+            }
+
+            // Last Param (After Last Comma or Single Param) | Último Parâmetro (Depois da Última Vírgula ou Parâmetro Único).
+            if (start < (int)Cond.size())
+            {
+                Instruction CondInst(
+                    {},
+                    vec<Token*>(Cond.begin() + start, Cond.end())
+                );
+
+                Decl->Params.push_back(
+                    ExprParser.ParseExpression(CondInst, State, Res, Data, Memory)
+                );
             }
         }
         else
         {
-            Decl->Params = {nullptr};
+            Decl->Params = {};
         }
 
         // CREATE BODY | CRIA O BODY.
@@ -450,7 +474,7 @@ DeclarationNode* DeclarationParser::ParseDeclaration(
                     Memory,
                     true
                 );
-            else if (Lexeme == "func")
+            else if (Lexeme == "fn")
                 return DeclUtils::ParseFnDecl(
                     Entry, 
                     Inst, 

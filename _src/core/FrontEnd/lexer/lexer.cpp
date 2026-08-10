@@ -398,7 +398,6 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
     fstream file(p, std::ios::out | std::ios::trunc); 
     if (not file.is_open())
         { 
-            PrintOut("");
             OrbitLog::Error(
                 "Lexer.cpp",
                 "Cannot Open File! Why: "+string(std::strerror(errno)), 

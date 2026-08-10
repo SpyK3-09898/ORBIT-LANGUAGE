@@ -77,7 +77,7 @@ enum class TypeKind
 };
 
 // Kindof SubTypes | Kind dos SubTipos.
-enum class SybTypeKind
+enum class SubTypeKind
 {
     NONE,
     INT,
@@ -90,7 +90,7 @@ enum class SybTypeKind
 struct TypeInfo
 {
     TypeKind Kind = TypeKind::MONO_STATE;
-    SybTypeKind SubKind = SybTypeKind::NONE;
+    SubTypeKind SubKind = SubTypeKind::NONE;
 };
 
 // Symbol Repr | Representação dos Simbolos.
@@ -102,7 +102,7 @@ struct Symbol
 
     vec<pair<string, TypeInfo*>> Objs;
 
-    str_view Name;
+    string Name;
     NodePos Pos;
 
     SymbolTypes Type = SymbolTypes::UNK;
@@ -119,7 +119,7 @@ struct Scope
     Scope* Parent  =  nullptr;
     Scope* Next    =  nullptr;
     ASTNode* Owner;
-    unord_map<str_view, Symbol*> Symbols;
+    unord_map<string, Symbol*> Symbols;
     BodyTypes Type;
 
     // HELPERS
@@ -184,7 +184,7 @@ class SemanticAnalizer
         void LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
 
         void LookUpProgram(ProgramNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
-        void LookUpBody(BodyNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        void LookUpBody(BodyNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Scope* S = nullptr);
 
         void LookUpLiteral(LiteralNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         void LookUpIdentifier(IdentifierNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
@@ -198,15 +198,15 @@ class SemanticAnalizer
         void LookUpArray(ArrayValue& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         void LookUpTable(TableValue& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
 
-        //void LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
-        //void LookUpFunction(FnDecl& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        void LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        void LookUpFunction(FnDecl& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
 
         //void LookUpIf(IfNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         //void LookUpElif(ElifNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         //void LookUpElse(ElseNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
-        //void LookUpWhile(WhileNode& Node);
-        //void LookUpFor(ForNode& Node);
-        //void LookUpForEach(ForEachNode& Node);
-        //void LookUpForDef(ForDefNode& Node);
+        void LookUpWhile(WhileNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        void LookUpFor(ForNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        //void LookUpForEach(ForEachNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        //void LookUpForDef(ForDefNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         //void LookUpReturn(ReturnNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
 };

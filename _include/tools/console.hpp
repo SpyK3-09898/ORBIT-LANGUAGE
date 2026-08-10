@@ -163,20 +163,23 @@ namespace OrbitLog {
                 first_error=false;
             }
 
-            // WARNS
-            bool first_warn=true;
-            for (LogObj obj : Logs)
+            if (Data.flags.debugMode)
             {
-                if (obj.type is_not LogTypes::WARN)
-                    continue;
-
-                if (Data.flags.debugMode)
+                // WARNS
+                bool first_warn=true;
+                for (LogObj obj : Logs)
                 {
-                    if (first_warn)
-                        PrintOut("");
-                    Warn(obj.origin, obj.mess);
+                    if (obj.type is_not LogTypes::WARN)
+                        continue;
+
+                    if (Data.flags.debugMode)
+                    {
+                        if (first_warn)
+                            PrintOut("");
+                        Warn(obj.origin, obj.mess);
+                    }
+                    first_warn=false;
                 }
-                first_warn=false;
             }
 
             // TYPES
