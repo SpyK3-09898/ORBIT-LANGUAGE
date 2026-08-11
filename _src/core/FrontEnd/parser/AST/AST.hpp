@@ -338,7 +338,7 @@ struct ProgramNode : ASTNode
 using LiteralValue = variant<
     i64,
     float,
-    str_view,
+    string,
     bool,
     NoneLitVal,
     NullLitVal,

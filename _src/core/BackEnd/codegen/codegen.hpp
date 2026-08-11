@@ -17,7 +17,44 @@
 #include "../../RunTimeData.hpp"
 
 // STRUCTS
-struct CodeGenState {};
+
+// State of Ifs | Estados dos Ifs
+struct IfCompileState
+{
+    vec<ByteInstruction*> EndJumps;
+    ByteInstruction* PreviousJumpFalse = nullptr;
+};
+
+// State of ByteCode Generator | Estado do Gerador de ByteCodes.
+struct CodeGenState 
+{
+    unord_map<string, ui32> Locals;
+    int currChunk = 0;
+    int localCount=0;
+
+    vec<IfCompileState> IfStates;
+
+    // UTILS:
+
+    // Return if Have a Local | Retorna se Tem um Local.
+    bool HasLocal(const string& Name)
+    {
+        return Locals.find(Name) != Locals.end();
+    }
+    // Get Slot of Local | Pega o Slot do Loca .
+    ui32 GetLocal(const string& Name)
+    {
+        auto It = Locals.find(Name);
+
+        if (It != Locals.end())
+            return It->second;
+
+        ui32 Index = localCount++;
+        Locals[Name] = Index;
+
+        return Index;
+    }
+};
 
 // MAIN CLASS | CLASSE PRINCIPAL
 class CodeGenerator

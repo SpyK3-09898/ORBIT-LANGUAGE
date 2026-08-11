@@ -16,6 +16,9 @@
 #include "../../core/FrontEnd/parser/parser.hpp"
 #include "../../core/FrontEnd/SA/semantic_analysis.hpp"
 
+#include "../../core/BackEnd/byte_code.hpp"
+#include "../../core/BackEnd/codegen/codegen.hpp"
+
 #include <string>
 #include <thread>
 #include <chrono>
@@ -114,7 +117,11 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
 
     // --- BACK-END --- //
 
+    // INSTANCES
+    CodeGenerator CG;
     
+    // FUNCTIONS
+    ByteCode BC = CG.InitCG(PRes, SARes, Data, Memory);
 
     // GENERATE MEMORY LOG | GERA LOG DE MEMORIA
     if (Data.flags.generateLog)

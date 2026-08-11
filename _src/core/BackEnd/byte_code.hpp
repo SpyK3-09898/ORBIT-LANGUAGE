@@ -14,6 +14,15 @@
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../RunTimeData.hpp"
+using ByteValue = variant<
+
+    bool,
+    float,
+    i64,
+    string,
+    NoneLitVal,
+    NullLitVal
+>;
 
 // ENUMS | ENUMERAÇÕES
 
@@ -22,17 +31,21 @@ enum class OpCode
 {
     NOP,
 
+    // LOADS
     LOAD_CONST,
-    LOAD_NULL,
 
+    // STACK CONTROL | CONTROLE DE PILHA:
     POP,
 
+    // OPERATIONS | OPERAÇOES:
     ADD,
     SUB,
     MUL,
     DIV,
     MOD,
+    POWER,
 
+    // OPS
     NEG,
     NOT,
 
@@ -43,12 +56,28 @@ enum class OpCode
     CMP_GT,
     CMP_GE,
 
+    // LOAD & GETS:
     LOAD_LOCAL,
     STORE_LOCAL,
 
+    GET_MEMBER,
+    LOAD_MEMBER,
+
+    GET_INDEX,
+    LOAD_INDEX,
+
+    LOAD_FN,
+
+    // BUILDS | CONTRUÇÕES.
+    BUILD_ARRAY,
+    BUILD_TABLE,
+    BUILD_RANGE,
+
+    // CONTROL-FLOW
     JUMP,
     JUMP_IF_FALSE,
 
+    // OTHERS
     CALL,
     RETURN
 };
@@ -61,11 +90,11 @@ struct ByteInstruction
     OpCode C; // Operation Code | Codigo Operacional.
 
     // REGISTERS | REGISTRADORES:
-    ui32 R1; ui32 R2;      // Operation Principal Registeres | Registradores Principais da Operação.
-    ui32* L1; ui32 L2;    //  Locals .
+    ByteValue R1; ByteValue R2;      // Operation Principal Registeres | Registradores Principais da Operação.
+    ByteValue L1; ByteValue L2;    //  Locals .
 
-    ui8 RX1; ui8 RX2;   // Extras.
-    ui8 LX1; ui8 LX2;  //  Extras.
+    ByteValue RX1; ByteValue RX2;   // Extras.
+    ByteValue LX1; ByteValue LX2;  //  Extras.
 };
 
 // ByteCode Chunks | Chunks de ByteCode
@@ -78,4 +107,5 @@ struct Chunk
 struct ByteCode
 {
     vec<Chunk*> Chunks;
+    unord_map<string, ui32> Functions;
 };
