@@ -76,6 +76,7 @@ enum class OpCode
     // CONTROL-FLOW
     JUMP,
     JUMP_IF_FALSE,
+    JUMP_FOR,
 
     // OTHERS
     CALL,

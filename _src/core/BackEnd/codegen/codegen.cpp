@@ -15,6 +15,8 @@
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../../RunTimeData.hpp"
+#include <string>
+#include <variant>
 
 // ========= UTILS ========== //
 
@@ -55,7 +57,7 @@ void CodeGenerator::CompileProgram(ProgramNode* Node, CodeGenState& State, ByteC
 void CodeGenerator::CompileBody(BodyNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
     for (ASTNode* N : Node->Data)
-        CompileNode(N, State, BC, Data, Memory);
+        CompileNode(N, State, BC, SARes, Data, Memory);
     return;
 }
 
@@ -69,7 +71,7 @@ void CodeGenerator::CompileIf(IfNode* Node, CodeGenState& State, ByteCode& BC, S
 
     // Data1
     IfCompileState& IfState = State.IfStates.back();
-    CompileNode(Node->Cond, State, BC, Data, Memory);
+    CompileNode(Node->Cond, State, BC, SARes, Data, Memory);
     ByteInstruction* JumpFalse = CodeGenUtils::CreateInst
         (OpCode::JUMP_IF_FALSE, 0, 0, Data, Memory);
     
@@ -77,7 +79,7 @@ void CodeGenerator::CompileIf(IfNode* Node, CodeGenState& State, ByteCode& BC, S
     JumpFalse->R1 = static_cast<i64>(-1);
     BC.Chunks[State.currChunk]->Instructions.push_back(JumpFalse);
     IfState.PreviousJumpFalse = JumpFalse;
-    CompileNode(Node->IfBody, State, BC, Data, Memory);
+    CompileNode(Node->IfBody, State, BC, SARes, Data, Memory);
     ByteInstruction* JumpEnd = CodeGenUtils::CreateInst
         (OpCode::JUMP, 0, 0, Data, Memory);
 
@@ -115,7 +117,7 @@ void CodeGenerator::CompileElse(ElseNode* Node, CodeGenState& State, ByteCode& B
         BC.Chunks[State.currChunk]->Instructions.size();
     IfState.PreviousJumpFalse->R1 =
         static_cast<i64>(ElseAddress);
-    CompileNode(Node->Body, State, BC, Data, Memory);
+    CompileNode(Node->Body, State, BC, SARes, Data, Memory);
 };
 
 // Compile Elif | Compila Elif.
@@ -132,7 +134,7 @@ void CodeGenerator::CompileElif(ElifNode* Node, CodeGenState& State, ByteCode& B
         static_cast<i64>(ElifAddress);
 
     // Compile
-    CompileNode(Node->Cond, State, BC, Data, Memory);
+    CompileNode(Node->Cond, State, BC, SARes, Data, Memory);
     ByteInstruction* JumpFalse = CodeGenUtils::CreateInst
         (OpCode::JUMP_IF_FALSE, 0, 0, Data, Memory);
 
@@ -142,7 +144,7 @@ void CodeGenerator::CompileElif(ElifNode* Node, CodeGenState& State, ByteCode& B
     IfState.PreviousJumpFalse = JumpFalse;
 
     // Compile 2
-    CompileNode(Node->Body, State, BC, Data, Memory);
+    CompileNode(Node->Body, State, BC, SARes, Data, Memory);
     ByteInstruction* JumpEnd = CodeGenUtils::CreateInst
         (OpCode::JUMP, 0, 0, Data, Memory);
     
@@ -154,11 +156,69 @@ void CodeGenerator::CompileElif(ElifNode* Node, CodeGenState& State, ByteCode& B
 
 // Compile While | Compila While.
 void CodeGenerator::CompileWhile(WhileNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
-{};
+{
+    // Init
+    int StartAddress =
+        BC.Chunks[State.currChunk]->Instructions.size();
+
+    // Data1
+    CompileNode(Node->Cond, State, BC, SARes, Data, Memory);
+
+    ByteInstruction* JumpFalse = CodeGenUtils::CreateInst
+        (OpCode::JUMP_IF_FALSE, 0, 0, Data, Memory);
+
+    // Data2
+    JumpFalse->R1 = static_cast<i64>(-1);
+    BC.Chunks[State.currChunk]->Instructions.push_back(JumpFalse);
+
+    // Compile Body | Compila Corpo.
+    CompileNode(Node->Body, State, BC, SARes, Data, Memory);
+
+    // Jump Back | Pula de Volta.
+    ByteInstruction* JumpBack = CodeGenUtils::CreateInst
+        (OpCode::JUMP, 0, 0, Data, Memory);
+
+    JumpBack->R1 = static_cast<i64>(StartAddress);
+    BC.Chunks[State.currChunk]->Instructions.push_back(JumpBack);
+
+    // Jump End | Pula para o Fim.
+    int EndAddress =
+        BC.Chunks[State.currChunk]->Instructions.size();
+
+    JumpFalse->R1 = static_cast<i64>(EndAddress);
+};
 
 // Compile For | Compila For.
 void CodeGenerator::CompileFor(ForNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
-{};
+{
+    // Compile | Compila.
+    CompileNode(Node->End, State, BC, SARes, Data, Memory);
+
+    // Start Address | Endereço Inicial.
+    int StartAddress =
+        BC.Chunks[State.currChunk]->Instructions.size();
+
+    // Create Jump For | Cria Salto do For.
+    ByteInstruction* Inst = CodeGenUtils::CreateInst
+        (OpCode::JUMP_FOR, State.GetLocal(Node->Identifier->Name), -1, Data, Memory);
+
+    // Set | Define.
+    BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+
+    // Compile Body | Compila Corpo.
+    CompileNode(Node->Body, State, BC, SARes, Data, Memory);
+
+    // Jump Back | Pulo De Volta.
+    ByteInstruction* JumpBack = CodeGenUtils::CreateInst
+        (OpCode::JUMP, StartAddress, 0, Data, Memory);
+    BC.Chunks[State.currChunk]->Instructions.push_back(JumpBack);
+
+    // End Address | Endereço Final.
+    int EndAddress =
+        BC.Chunks[State.currChunk]->Instructions.size();
+    Inst->R2 =
+        EndAddress;
+};
 
 // Compile For Each | Compila For Each.
 void CodeGenerator::CompileForEach(ForEachNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
@@ -172,7 +232,7 @@ void CodeGenerator::CompileForDef(ForDefNode* Node, CodeGenState& State, ByteCod
 void CodeGenerator::CompileReturn(ReturnNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
     if (Node->Value)
-        CompileNode(Node->Value, State, BC, Data, Memory);
+        CompileNode(Node->Value, State, BC, SARes, Data, Memory);
     
     ByteInstruction* Inst = CodeGenUtils::CreateInst
         (OpCode::RETURN, 0, 0, Data, Memory);
@@ -190,7 +250,7 @@ void CodeGenerator::CompileVarDecl(VarDeclNode* Node, CodeGenState& State, ByteC
 {
     // Get Slot And Compile | Pega o Espaço e Compila.
     ui32 Slot = State.GetLocal(Node->Name);
-    CompileNode(Node->Val, State, BC, Data, Memory);
+    CompileNode(Node->Val, State, BC, SARes, Data, Memory);
 
     ByteInstruction* Inst =
      CodeGenUtils::CreateInst
@@ -274,7 +334,7 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
 void CodeGenerator::CompileUnary(UnaryNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
     // Compile Operand | Compila o Operando.
-    CompileNode(Node->Operand, State, BC, Data, Memory);
+    CompileNode(Node->Operand, State, BC, SARes, Data, Memory);
 
     // Generate Instruction | Gera a Instrução.
     ByteInstruction* Inst = CodeGenUtils::
@@ -294,8 +354,8 @@ void CodeGenerator::CompileUnary(UnaryNode* Node, CodeGenState& State, ByteCode&
 void CodeGenerator::CompileBinary(BinaryNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
     // Compile Right and Left | Compila o Direito e Esquerdo.
-    CompileNode(Node->L, State, BC, Data, Memory);
-    CompileNode(Node->R, State, BC, Data, Memory);
+    CompileNode(Node->L, State, BC, SARes, Data, Memory);
+    CompileNode(Node->R, State, BC, SARes, Data, Memory);
 
     // Compile Operators | Compila os Operadores
     OpCode Op;
@@ -362,7 +422,7 @@ void CodeGenerator::CompileBinary(BinaryNode* Node, CodeGenState& State, ByteCod
 // Compile Assignment | Compila Atribuição.
 void CodeGenerator::CompileAssignment(AssignmentNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
-    CompileNode(Node->Right, State, BC, Data, Memory);
+    CompileNode(Node->Right, State, BC, SARes, Data, Memory);
 
     IdentifierNode* Left = static_cast<IdentifierNode*>(Node->Left);
 
@@ -379,8 +439,8 @@ void CodeGenerator::CompileAssignment(AssignmentNode* Node, CodeGenState& State,
 void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
     // Compile Object and Member | Compila o Objeto e Membro
-    CompileNode(Node->Object, State, BC, Data, Memory);
-    CompileNode(Node->Member, State, BC, Data, Memory);
+    CompileNode(Node->Object, State, BC, SARes, Data, Memory);
+    CompileNode(Node->Member, State, BC, SARes, Data, Memory);
 
     // Generate Instrucion | Gera a Instrução.
     ByteInstruction* Inst =
@@ -393,8 +453,8 @@ void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& St
 void CodeGenerator::CompileIndexAccess(IndexAccessNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
     // Compile Object and Index | Compila o Objeto e Anexo.
-    CompileNode(Node->Object, State, BC, Data, Memory);
-    CompileNode(Node->Index, State, BC, Data, Memory);
+    CompileNode(Node->Object, State, BC, SARes, Data, Memory);
+    CompileNode(Node->Index, State, BC, SARes, Data, Memory);
 
     ByteInstruction* Inst =
         CodeGenUtils::CreateInst
@@ -406,9 +466,9 @@ void CodeGenerator::CompileIndexAccess(IndexAccessNode* Node, CodeGenState& Stat
 void CodeGenerator::CompileFunctionCall(FunctionCall* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
     // Compile Node | Compila os Nós. 
-    CompileNode(Node->Callee, State, BC, Data, Memory);
+    CompileNode(Node->Callee, State, BC, SARes, Data, Memory);
     for (ExpressionNode* Arg : Node->Args)
-        CompileNode(Arg,State, BC, Data, Memory);
+        CompileNode(Arg, State, BC, SARes, Data, Memory);
 
     // Instruction | Instrução.
     ByteInstruction* Inst =
@@ -422,8 +482,8 @@ void CodeGenerator::CompileTableValue(TableValue* Node, CodeGenState& State, Byt
 {
     for (ArrayEntry& Entry : Node->Args)
     {
-        CompileNode(Entry.Key, State, BC, Data, Memory);
-        CompileNode(Entry.Value, State, BC, Data, Memory);
+        CompileNode(Entry.Key, State, BC, SARes, Data, Memory);
+        CompileNode(Entry.Value, State, BC, SARes, Data, Memory);
     }
 
     ByteInstruction* Inst =
@@ -438,7 +498,7 @@ void CodeGenerator::CompileArrayValue(ArrayValue* Node, CodeGenState& State, Byt
 {
     // Compile Node | Compila os Nós. 
     for (ExpressionNode* Arg : Node->Args)
-        CompileNode(Arg,State, BC, Data, Memory);
+        CompileNode(Arg, State, BC, SARes, Data, Memory);
 
     // Instruction | Instrução.
     ByteInstruction* Inst =
@@ -451,8 +511,8 @@ void CodeGenerator::CompileArrayValue(ArrayValue* Node, CodeGenState& State, Byt
 // Compile Range | Compila Intervalo.
 void CodeGenerator::CompileRange(RangeNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
-    CompileNode(Node->Begin, State, BC, Data, Memory);
-    CompileNode(Node->End, State, BC, Data, Memory);
+    CompileNode(Node->Begin, State, BC, SARes, Data, Memory);
+    CompileNode(Node->End, State, BC, SARes, Data, Memory);
 
     ByteInstruction* Inst =
         CodeGenUtils::CreateInst
@@ -472,14 +532,320 @@ void CodeGenerator::CompileNode(
     ASTNode* Node, 
     CodeGenState& State, 
     ByteCode& BC, 
+    SAResult& SARes,
     RunTimeData& Data, 
     Arena& Memory
 )
 {
-    switch (Node->Type) {
-    
-        default: {};
+    switch (Node->Type)
+    {
+        // PROGRAM
+        case NodeType::PROGRAM:
+            CompileProgram(
+                static_cast<ProgramNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        // CONTROL FLOW
+        case NodeType::IF_CONTROL:
+            CompileIf(
+                static_cast<IfNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::ELIF_CONTROL:
+            CompileElif(
+                static_cast<ElifNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::ELSE_CONTROL:
+            CompileElse(
+                static_cast<ElseNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::WHILE:
+            CompileWhile(
+                static_cast<WhileNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::FOR:
+            CompileFor(
+                static_cast<ForNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::FOR_EACH:
+            CompileForEach(
+                static_cast<ForEachNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::FOR_DEF:
+            CompileForDef(
+                static_cast<ForDefNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::RETURN:
+            CompileReturn(
+                static_cast<ReturnNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        // DECLARATIONS
+        case NodeType::VAR_DECL:
+            CompileVarDecl(
+                static_cast<VarDeclNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::FN_DECL:
+            CompileFnDecl(
+                static_cast<FnDecl*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        // EXPRESSIONS
+        case NodeType::LITERAL:
+            CompileLiteral(
+                static_cast<LiteralNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::IDENTIFIER:
+            CompileIdentifier(
+                static_cast<IdentifierNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::UNARY:
+            CompileUnary(
+                static_cast<UnaryNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::BINARY:
+            CompileBinary(
+                static_cast<BinaryNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::ASSIGNMENT:
+            CompileAssignment(
+                static_cast<AssignmentNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::MEMBER_ACCESS:
+            CompileMemberAccess(
+                static_cast<MemberAccessNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::INDEX_ACCESS:
+            CompileIndexAccess(
+                static_cast<IndexAccessNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::FN_CALL:
+            CompileFunctionCall(
+                static_cast<FunctionCall*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::TABLE_VALUE:
+            CompileTableValue(
+                static_cast<TableValue*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::ARRAY_VALUE:
+            CompileArrayValue(
+                static_cast<ArrayValue*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        case NodeType::RANGE:
+            CompileRange(
+                static_cast<RangeNode*>(Node),
+                State,
+                BC,
+                SARes,
+                Data,
+                Memory
+            );
+            break;
+
+        default:
+            break;
     }
+}
+
+// Convert Byte Value to a String | Converte ByteValue para uma String.
+string ByteValueToString(const ByteValue& Value)
+{
+    return std::visit([](const auto& V) -> string
+    {
+        using T = std::decay_t<decltype(V)>;
+
+        if constexpr (std::is_same_v<T, string>)
+            return V;
+
+        else if constexpr (std::is_same_v<T, bool>)
+            return V ? "true" : "false";
+
+        else if constexpr (std::is_same_v<T, NoneLitVal>)
+            return "none";
+
+        else if constexpr (std::is_same_v<T, NullLitVal>)
+            return "null";
+
+        else
+            return std::to_string(V);
+
+    }, Value);
+}
+
+// Generate CodeGen Log | Gera o Log do CodeGen.
+void GenerateCodeGenLog(ByteCode& BC, RunTimeData& Data)
+{
+    fstream file(Data.LogDir, std::ios::out | std::ios::app);
+    file << "\n\n// =========== CODE-GENERATION ======== //\n\n";
+
+    int ci=0;
+    for (Chunk* C : BC.Chunks)
+    {
+        string txt;
+
+        txt += "CHUNK["+std::to_string(ci)+"]\n";
+        txt += "\tINSTRUCTIONS: \n";
+
+        int i=0;
+        for (ByteInstruction* Inst : C->Instructions)
+        {
+            txt += "\t\tByteInst["+std::to_string(i)+"]: \n";
+            txt += "\t\t\tOpCode: "+std::to_string(static_cast<int>(Inst->C))+"\n";
+            txt += "\t\t\tRegister1: "+ByteValueToString(Inst->R1)+"\n";
+            txt += "\t\t\tRegister2: "+ByteValueToString(Inst->R2)+"\n";
+            txt += "\t\t\tLocals: 1 - "+ByteValueToString(Inst->L1)+" 2 - "+ByteValueToString(Inst->L2)+"\n";
+            
+            i++;
+        }
+
+        file << txt;
+        ci++;
+    }
+
+    file << "\n\n// =========== ENDOF: 'CODE-GENERATION' . .. ... ======== //\n\n";
 }
 
 // Entry-Point of CodeGen Program 
@@ -492,7 +858,7 @@ ByteCode CodeGenerator::InitCG(
 )
 {
     if (Data.flags.debugMode)
-        PrintLn("STARTING TASK: Compile ORBIT");
+        PrintIn("STARTING TASK: Compile ORBIT");
     // Data    
     CodeGenState State;
     ByteCode BC;
@@ -500,9 +866,14 @@ ByteCode CodeGenerator::InitCG(
 
     // Set Data
     BC.Chunks.push_back(Cnk); // Compile Program:
-    CompileNode(PRes.AST, State, BC, Data, Memory);
+    CompileNode(PRes.AST, State, BC, SARes, Data, Memory);
 
+    if (Data.flags.generateLog)
+        GenerateCodeGenLog(BC, Data);
     if (Data.flags.debugMode)
-        PrintLn("ENDOF TASK: 'Compile ORBIT'. .. ...");
+    {
+        PrintIn("ENDOF TASK: 'Compile ORBIT'. .. ...");
+        PrintIn("");
+    }
     return BC;
 }

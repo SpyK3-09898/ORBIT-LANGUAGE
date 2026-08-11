@@ -1,8 +1,9 @@
 
-// ========== CODE-GEN =========== //
+// ========== CODE-GENNERATOR =========== //
 // Parse '_AST' And Generate ByteCodes.
 // Developed By: SpyK3(2026) | License: GitHub(MIT).
 
+// PRAGMATIC INFOS | INFORMAÇOES PRAGMANTICAS.
 #pragma once
 
 // INCLUDE HEADERS 'N DEPENDENCES
@@ -66,7 +67,7 @@ class CodeGenerator
     
     // OTHERS
 
-    void CompileNode(ASTNode* Node, CodeGenState& State, ByteCode& BC, RunTimeData& Data, Arena& Memory);
+    void CompileNode(ASTNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory);
 
 
     // PROGRAMS:

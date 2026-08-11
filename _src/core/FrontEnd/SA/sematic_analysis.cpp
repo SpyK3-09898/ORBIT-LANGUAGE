@@ -236,7 +236,7 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
                 TInfo->Kind = TypeKind::NUMBER;
                 TInfo->SubKind = SubTypeKind::FLOAT;
             }
-            else if (holds_alt<str_view>(Lit.Value))
+            else if (holds_alt<string>(Lit.Value))
             {
                 TInfo->Kind = TypeKind::STRING;
             }

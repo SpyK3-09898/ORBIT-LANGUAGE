@@ -106,11 +106,7 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
 
     // For Debug | Para Debug
     if (Data.flags.debugMode)
-    {
-        PrintInLn("[DRIVER] ENDOF TASK: Build ORBIT. .. ..."); 
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        PrintOut("");
-    }
+        PrintIn("[DRIVER] ENDOF TASK: Build ORBIT. .. ..."); 
 
     // Finalize | Fializa: 
     OrbitLog::SyntaxLog::ThrowLog(Data); // Throw | Chamada.
