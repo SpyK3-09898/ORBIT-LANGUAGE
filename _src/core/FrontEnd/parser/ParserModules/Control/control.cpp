@@ -706,7 +706,8 @@ ControlNode* ControlParser::ParseControl(
                 return ControlUtils::ParseReturn(Inst, State, Res, Data, DeclParser, ExprParser, Memory, false);
             else if (Lexeme == "return_if")
                 return ControlUtils::ParseReturn(Inst, State, Res, Data, DeclParser, ExprParser, Memory, true);
-    
+            else if (Lexeme == "echo")
+                return ControlUtils::ParseEcho(Inst, State, Res, Data, DeclParser, ExprParser, Memory);    
             else if (Lexeme == "end")
                 {
                     ParserUtils::PopBodyStack(State, Data); 

@@ -48,7 +48,7 @@ struct CallStack
     }
 
     // Add a New Frame | Adiciona Um Novo Frame.
-    void Push(VM_Frame Frame)
+    void Push(VM_Frame& Frame)
     {
         Frames.push_back(Frame);
     }
@@ -78,7 +78,7 @@ struct Stack
     }
     void Push(ByteValue Val)
     {
-        Data.push_back(Val);
+        Data.push_back(std::move(Val));
         Top = Data.size() - 1;
     }
 };

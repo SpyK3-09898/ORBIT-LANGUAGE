@@ -52,8 +52,10 @@ namespace CodeGenUtils {
 
 // Compile Entry-Point | Compila o Ponto-de-Entrada.
 void CodeGenerator::CompileProgram(ProgramNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
-{ CompileBody(Node->Node, State, BC, SARes, Data, Memory); }
-
+{
+    State.currChunk = CodeGenUtils::CreateChunk(BC, Data, Memory); 
+    CompileBody(Node->Node, State, BC, SARes, Data, Memory); 
+}
 // Compile Bodys | Compila BodyNodes.
 void CodeGenerator::CompileBody(BodyNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
@@ -239,6 +241,15 @@ void CodeGenerator::CompileReturn(ReturnNode* Node, CodeGenState& State, ByteCod
         (Node, OpCode::RETURN, 0, 0, Data, Memory);
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);    
 };
+
+// Compile Echos | Compila Ecos.
+void CodeGenerator::CompileEcho(EchoNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
+{
+    CompileNode(Node->Value, State, BC, SARes, Data, Memory);
+    ByteInstruction* Inst = 
+        CodeGenUtils::CreateInst(Node, OpCode::ECHO, 0, 0, Data, Memory);
+    BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+}
 
 // Compile Error Statement | Compila Erro de Statement.
 void CodeGenerator::CompileErrorStmt(ErrorStmtNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
@@ -538,6 +549,7 @@ void CodeGenerator::CompileNode(
     Arena& Memory
 )
 {
+    
     switch (Node->Type)
     {
         // PROGRAM
@@ -639,6 +651,11 @@ void CodeGenerator::CompileNode(
                 Data,
                 Memory
             );
+            break;
+
+        case NodeType::ECHO:
+            CompileEcho
+            (static_cast<EchoNode*>(Node), State, BC, SARes, Data, Memory);
             break;
 
         // DECLARATIONS
@@ -809,7 +826,9 @@ string ByteValueToString(const ByteValue& Value)
 
         else if constexpr (std::is_same_v<T, NullLitVal>)
             return "null";
-
+        else if constexpr (std::is_same_v<T, shared_ptr<ByteArray>>) {
+            return "array";
+        }
         else
             return std::to_string(V);
 
@@ -878,3 +897,5 @@ ByteCode CodeGenerator::InitCG(
     }
     return BC;
 }
+
+// EOF.

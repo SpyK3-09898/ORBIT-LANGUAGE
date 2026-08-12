@@ -87,6 +87,7 @@ enum class OpCode
     JUMP_FOR,
 
     // OTHERS
+    ECHO,
     CALL,
     RETURN
 };

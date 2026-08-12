@@ -29,7 +29,8 @@
 enum ORBIT_ERRORS_CODE
 {
     MEMORY_ERROR = 1001,
-    LOG_ERROR = 795  
+    LOG_ERROR = 795,
+    RUNTIME_ERROR = 20
 };
 
 // BASICS
@@ -58,7 +59,7 @@ using unord_map= std::unordered_map<Key, Value>;
 template<typename T>
 using uniq_ptr=std::unique_ptr<T>;
 template<typename T>
-using shared_ptr=std::unique_ptr<T>;
+using shared_ptr=std::shared_ptr<T>;
 template<typename T1, typename T2>
 using pair=std::pair<T1, T2>;
 template<typename... T>

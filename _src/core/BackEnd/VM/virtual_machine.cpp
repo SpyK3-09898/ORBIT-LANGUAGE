@@ -5,6 +5,7 @@
 // INCLUDE HEADERS 'N DEPENDENCES
 
 #include "virtual_machine.hpp" // HEADER FILE | CABEÇALHO
+#include "../codegen/codegen.hpp"
 #include "../byte_code.hpp"
 
 #include "../../FrontEnd/SA/semantic_analysis.hpp"
@@ -17,7 +18,6 @@
 #include "../../RunTimeData.hpp"
 #include <cmath>
 #include <string>
-#include <variant>
 
 // ========= UTILS || UTILIDADES =========== //
 
@@ -297,10 +297,12 @@ namespace VM_Utils {
     // Get Value of I-Acess | Pega o Membro de Indices.
     ByteValue RunIndexAcess(ByteValue Object, ByteValue Member, NodePos& P, RunTimeData& Data)
     {
-        if (holds_alt<TableValue>(Object))
+        if (holds_alt<shared_ptr<ByteArray>>(Object))
         {
             
         }
+
+        return Object;
     }
 
     // Execute Comparisons || Executa Comparações.
@@ -586,17 +588,17 @@ void VirtualMachine::Run(RunTimeData& Data, Arena& Memory)
     // MAIN LOOP | LOOP PRINCIPAL.
     while (running) {
     
+
         // Data
         VM_Frame& Frame = Calls.Top(); // Error prev | Prevenções de Erros:
         if (Frame.IP.Index >= Frame.C->Instructions.size())
             { running = false; break; }
         ByteInstruction* Inst =
             Frame.C->Instructions[Frame.IP.Index++];
-        
+    
         // Main Switch | Switch Principal.
         switch(Inst->C)
         {
-
             // LOADS | CARREGAMENTOS.
             case OpCode::LOAD_CONST:
                 if (generate_log)
@@ -644,17 +646,30 @@ void VirtualMachine::Run(RunTimeData& Data, Arena& Memory)
 
 
             // LOADS & GETS:
-            case OpCode::LOAD_LOCAL:
+            case OpCode::LOAD_LOCAL: 
+            {
                 if (generate_log)
                     logFile << "LOADING LOCAL, IP: "+std::to_string(Frame.IP.Index)+"\n";
+                
+                i64 slotIndex = std::get<i64>(Inst->R1);
+                if (slotIndex < 0 || slotIndex >= static_cast<i64>(Calls.Top().Locals.size()))
+                {
+                    OrbitLog::Error("virtual_machine.cpp", "Slot Index OutOfRange: "+std::to_string(slotIndex)+", Aborting. .. ...", true, ORBIT_ERRORS_CODE::RUNTIME_ERROR);
+                }
                 St.Push(Calls.Top().Locals[std::get<i64>(Inst->R1)]);
                 break;
+            }
 
             case OpCode::STORE_LOCAL:
+            {
                 if (generate_log)
-                    logFile << "STORING LOCAL, IP: "+std::to_string(Frame.IP.Index)+"\n";
-                Calls.Top().Locals[std::get<i64>(Inst->R1)] = St.Pop();
+                    logFile << "STORING LOCAL, IP: " << Frame.IP.Index << "\n";
+                i64 slotIndex = std::get<i64>(Inst->R1);
+                if (slotIndex >= static_cast<i64>(Calls.Top().Locals.size()))
+                    Calls.Top().Locals.resize(static_cast<size_t>(slotIndex + 1));
+                Calls.Top().Locals[slotIndex] = St.Pop();
                 break;
+            }
                 
             case OpCode::LOAD_INDEX:
             {
@@ -690,7 +705,7 @@ void VirtualMachine::Run(RunTimeData& Data, Arena& Memory)
                 for (i64 i = Count - 1; i >= 0; i--)
                     Array[i] = St.Pop();
 
-                St.Push(Array);
+                St.Push(std::make_shared<ByteArray>(Array));
                 break;
             }
 
@@ -721,6 +736,16 @@ void VirtualMachine::Run(RunTimeData& Data, Arena& Memory)
                 break;
             }
 
+            // OTHERS
+            case OpCode::ECHO:
+            {
+                if (generate_log)
+                    logFile << "PRINTING, IP: "+std::to_string(Frame.IP.Index)+"\n";;
+                ByteValue Value = St.Pop();
+                std::cout << ByteValueToString(Value);
+                break;
+            }
+
             // ERRORS / NOT IMPLEMENTED || ERROS / NAO IMPLEMENTADOS:
             default:
                 logFile << "UNKNOW! EXITING. .. ... IP: "+std::to_string(Frame.IP.Index)+"\n";
@@ -734,11 +759,11 @@ void VirtualMachine::Run(RunTimeData& Data, Arena& Memory)
 void VirtualMachine::InitVM(ByteCode& BC, RunTimeData& Data, Arena& Memory)
 {
     // DEBUG
-    if (Data.flags.debugMode)
+    if (Data.flags.generateLog)
     {
         logFile = fstream(Data.LogDir, std::ios::out | std::ios::app);
         logFile << "\n\n// =========== VIRTUAL-MACHINE ========== //\n\n";
-        generate_log = Data.flags.debugMode;
+        generate_log = Data.flags.generateLog;
     }
 
     // DATA
@@ -753,13 +778,10 @@ void VirtualMachine::InitVM(ByteCode& BC, RunTimeData& Data, Arena& Memory)
 
     // Run Orbit | Roda A Orbit.
     Run(Data, Memory);
-
+    if (Data.flags.generateLog) // Logs:
+        logFile << "\n// =========== ENDOF: 'VIRTUAL-MACHINE EXEC'. .. ... ========== //\n\n";
     logFile.flush();
     logFile.close();
-    if (Data.flags.debugMode)
-    {
-        logFile << "\n\n// =========== ENDOF: 'VIRTUAL-MACHINE EXEC'. .. ... ========== //\n\n";
-    }
 }
 
 // EOF

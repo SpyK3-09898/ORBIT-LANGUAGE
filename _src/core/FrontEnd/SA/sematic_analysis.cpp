@@ -891,6 +891,16 @@ void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, 
             (static_cast<ForNode&>(Node), State, Res, Data, Memory);
             break;
 
+        case NodeType::IF_CONTROL:
+            LookUpIf
+            (static_cast<IfNode&>(Node), State, Res, Data, Memory);
+            break;
+
+        case NodeType::ECHO:
+            LookUpEcho
+            (static_cast<EchoNode&>(Node), State, Res, Data, Memory);
+            break;
+
         // DECLARATIONS
         case NodeType::VAR_DECL:
             LookUpVarDecl
@@ -1115,6 +1125,30 @@ void SemanticAnalizer::LookUpIf(IfNode& Node, SAState& State, SAResult& Res, Run
     if (Node.ElseBody)
         LookUpElse(*Node.ElseBody, State, Res, Data, Memory);
 }
+
+// LookUp Return Nodes | Olha um Return Node.
+void SemanticAnalizer::LookUpReturn(ReturnNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+{
+    LookUpNode(*Node.Value, State, Res, Data, Memory);
+    if (Node.isIf)
+        if (GetExpressionType(Node.Value, State, Res, Data, Memory)->Kind != TypeKind::BOOL)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                "Expected <BOOLEAN> Condition",
+                "ReturnIfs Needs a <BOOL> Condition to Check",
+                "Add a Valid Type or Convert",
+                Node.Value->pos.line,
+                Node.Value->pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return;
+        }
+}
+
+// LookUp Echo Nodes | Olha Nós de Echo.
+void SemanticAnalizer::LookUpEcho(EchoNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+{ LookUpNode(*Node.Value, State, Res, Data, Memory); }
 
 // ===== DECLARATIONS ===== //
 

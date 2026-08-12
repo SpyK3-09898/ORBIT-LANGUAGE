@@ -208,5 +208,8 @@ class SemanticAnalizer
         void LookUpFor(ForNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         //void LookUpForEach(ForEachNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         //void LookUpForDef(ForDefNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
-        //void LookUpReturn(ReturnNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        void LookUpReturn(ReturnNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        void LookUpEcho(EchoNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
 };
+
+// EOF
