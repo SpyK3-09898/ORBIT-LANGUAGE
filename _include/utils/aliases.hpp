@@ -57,6 +57,8 @@ template<typename Key, typename Value>
 using unord_map= std::unordered_map<Key, Value>;
 template<typename T>
 using uniq_ptr=std::unique_ptr<T>;
+template<typename T>
+using shared_ptr=std::unique_ptr<T>;
 template<typename T1, typename T2>
 using pair=std::pair<T1, T2>;
 template<typename... T>

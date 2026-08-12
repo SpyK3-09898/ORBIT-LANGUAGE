@@ -24,13 +24,14 @@
 namespace CodeGenUtils {
 
     // Create A New Instruction | Cria uma Nova Instrução.
-    ByteInstruction* CreateInst(OpCode Code, ByteValue R1, ByteValue R2, RunTimeData& Data, Arena& Memory)
+    ByteInstruction* CreateInst(ASTNode* Node, OpCode Code, ByteValue R1, ByteValue R2, RunTimeData& Data, Arena& Memory)
     {
         ByteInstruction* Inst = Memory.New<ByteInstruction>();
-        
+
         Inst->C = Code;
         Inst->R1 = R1;
         Inst->R2 = R2;
+        Inst->Pos = Node->pos;
 
         return Inst;
     }
@@ -73,7 +74,7 @@ void CodeGenerator::CompileIf(IfNode* Node, CodeGenState& State, ByteCode& BC, S
     IfCompileState& IfState = State.IfStates.back();
     CompileNode(Node->Cond, State, BC, SARes, Data, Memory);
     ByteInstruction* JumpFalse = CodeGenUtils::CreateInst
-        (OpCode::JUMP_IF_FALSE, 0, 0, Data, Memory);
+        (Node, OpCode::JUMP_IF_FALSE, 0, 0, Data, Memory);
     
     //  Data2
     JumpFalse->R1 = static_cast<i64>(-1);
@@ -81,7 +82,7 @@ void CodeGenerator::CompileIf(IfNode* Node, CodeGenState& State, ByteCode& BC, S
     IfState.PreviousJumpFalse = JumpFalse;
     CompileNode(Node->IfBody, State, BC, SARes, Data, Memory);
     ByteInstruction* JumpEnd = CodeGenUtils::CreateInst
-        (OpCode::JUMP, 0, 0, Data, Memory);
+        (Node, OpCode::JUMP, 0, 0, Data, Memory);
 
     JumpEnd->R1 = static_cast<i64>(-1);
     BC.Chunks[State.currChunk]->Instructions.push_back(JumpEnd);
@@ -136,7 +137,7 @@ void CodeGenerator::CompileElif(ElifNode* Node, CodeGenState& State, ByteCode& B
     // Compile
     CompileNode(Node->Cond, State, BC, SARes, Data, Memory);
     ByteInstruction* JumpFalse = CodeGenUtils::CreateInst
-        (OpCode::JUMP_IF_FALSE, 0, 0, Data, Memory);
+        (Node, OpCode::JUMP_IF_FALSE, 0, 0, Data, Memory);
 
     // Set | Define
     JumpFalse->R1 = static_cast<i64>(-1);
@@ -146,7 +147,7 @@ void CodeGenerator::CompileElif(ElifNode* Node, CodeGenState& State, ByteCode& B
     // Compile 2
     CompileNode(Node->Body, State, BC, SARes, Data, Memory);
     ByteInstruction* JumpEnd = CodeGenUtils::CreateInst
-        (OpCode::JUMP, 0, 0, Data, Memory);
+        (Node, OpCode::JUMP, 0, 0, Data, Memory);
     
     // Set | Define
     JumpEnd->R1 = static_cast<i64>(-1);
@@ -165,7 +166,7 @@ void CodeGenerator::CompileWhile(WhileNode* Node, CodeGenState& State, ByteCode&
     CompileNode(Node->Cond, State, BC, SARes, Data, Memory);
 
     ByteInstruction* JumpFalse = CodeGenUtils::CreateInst
-        (OpCode::JUMP_IF_FALSE, 0, 0, Data, Memory);
+        (Node, OpCode::JUMP_IF_FALSE, 0, 0, Data, Memory);
 
     // Data2
     JumpFalse->R1 = static_cast<i64>(-1);
@@ -176,7 +177,7 @@ void CodeGenerator::CompileWhile(WhileNode* Node, CodeGenState& State, ByteCode&
 
     // Jump Back | Pula de Volta.
     ByteInstruction* JumpBack = CodeGenUtils::CreateInst
-        (OpCode::JUMP, 0, 0, Data, Memory);
+        (Node, OpCode::JUMP, 0, 0, Data, Memory);
 
     JumpBack->R1 = static_cast<i64>(StartAddress);
     BC.Chunks[State.currChunk]->Instructions.push_back(JumpBack);
@@ -200,7 +201,7 @@ void CodeGenerator::CompileFor(ForNode* Node, CodeGenState& State, ByteCode& BC,
 
     // Create Jump For | Cria Salto do For.
     ByteInstruction* Inst = CodeGenUtils::CreateInst
-        (OpCode::JUMP_FOR, State.GetLocal(Node->Identifier->Name), -1, Data, Memory);
+        (Node, OpCode::JUMP_FOR, State.GetLocal(Node->Identifier->Name), -1, Data, Memory);
 
     // Set | Define.
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
@@ -210,7 +211,7 @@ void CodeGenerator::CompileFor(ForNode* Node, CodeGenState& State, ByteCode& BC,
 
     // Jump Back | Pulo De Volta.
     ByteInstruction* JumpBack = CodeGenUtils::CreateInst
-        (OpCode::JUMP, StartAddress, 0, Data, Memory);
+        (Node, OpCode::JUMP, StartAddress, 0, Data, Memory);
     BC.Chunks[State.currChunk]->Instructions.push_back(JumpBack);
 
     // End Address | Endereço Final.
@@ -235,7 +236,7 @@ void CodeGenerator::CompileReturn(ReturnNode* Node, CodeGenState& State, ByteCod
         CompileNode(Node->Value, State, BC, SARes, Data, Memory);
     
     ByteInstruction* Inst = CodeGenUtils::CreateInst
-        (OpCode::RETURN, 0, 0, Data, Memory);
+        (Node, OpCode::RETURN, 0, 0, Data, Memory);
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);    
 };
 
@@ -253,8 +254,8 @@ void CodeGenerator::CompileVarDecl(VarDeclNode* Node, CodeGenState& State, ByteC
     CompileNode(Node->Val, State, BC, SARes, Data, Memory);
 
     ByteInstruction* Inst =
-     CodeGenUtils::CreateInst
-        (OpCode::STORE_LOCAL, Slot, 0, Data, Memory);
+        CodeGenUtils::CreateInst
+        (Node, OpCode::STORE_LOCAL, Slot, 0, Data, Memory);
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 };
 
@@ -289,22 +290,22 @@ void CodeGenerator::CompileLiteral(LiteralNode* Node, CodeGenState& State, ByteC
     /// Compile Literals | Compila os Literais:
     if (holds_alt<i64>(Node->Value))
         Inst = CodeGenUtils::CreateInst
-            (OpCode::LOAD_CONST, std::get<i64>(Node->Value), 0, Data, Memory);
+            (Node, OpCode::LOAD_CONST, std::get<i64>(Node->Value), 0, Data, Memory);
     else if (holds_alt<float>(Node->Value))
         Inst = CodeGenUtils::CreateInst
-            (OpCode::LOAD_CONST, std::get<float>(Node->Value), 0, Data, Memory);
+            (Node, OpCode::LOAD_CONST, std::get<float>(Node->Value), 0, Data, Memory);
     else if (holds_alt<bool>(Node->Value))
         Inst = CodeGenUtils::CreateInst
-            (OpCode::LOAD_CONST, std::get<bool>(Node->Value), 0, Data, Memory);
+            (Node, OpCode::LOAD_CONST, std::get<bool>(Node->Value), 0, Data, Memory);
     else if (holds_alt<string>(Node->Value))
         Inst = CodeGenUtils::CreateInst
-            (OpCode::LOAD_CONST, std::get<string>(Node->Value), 0, Data, Memory);
+            (Node, OpCode::LOAD_CONST, std::get<string>(Node->Value), 0, Data, Memory);
     else if (holds_alt<NoneLitVal>(Node->Value))
         Inst = CodeGenUtils::CreateInst
-            (OpCode::LOAD_CONST, std::get<NoneLitVal>(Node->Value), 0, Data, Memory);
+            (Node, OpCode::LOAD_CONST, std::get<NoneLitVal>(Node->Value), 0, Data, Memory);
     else if (holds_alt<NullLitVal>(Node->Value))
         Inst = CodeGenUtils::CreateInst
-            (OpCode::LOAD_CONST, std::get<NullLitVal>(Node->Value), 0, Data, Memory);
+            (Node, OpCode::LOAD_CONST, std::get<NullLitVal>(Node->Value), 0, Data, Memory);
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 };
 
@@ -317,7 +318,7 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
     {
         ByteInstruction* Inst =
             CodeGenUtils::CreateInst
-            (OpCode::LOAD_FN, It->second, 0, Data, Memory);
+            (Node, OpCode::LOAD_FN, It->second, 0, Data, Memory);
         BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
         return;
     }
@@ -326,7 +327,7 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
     ui32 Local = State.GetLocal(Node->Name);
     ByteInstruction* Inst =
         CodeGenUtils::CreateInst
-            (OpCode::LOAD_LOCAL, Local, 0, Data, Memory);
+            (Node, OpCode::LOAD_LOCAL, Local, 0, Data, Memory);
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 };
 
@@ -338,7 +339,7 @@ void CodeGenerator::CompileUnary(UnaryNode* Node, CodeGenState& State, ByteCode&
 
     // Generate Instruction | Gera a Instrução.
     ByteInstruction* Inst = CodeGenUtils::
-        CreateInst(OpCode::NEG, 0, 0, Data, Memory);
+        CreateInst(Node, OpCode::NEG, 0, 0, Data, Memory);
     switch (Node->Operator)
     {
         case Operator::SUB: // NEG:
@@ -415,7 +416,7 @@ void CodeGenerator::CompileBinary(BinaryNode* Node, CodeGenState& State, ByteCod
 
     // Generate Instruction | Gera Instrução.
     ByteInstruction* Inst = CodeGenUtils::
-        CreateInst(Op, 0, 0, Data, Memory);
+        CreateInst(Node, Op, 0, 0, Data, Memory);
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 };
 
@@ -430,7 +431,7 @@ void CodeGenerator::CompileAssignment(AssignmentNode* Node, CodeGenState& State,
 
     ByteInstruction* Inst =
         CodeGenUtils::CreateInst
-        (OpCode::STORE_LOCAL, Local, 0, Data, Memory);
+            (Node, OpCode::STORE_LOCAL, Local, 0, Data, Memory);
 
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 };
@@ -445,7 +446,7 @@ void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& St
     // Generate Instrucion | Gera a Instrução.
     ByteInstruction* Inst =
         CodeGenUtils::CreateInst
-        (OpCode::LOAD_MEMBER, 0, 0, Data, Memory);
+            (Node, OpCode::LOAD_MEMBER, 0, 0, Data, Memory);
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 };
 
@@ -458,7 +459,7 @@ void CodeGenerator::CompileIndexAccess(IndexAccessNode* Node, CodeGenState& Stat
 
     ByteInstruction* Inst =
         CodeGenUtils::CreateInst
-        (OpCode::LOAD_INDEX, 0, 0, Data, Memory);
+        (Node, OpCode::LOAD_INDEX, 0, 0, Data, Memory);
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 };
 
@@ -473,7 +474,7 @@ void CodeGenerator::CompileFunctionCall(FunctionCall* Node, CodeGenState& State,
     // Instruction | Instrução.
     ByteInstruction* Inst =
         CodeGenUtils::CreateInst
-        (OpCode::CALL, int(Node->Args.size()), 0, Data, Memory);
+            (Node, OpCode::CALL, int(Node->Args.size()), 0, Data, Memory);
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);    
 };
 
@@ -488,7 +489,7 @@ void CodeGenerator::CompileTableValue(TableValue* Node, CodeGenState& State, Byt
 
     ByteInstruction* Inst =
         CodeGenUtils::CreateInst
-        (OpCode::BUILD_TABLE, int(Node->Args.size()), 0, Data, Memory);
+            (Node, OpCode::BUILD_TABLE, int(Node->Args.size()), 0, Data, Memory);
 
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 };
@@ -503,7 +504,7 @@ void CodeGenerator::CompileArrayValue(ArrayValue* Node, CodeGenState& State, Byt
     // Instruction | Instrução.
     ByteInstruction* Inst =
         CodeGenUtils::CreateInst
-        (OpCode::BUILD_ARRAY, int(Node->Args.size()), 0, Data, Memory);
+            (Node, OpCode::BUILD_ARRAY, int(Node->Args.size()), 0, Data, Memory);
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);    
 
 };
@@ -516,7 +517,7 @@ void CodeGenerator::CompileRange(RangeNode* Node, CodeGenState& State, ByteCode&
 
     ByteInstruction* Inst =
         CodeGenUtils::CreateInst
-        (OpCode::BUILD_RANGE, 0, 0, Data, Memory);
+            (Node, OpCode::BUILD_RANGE, 0, 0, Data, Memory);
 
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 };

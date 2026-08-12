@@ -248,12 +248,14 @@ struct Token
 
 // LEXER
 
+// Current State of Lexer || Estado Atual do Lexer
 struct LexState
 {
     TokenPos currPos; // Current Position of Lexer | Posição Atual dos Tokens.
     ui32 index = 0; // Current Global Position Of Lexer | Posição Atual Global dos Tokens
 };
 
+// Result of Lex Program | Resultado do Programa de  Lexing.
 struct LexResult
 {
     vec<Token*> Tokens; // Main TOken Stack | Pilha De Tokens Principal.
@@ -262,70 +264,72 @@ struct LexResult
 // MAIN CLASS | CLASSE PRINCIPAL.
 class Lexer
 {
-
-public:
-
-    LexResult InitL(fstream& file, RunTimeData& Data, Arena& Memory);
-    static void SkipLine(LexState& State, RunTimeData& Data);
-
-    // UTILS SCANNERS | SCANNERS UTILITARIOS
-    class Scanners
-    {
+    // PUBLICS:
     public:
-        void ReadNumber(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, Arena& memory);
-        void ReadString(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N, Arena& memory);
-        void ReadComment(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N, Arena& memory);
-    };
-    Scanners Scanners;
-private:
 
-    // UTILS OF LEXER | UTILIDADES DO LEXER
-    struct LexUtils
-    {
-        // RETURN NEXT CHAR AND CONSUMES | RETORNA O PROXIMO CHAR E CONSOME
-        static inline char Advance(LexState& State, RunTimeData& Data)
+        LexResult InitL(fstream& file, RunTimeData& Data, Arena& Memory);
+        static void SkipLine(LexState& State, RunTimeData& Data);
+
+        // UTILS SCANNERS | SCANNERS UTILITARIOS
+        class Scanners
         {
-            if (State.index >= Data.source.size())
-                return EOF_CHAR;
+        public:
+            void ReadNumber(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, Arena& memory);
+            void ReadString(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N, Arena& memory);
+            void ReadComment(Lexer& Lexer, RunTimeData& Data, LexState& State, char C, char N, Arena& memory);
+        };
+        Scanners Scanners;
 
-            char C = Data.source[State.index];
+    // PRIVATES:
+    private:
 
-            if (C is '\n')
+        // UTILS OF LEXER | UTILIDADES DO LEXER
+        struct LexUtils
+        {
+            // RETURN NEXT CHAR AND CONSUMES | RETORNA O PROXIMO CHAR E CONSOME
+            static inline char Advance(LexState& State, RunTimeData& Data)
             {
-                State.currPos.line++;
-                State.currPos.collumn = 0;
+                if (State.index >= Data.source.size())
+                    return EOF_CHAR;
+
+                char C = Data.source[State.index];
+
+                if (C is '\n')
+                {
+                    State.currPos.line++;
+                    State.currPos.collumn = 0;
+                }
+                else
+                {
+                    State.currPos.collumn++;
+                }
+                
+                State.index++;
+                return C;
             }
-            else
+
+            // RETURN NEXT CHAR AND NOT CONSUMES | RETORNA O PROXIMO CHAR E NAO CONSUME
+            static inline char Peek(LexState& State, RunTimeData& Data)
             {
-                State.currPos.collumn++;
+                if (State.index >= Data.source.size())
+                    return EOF_CHAR;
+
+                return Data.source[State.index];
             }
-            
-            State.index++;
-            return C;
-        }
 
-        // RETURN NEXT CHAR AND NOT CONSUMES | RETORNA O PROXIMO CHAR E NAO CONSUME
-        static inline char Peek(LexState& State, RunTimeData& Data)
-        {
-            if (State.index >= Data.source.size())
-                return EOF_CHAR;
+            // RETURN NEXT CHAR WHIT OFFSET | RETORNA O PROXIMO CHAR COM OFFSET
+            static inline char PeekNext(LexState& State, RunTimeData& Data, size_t offset = 0)
+            {
+                if (State.index + offset >= Data.source.size())
+                    return EOF_CHAR;
 
-            return Data.source[State.index];
-        }
+                return Data.source[State.index + offset];
+            }
+        };
 
-        // RETURN NEXT CHAR WHIT OFFSET | RETORNA O PROXIMO CHAR COM OFFSET
-        static inline char PeekNext(LexState& State, RunTimeData& Data, size_t offset = 0)
-        {
-            if (State.index + offset >= Data.source.size())
-                return EOF_CHAR;
-
-            return Data.source[State.index + offset];
-        }
-    };
-
-    // DATA 
-    LexResult Res;
-    LexState State;  
+        // DATA 
+        LexResult Res;
+        LexState State;  
 };
 
 // EOF

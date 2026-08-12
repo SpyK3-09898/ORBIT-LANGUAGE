@@ -532,7 +532,7 @@ namespace ControlUtils {
         return Cntrl;
     }
 
-    // Parse Return Statements | Parseia Instruç~eos de Retorno.
+    // Parse Return Statements | Parseia Instruções de Retorno.
     ControlNode* ParseReturn(
         Instruction& Inst, 
         ParseState& State, 
@@ -591,6 +591,86 @@ namespace ControlUtils {
             MakeNode<ReturnNode>(State, Res, Memory);
         Cntrl->Value = CondNode;
         Cntrl->isIf = IsIf;
+
+        return Cntrl;
+    }
+
+    // Parse Echo Statements | Parseia Instruções de Echos.
+    ControlNode* ParseEcho(
+        Instruction& Inst, 
+        ParseState& State, 
+        ParseResult& Res,
+        RunTimeData& Data, 
+        DeclarationParser& DeclParser,
+        ExpressionParser& ExprParser,
+        Arena& Memory
+    )
+    {
+        // RETURN
+        Token* E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+        
+        // Error Prevention | Prevenção de Erros.
+        if (Inst.Peek() and Inst.Peek()->Type != TokenType::CNTXT_KW)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Invalid <CONTEXTUAL_KW>",
+                "Expected CNTX... After <ECHO> Statement, Ex: 'cout', 'cerr, 'callert'. Bug Got: <NULL>",
+                "Add a Valid Mode For Echo",
+                Inst.Peek()->pos.line, Inst.Peek()->pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::
+                MakeNode<ErrorStmtNode>(State, Res, Memory);
+        }
+
+        // Set Node | Define o Nó
+        EchoNode* Cntrl = ParserUtils::MakeNode<EchoNode>
+            (State, Res, Memory);
+
+        // Set Mode | Define o Modo.
+        string L = Inst.Peek()->Lexeme(Data);
+        if (L == "cout")
+            Cntrl->Type = EchoTypes::COUT;
+        else if (L == "cwarn")
+            Cntrl->Type = EchoTypes::CWARN;
+        else if (L == "cerr")
+            Cntrl->Type = EchoTypes::CERR; 
+        else {
+            OrbitLog::SyntaxLog::SyntaxWarn("Parsing", 
+                "Ignoring <ECHO> Node", 
+                "Mode: "+L+" Is Invalid, Ignoring. .. ...", 
+                "Add a Valid Mode",
+                Inst.Peek()->pos.line, Inst.Peek()->pos.collumn
+            ); 
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+                return ParserUtils::
+                    MakeNode<ErrorStmtNode>(State, Res, Memory);           
+        }
+
+        // Advance
+        E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+
+        // TAKE COND
+        vec<Token*> Cond;
+        while(true)
+        {
+            Token* Tok = Inst.Advance();
+
+            if (!Tok)
+                break;
+
+            ParserUtils::UpdateStatePos(Tok, State);
+            Cond.push_back(Tok);
+        }
+
+        // INSTRUCTION COND
+        Instruction ICond{{}, Cond};
+        ExpressionNode* CondNode = ExprParser.
+            ParseExpression(ICond, State,Res, Data, Memory);
+        Cntrl->Value = CondNode;
 
         return Cntrl;
     }

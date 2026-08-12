@@ -112,6 +112,7 @@ enum class NodeType : uint8_t
     FOR_DEF,
 
     RETURN,
+    ECHO,
 
     // DECLARATIONS
     VAR_DECL,
@@ -223,6 +224,13 @@ enum class Operator: uint8_t
 
     NONE
 };
+
+// Typeof Echo's | Tipo dos Ecos.
+enum class EchoTypes 
+{
+    COUT, CERR, CWARN
+};
+
 
 // STRUCTS.
 
@@ -661,6 +669,16 @@ struct ReturnNode : ControlNode
     // CONSTRUCTOR | CONSTRUTOR
     ReturnNode(NodePos P)
         : ControlNode(NodeType::RETURN, P) {};
+};
+
+// Debug-Echo | Eco.
+struct EchoNode : ControlNode
+{
+    EchoTypes Type;
+    ExpressionNode* Value;
+
+    EchoNode(NodePos P)
+        : ControlNode(NodeType::ECHO, P) {};
 };
 
 // Error Statements Nodes | Errors de Nos de Statement.

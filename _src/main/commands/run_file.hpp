@@ -18,6 +18,7 @@
 
 #include "../../core/BackEnd/byte_code.hpp"
 #include "../../core/BackEnd/codegen/codegen.hpp"
+#include "../../core/BackEnd/VM/virtual_machine.hpp"
 
 #include <string>
 #include <thread>
@@ -115,9 +116,11 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
 
     // INSTANCES
     CodeGenerator CG;
-    
+    VirtualMachine VM;
+
     // FUNCTIONS
     ByteCode BC = CG.InitCG(PRes, SARes, Data, Memory);
+    VM.InitVM(BC, Data, Memory);
 
     // GENERATE MEMORY LOG | GERA LOG DE MEMORIA
     if (Data.flags.generateLog)

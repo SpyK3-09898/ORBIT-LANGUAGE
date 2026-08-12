@@ -89,11 +89,15 @@ class VirtualMachine
     private:
     
         ByteCode* Code;
-        Stack Stack;
+        Stack St;
         CallStack Calls;
+        fstream logFile;
+        bool generate_log=false;
         bool running=false;
     public:
 
-        void Run();
+        void Run(RunTimeData& Data, Arena& Memory);
         void InitVM(ByteCode& BC, RunTimeData& Data, Arena& Memory);
 };
+
+// EOF.

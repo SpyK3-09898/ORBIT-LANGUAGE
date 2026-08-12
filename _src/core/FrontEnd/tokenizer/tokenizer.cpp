@@ -37,11 +37,12 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
         "if", "else", "elif",
         "while", "for", 
         "func", "fn", "return",
-        "end"
+        "end",
+        "echo"
     };
     vec<string> CntxtKW
     {
-        "new", "in"
+        "new", "in", "cout", "cerr"
     };
     vec<string> Modifiers
     {

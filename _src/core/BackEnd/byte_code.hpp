@@ -14,6 +14,8 @@
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../RunTimeData.hpp"
+
+struct ByteArray;
 using ByteValue = variant<
 
     bool,
@@ -21,14 +23,20 @@ using ByteValue = variant<
     i64,
     string,
     NoneLitVal,
-    NullLitVal
+    NullLitVal,
+    shared_ptr<ByteArray>
 >;
+struct ByteArray : vec<ByteValue>
+{
+    using vec<ByteValue>::vector;
+};
 
 // ENUMS | ENUMERAÇÕES
 
 // OpCodes | OpCodes.
 enum class OpCode
 {
+    // OT
     NOP,
 
     // LOADS
@@ -89,6 +97,7 @@ enum class OpCode
 struct ByteInstruction
 {
     OpCode C; // Operation Code | Codigo Operacional.
+    NodePos Pos;
 
     // REGISTERS | REGISTRADORES:
     ByteValue R1; ByteValue R2;      // Operation Principal Registeres | Registradores Principais da Operação.
