@@ -774,8 +774,12 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
                     ParseExpression(Inst, State, Res, Data, Memory);
 
         // INDENT SYSTEM
-        if (I + 1 < Instructions.size())
+        if (I + 1 < Instructions.size() and I > 0)
         {
+            size_t PrevIndent = !Instructions[I - 1].Tokens.empty()
+                ? Instructions[I - 1].Tokens[0]->pos.indent
+                : Instructions[I - 1].Modifiers[0]->pos.indent;
+
             size_t InstIndent = !Inst.Tokens.empty()
                 ? Inst.Tokens[0]->pos.indent
                 : Inst.Modifiers[0]->pos.indent;
@@ -787,13 +791,11 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
                 : NextInst.Modifiers[0]->pos.indent;
 
             if (
-                State.Bodys.size() > 1  and
+                State.Bodys.size() > 1 and
+                PrevIndent < InstIndent and
                 NextIndent < InstIndent and
-                State.CurrBody->Type != BodyTypes::PROGRAM and
-                Inst.Tokens.size() > 0 and
-                Inst.Tokens[0]->Lexeme(Data) != "End"
+                State.CurrBody->Type != BodyTypes::PROGRAM
             ) ParserUtils::PopBodyStack(State, Data);
-        //
         }
 
         if (!State.consumedInst)

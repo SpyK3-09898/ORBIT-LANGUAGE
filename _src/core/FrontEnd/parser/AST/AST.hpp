@@ -272,6 +272,7 @@ struct ASTNode
             case NodeType::FOR_DEF:        return "<FOR_DEF>";
 
             case NodeType::RETURN:         return "<RETURN>";
+            case NodeType::ECHO:           return "<ECHO>";
 
             case NodeType::VAR_DECL:       return "<VAR_DECL>";
             case NodeType::FN_DECL:        return "<FN_DECL>";
@@ -589,6 +590,7 @@ struct ElifNode : ControlNode
 struct IfNode : ControlNode
 {
     // DATA
+    bool alwaysTrue=false;
     ExpressionNode* Cond;
     BodyNode* IfBody;
     ElseNode* ElseBody;

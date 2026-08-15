@@ -1048,12 +1048,11 @@ void SemanticAnalizer::LookUpWhile(WhileNode& Node, SAState& State, SAResult& Re
         return;
     } else if (TInfo->SubKind ==  SubTypeKind::TRUE) {
 
-        Node.alwaysExecuteFirst=true;
         OrbitLog::SyntaxLog::SyntaxWarn(
             "Semantic",
             "Condition Maybe Always is <TRUE>",
             "Semantic Analizer Check <TRUE> In All Ways, Skiping...",
-            "~", Node.Cond->pos.line, Node.Cond->pos.collumn
+            "use 'do' Modifier Instead", Node.Cond->pos.line, Node.Cond->pos.collumn
         );
     }
 
@@ -1112,12 +1111,15 @@ void SemanticAnalizer::LookUpIf(IfNode& Node, SAState& State, SAResult& Res, Run
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
         return;
     } else if (TInfo->SubKind ==  SubTypeKind::TRUE)
+    {
+        Node.alwaysTrue=true;
         OrbitLog::SyntaxLog::SyntaxWarn(
             "Semantic",
             "Condition Maybe Always is <TRUE>",
             "Semantic Analizer Check <TRUE> In All Ways, Skiping...",
             "~", Node.Cond->pos.line, Node.Cond->pos.collumn
         );
+    }
 
     LookUpBody(*Node.IfBody, State, Res, Data, Memory);
     for (ElifNode* Elif : Node.ElifBodyStack)

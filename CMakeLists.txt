@@ -23,6 +23,7 @@ set(ORBIT_CORE
     _src/core/FrontEnd/parser/ParserModules/Declaration/declaration.cpp
     _src/core/FrontEnd/parser/ParserModules/Expressions/expression.cpp
     _src/core/FrontEnd/SA/sematic_analysis.cpp
+    _src/core/BackEnd/codegen/codegen.cpp
     _src/core/Arena/Arena.cpp
 )
 
@@ -35,8 +36,6 @@ set(_ORBIT
 add_executable(ORBIT
     ${ORBIT_CORE}
     ${_ORBIT}
-    _src/core/BackEnd/codegen/codegen.cpp
-    _src/core/BackEnd/VM/virtual_machine.cpp
 )       
 
 # Include directories

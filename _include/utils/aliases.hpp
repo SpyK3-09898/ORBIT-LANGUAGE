@@ -18,6 +18,7 @@
 #include <variant>
 #include <cstdint>
 #include <cctype>
+#include <optional>
 #include <algorithm>
 #include <memory>
 
@@ -64,6 +65,8 @@ template<typename T1, typename T2>
 using pair=std::pair<T1, T2>;
 template<typename... T>
 using variant=std::variant<T...>;
+template<typename T>
+using opt=std::optional<T>;
 
 // HELPERS
 

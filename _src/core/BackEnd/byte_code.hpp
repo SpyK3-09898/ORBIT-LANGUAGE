@@ -39,11 +39,9 @@ enum class OpCode
     // OT
     NOP,
 
-    // LOADS
-    LOAD_CONST,
-
     // STACK CONTROL | CONTROLE DE PILHA:
     POP,
+    PUSH,
 
     // OPERATIONS | OPERAÇOES:
     ADD,
@@ -52,6 +50,10 @@ enum class OpCode
     DIV,
     MOD,
     POWER,
+    LESS,
+    GREATER,
+    LESSEQ,
+    GREATEREQ,
 
     // OPS
     NEG,
@@ -67,6 +69,8 @@ enum class OpCode
     // LOAD & GETS:
     LOAD_LOCAL,
     STORE_LOCAL,
+    LOAD_CONST,
+    STORE_CONST,
 
     GET_MEMBER,
     LOAD_MEMBER,
@@ -80,6 +84,8 @@ enum class OpCode
     BUILD_ARRAY,
     BUILD_TABLE,
     BUILD_RANGE,
+
+    SET_TKEY,
 
     // CONTROL-FLOW
     JUMP,
