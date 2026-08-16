@@ -423,7 +423,7 @@ void CodeGenerator::CompileLValue(ExpressionNode* Node, CodeGenState& State, Byt
         case NodeType::IDENTIFIER:
         {
             IdentifierNode* N = static_cast<IdentifierNode*>(Node);
-            OpCode op = base ? OpCode::STORE_CONST : OpCode::LOAD_CONST;
+            OpCode op = base ? OpCode::STORE_CONST : OpCode::LOAD_LOCAL;
             ByteInstruction* Inst = CodeGenUtils::
                 CreateInst(Node, op, State.GetLocal(N->Name), 0, Data, Memory);
             BC.Chunks[State.currChunk]->Instructions.push_back(Inst);

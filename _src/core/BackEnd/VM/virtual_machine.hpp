@@ -34,6 +34,17 @@ struct VM_Frame
 
     unord_map<ui32, ByteValue> Locals;
     vec<ByteValue> Stack;
+
+    void PushBack(ByteValue Val)
+    {
+        Stack.push_back(Val);
+    }
+    ByteValue Pop()
+    {
+        ByteValue Val = Stack.back();
+        Stack.pop_back();
+        return Val;
+    }
 };
 
 // Stack of Calls | Pilha de Chamadas.
@@ -48,6 +59,10 @@ class StackCall
     public:
 
         StackCall(Arena& M) : Top(nullptr), Depth(0), Memory(M) {};
+
+        // Return Top of Stack | Retorna o Topo da Pilha.
+        VM_Frame* GetTop()
+        { return Top; }
 
         // Add a New Frame To O-VM | Adiciona um Novo Quadro pra O-VM.
         void Push(VM_Frame* New, InstructionPointer* Curr)
