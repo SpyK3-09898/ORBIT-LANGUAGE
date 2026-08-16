@@ -16,6 +16,7 @@
 #include "tools/console.hpp"
 #include "../../RunTimeData.hpp"
 #include <algorithm>
+#include <cstddef>
 #include <string>
 #include <cerrno>
 #include <cstring>
@@ -295,8 +296,8 @@ void CodeGenerator::CompileBinary(BinaryNode* Node, CodeGenState& State, ByteCod
         case Operator::POWER: op = OpCode::POWER; break;
         case Operator::LESS:  op = OpCode::LESS;  break;
         case Operator::GREATER: op = OpCode::GREATER; break;
-        case Operator::LESS_EQUAL: op = OpCode::LESSEQ; break;
-        case Operator::GREATER_EQUAL: op = OpCode::GREATEREQ; break;
+        case Operator::LESS_EQUAL: op = OpCode::CMP_LE; break;
+        case Operator::GREATER_EQUAL: op = OpCode::CMP_GT; break;
 
         default:
             if (Data.flags.generateLog)
@@ -317,11 +318,7 @@ void CodeGenerator::CompileAssignment(AssignmentNode* Node, CodeGenState& State,
 {
     // Compile | Compila:
     CompileNode(Node->Right, State, BC, SARes, Data, Memory);
-
-    // Instruction | Instrução:
-    ByteInstruction* Inst = CodeGenUtils::
-        CreateInst(Node, OpCode::STORE_LOCAL, 0, 0, Data, Memory);
-    BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+    CompileLValue(Node->Left, State, BC, SARes, Data, Memory, true);
 }
 
 // Compile Object Member Access | Compila Acesso a Membro de Objeto
@@ -418,6 +415,51 @@ void CodeGenerator::CompileErrorExpr(ErrorExprNode* Node, CodeGenState& State, B
 
 }
 
+// Compile L-Values | Compila Valores Esquedos
+void CodeGenerator::CompileLValue(ExpressionNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory, bool base)
+{
+    switch (Node->Type) {
+    
+        case NodeType::IDENTIFIER:
+        {
+            IdentifierNode* N = static_cast<IdentifierNode*>(Node);
+            OpCode op = base ? OpCode::STORE_CONST : OpCode::LOAD_CONST;
+            ByteInstruction* Inst = CodeGenUtils::
+                CreateInst(Node, op, State.GetLocal(N->Name), 0, Data, Memory);
+            BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+            break;
+        }
+        case NodeType::MEMBER_ACCESS:
+        {
+            MemberAccessNode* N = static_cast<MemberAccessNode*>(Node);
+
+            CompileLValue(N->Object, State, BC, SARes, Data, Memory, false);
+            CompileNode(N->Member, State, BC, SARes, Data, Memory);
+
+            OpCode op = base ? OpCode::STORE_MEMBER : OpCode::GET_MEMBER;
+            ByteInstruction* Inst = CodeGenUtils::
+                CreateInst(Node, op, 0, 0, Data, Memory);
+            BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+            break;            
+        }
+        case NodeType::INDEX_ACCESS:
+        {
+            IndexAccessNode* N = static_cast<IndexAccessNode*>(Node);
+
+            CompileLValue(N->Object, State, BC, SARes, Data, Memory, false);
+            CompileNode(N->Index, State, BC, SARes, Data, Memory);
+
+            OpCode op = base ? OpCode::STORE_INDEX : OpCode::GET_INDEX;
+            ByteInstruction* Inst = CodeGenUtils::
+                CreateInst(Node, op, 0, 0, Data, Memory);
+            BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+            break;
+        }
+        default:
+            OrbitLog::Error("codegen.cpp", "Trying to Assign a non 'L-Value'", true, 1);
+    }
+}
+
 // DECLARATION
 
 // Compile Variable Declaration | Compila Declaração de Variável
@@ -429,6 +471,7 @@ void CodeGenerator::CompileVarDecl(VarDeclNode* Node, CodeGenState& State, ByteC
     // Gen Inst | Gera a Instrução.
     ByteInstruction* Inst = CodeGenUtils::
         CreateInst(Node, OpCode::STORE_LOCAL, Node->Name, 0, Data, Memory);
+    BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 }
 
 // Compile Function Declaration | Compila Declaração de Função
@@ -467,28 +510,45 @@ void CodeGenerator::CompileErrorDecl(ErrorDeclNode* Node, CodeGenState& State, B
 // Compile Conditional 'if' Statement | Compila Instrução Condicional 'if'
 void CodeGenerator::CompileIf(IfNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
-    // IF
-    CompileNode(Node->Cond, State, BC, SARes, Data, Memory);
-    ByteInstruction* JFALSE_Inst = CodeGenUtils::CreateInst
-        (Node, OpCode::JUMP_IF_FALSE, -1, 0, Data, Memory);
-    BC.Chunks[State.currChunk]->Instructions.push_back(JFALSE_Inst);
+    State.IfStates.push_back({});
 
+    // IF
     if (!Node->alwaysTrue) // Condition Is Always True:
+    {
+        CompileNode(Node->Cond, State, BC, SARes, Data, Memory);
+        ByteInstruction* JFALSE_Inst = CodeGenUtils::CreateInst
+            (Node, OpCode::JUMP_IF_FALSE, -1, 0, Data, Memory);
+        BC.Chunks[State.currChunk]->Instructions.push_back(JFALSE_Inst);
+
         CompileNode(Node->IfBody, State, BC, SARes, Data, Memory);
+
+        ByteInstruction* JEND_Inst = CodeGenUtils::CreateInst
+            (Node, OpCode::JUMP, -1, 0, Data, Memory);
+        BC.Chunks[State.currChunk]->Instructions.push_back(JEND_Inst);
+        State.IfStates.back().EndJumps.push_back(JEND_Inst);
+
+        JFALSE_Inst->R1 = static_cast<i64>(BC.Chunks[State.currChunk]->Instructions.size());
+    }
+    else
+    {
+        CompileNode(Node->IfBody, State, BC, SARes, Data, Memory);
+    }
 
     // ELSES
     for (ElifNode* N : Node->ElifBodyStack)
     {
-        CompileNode(Node->ElseBody, State, BC, SARes, Data, Memory);
-        if (std::get<i64>(JFALSE_Inst->R1) != -1)
-            JFALSE_Inst->R1 = static_cast<i64>(BC.Chunks[State.currChunk]->Instructions.size());
+        CompileNode(N, State, BC, SARes, Data, Memory);
     } 
     if (Node->ElseBody)
     {
         CompileNode(Node->ElseBody, State, BC, SARes, Data, Memory);
-        if (std::get<i64>(JFALSE_Inst->R1) != -1)
-            JFALSE_Inst->R1 = JFALSE_Inst->R1 = static_cast<i64>(BC.Chunks[State.currChunk]->Instructions.size());
     }
+
+    i64 EndIp = static_cast<i64>(BC.Chunks[State.currChunk]->Instructions.size());
+    for (ByteInstruction* J : State.IfStates.back().EndJumps)
+        J->R1 = EndIp;
+
+    State.IfStates.pop_back();
 }
 
 // Compile Conditional 'else' Block | Compila Bloco Condicional 'else'
@@ -497,7 +557,6 @@ void CodeGenerator::CompileElse(ElseNode* Node, CodeGenState& State, ByteCode& B
     CompileNode(Node->Body, State, BC, SARes, Data, Memory);
 }
 
-// Compile Conditional 'elif' Branch | Compila Ramificação Condicional 'elif'
 void CodeGenerator::CompileElif(ElifNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
     // Inst1
@@ -571,20 +630,53 @@ void CodeGenerator::CompileWhile(WhileNode* Node, CodeGenState& State, ByteCode&
 // Compile Standard 'for' Loop | Compila Laço de Repetição 'for' Padrão
 void CodeGenerator::CompileFor(ForNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
+    // Compile And Take Insts | Compila e Pega a Instrução:
+    auto& Insts = BC.Chunks[State.currChunk]->Instructions;
+    CompileNode(Node->End, State, BC, SARes, Data, Memory);
 
+    // Take The Loop Start Pos | Pega a Posição do Inicio do Loop.
+    size_t LoopStart = Insts.size();
+
+    // Instructions | Instruções:
+    ByteInstruction* HasNext = CodeGenUtils::
+        CreateInst(Node, OpCode::ITER_HAS_NEXT, 0, 0, Data, Memory);
+    Insts.push_back(HasNext);
+    ByteInstruction* ExitJump = CodeGenUtils::
+        CreateInst(Node, OpCode::JUMP_IF_FALSE, 0, 0, Data, Memory);
+    Insts.push_back(ExitJump);
+    ByteInstruction* Next = CodeGenUtils::
+        CreateInst(Node, OpCode::ITER_NEXT, 0, 0, Data, Memory);
+    Insts.push_back(Next);
+
+    int slot = State.GetLocal(Node->Identifier->Name);
+    ByteInstruction* Store = CodeGenUtils::
+        CreateInst(Node, OpCode::STORE_LOCAL, slot, 0, Data, Memory);
+    Insts.push_back(Store);
+
+    // Compile Body of Loop | Compila o Corpo do Loop.
+    CompileNode(Node->Body, State, BC, SARes, Data, Memory);
+
+    // Come Back | Volta Para o inicio.
+    ByteInstruction* LoopJump = CodeGenUtils::
+        CreateInst(Node, OpCode::JUMP, static_cast<i64>(LoopStart), 0, Data, Memory);
+    Insts.push_back(LoopJump);
+
+    size_t LoopEnd = Insts.size();
+    ExitJump->R1 = static_cast<i64>(LoopEnd);
+
+    // Remove Iter | Remove o Iterador.
+    ByteInstruction* Pop = CodeGenUtils::
+        CreateInst(Node, OpCode::POP, 0, 0, Data, Memory);
+    Insts.push_back(Pop);
 }
 
 // Compile 'foreach' Iteration Loop | Compila Laço de Repetição 'foreach'
 void CodeGenerator::CompileForEach(ForEachNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
-{
-
-}
+{}
 
 // Compile 'for' Loop Default Node | Compila Nó de do Laço 'for' Padrão.
 void CodeGenerator::CompileForDef(ForDefNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
-{
-
-}
+{}
 
 // Compile Return Statement | Compila Instrução de Retorno ('return')
 void CodeGenerator::CompileReturn(ReturnNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
@@ -627,7 +719,12 @@ void GenerateCodeGenLog(ByteCode& BC, RunTimeData& Data)
         file << "CHUNK["+std::to_string(ic)+"]: \n";
         int i=0;
         for (ByteInstruction* Inst : C->Instructions)
-            file << "\tOpCode: ["+std::to_string(i)+"]"+std::to_string(static_cast<int>(Inst->C))+"\n";
+        {
+            if (i == C->Instructions.size())
+                file << "\tOpCode: ["+std::to_string(i)+"]: "+std::to_string(static_cast<int>(Inst->C))+",\n";
+            else file << "\tOpCode: ["+std::to_string(i)+"]: "+std::to_string(static_cast<int>(Inst->C))+"\n";
+            i++;
+        }
         ic++;
     }
     file << "\n\n// ============ ENDOF: 'CODE-GENERATION'. .. ... =========== //\n\n";
@@ -641,8 +738,9 @@ ByteCode CodeGenerator::InitCG(ParseResult& PRes, SAResult& SARes, RunTimeData& 
         PrintIn("STARTING TASK: Compile ORBIT");
 
     ByteCode BC;
-    CodeGenState State;
-
+    BC.Chunks.push_back(Memory.New<Chunk>());
+    CodeGenState State; 
+    
     CompileNode(PRes.AST, State, BC, SARes, Data, Memory);
 
     if (Data.flags.generateLog)

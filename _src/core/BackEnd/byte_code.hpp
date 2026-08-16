@@ -52,8 +52,6 @@ enum class OpCode
     POWER,
     LESS,
     GREATER,
-    LESSEQ,
-    GREATEREQ,
 
     // OPS
     NEG,
@@ -74,9 +72,11 @@ enum class OpCode
 
     GET_MEMBER,
     LOAD_MEMBER,
+    STORE_MEMBER,
 
     GET_INDEX,
     LOAD_INDEX,
+    STORE_INDEX,
 
     LOAD_FN,
 
@@ -86,6 +86,10 @@ enum class OpCode
     BUILD_RANGE,
 
     SET_TKEY,
+
+    // ITERS
+    ITER_NEXT,
+    ITER_HAS_NEXT,
 
     // CONTROL-FLOW
     JUMP,
