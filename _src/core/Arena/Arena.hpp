@@ -99,6 +99,10 @@ class Arena
         );
     }
 
+    // DELETE A OBJECT | DELETA UM OBJETO.
+    template<typename T>
+    void Delete(T* Obj)
+        { Obj.~T(); };
 
     // ALLOC ARRAY | ALOCA ARRAY
     template<typename T>

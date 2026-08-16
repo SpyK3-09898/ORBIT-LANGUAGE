@@ -681,13 +681,26 @@ void CodeGenerator::CompileForDef(ForDefNode* Node, CodeGenState& State, ByteCod
 // Compile Return Statement | Compila Instrução de Retorno ('return')
 void CodeGenerator::CompileReturn(ReturnNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
+    // Compile Expr | Compila a Expressão:
+    if (Node->Value)
+        CompileNode(Node->Value, State, BC, SARes, Data, Memory);
 
+    // Gen Inst | Gera a Instrução.
+    ByteInstruction* Inst = CodeGenUtils::
+        CreateInst(Node, OpCode::RETURN, 0, 0, Data, Memory);
+    BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 }
 
 // Compile Echo/Print Statement | Compila Instrução 'echo' (Impressão)
 void CodeGenerator::CompileEcho(EchoNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
-
+    // Compile Expr | Compila a Expressão:
+    CompileNode(Node->Value, State, BC, SARes, Data, Memory);
+    
+    // Gen Inst | Gera a Instrução.
+    ByteInstruction* Inst = CodeGenUtils::
+        CreateInst(Node, OpCode::ECHO, 0, 0, Data, Memory);
+    BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 }
 
 // Handle/Compile Statement Errors | Manipula/Compila Erros em Instruções (Statements)

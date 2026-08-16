@@ -36,6 +36,7 @@ set(_ORBIT
 add_executable(ORBIT
     ${ORBIT_CORE}
     ${_ORBIT}
+    _src/core/BackEnd/VM/virtual_machine.cpp
 )       
 
 # Include directories

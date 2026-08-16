@@ -406,11 +406,11 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
             ); 
         }
 
-    file << "Orbit Execution Log File. .. ...\n"
+    file << "\nOrbit Execution Log File. .. ...\n"
             "Log of ALL Execution Steps, Used for Devs and Debug\n"
             "--------------------------------------------------\n"
             "Saida de Execução Orbit. .. ....\n"
-            "Saida de TODAS as Etapas de Execução, Usados para DEVS E DEBUG\n\n\n";
+            "Saida de TODAS as Etapas de Execução, Usados para DEVS E DEBUG\n\n";
     string text = 
         "\n// ========== LEXER ============ // \n\n"
         "TOKEN COUNT: " + std::to_string(Res.Tokens.size())+"\n"
