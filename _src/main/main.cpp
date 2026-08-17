@@ -8,6 +8,11 @@
 #include "commands/run_file.hpp"
 #include "../core/RunTimeData.hpp"
 
+#include <chrono>
+#include <numeric>
+#include <limits>
+#include <string>
+
 // PARSE ARGUMENTS | PARSEIA ARGUMENTOS
 void ParseRunTimeArgs(const vec<string>& args, RunTimeData& Data)
 {
@@ -98,6 +103,71 @@ int main(int argc, char* argv[])
                 }
                 Data.LogDir = fs::absolute(argv[0]).parent_path().parent_path() / "_tests/logs";
                 RunOrbit(argv[2], Data);
+            }
+        } else if (Entry == "--benchmark") {
+
+            int times = 100;
+            if (argc < 3)
+                throw runt_err("File Expected after commandd '--benchmark'");
+            else {
+                ParseRunTimeArgs(vec<string>(argv + 2, argv + argc), Data);
+
+                for (RunTimeArg Arg : Data.Args)
+                {
+                    if (
+                        Arg.name == "DebugMode"
+                        && holds_alt_value<bool>(Arg.value, true)
+                    ) Data.flags.debugMode = true;
+
+                    if (
+                        Arg.name == "GenerateLog"
+                        && holds_alt_value<bool>(Arg.value, true)
+                    ) Data.flags.generateLog = true;
+
+                    if (
+                        Arg.name == "Times"
+                        && holds_alt<int>(Arg.value)
+                    ) times = std::get<int>(Arg.value);
+                }
+
+                Data.LogDir = fs::absolute(argv[0]).parent_path().parent_path() / "_tests/logs";
+
+                for (int i = 0; i < 10; i++)
+                    RunOrbit(argv[2], Data);
+
+                std::vector<double> Times;
+                Times.reserve(times);
+
+                for (int i = 0; i < times; i++)
+                {
+                    auto Start = std::chrono::steady_clock::now();
+
+                    RunOrbit(argv[2], Data);
+
+                    auto End = std::chrono::steady_clock::now();
+
+                    double Time =
+                        std::chrono::duration<double, std::milli>
+                        (End - Start).count();
+
+                    Times.push_back(Time);
+                }
+
+                double Sum = 0.0;
+
+                for (double Time : Times)
+                    Sum += Time;
+
+                double Average = Sum / Times.size();
+                double Min = *std::min_element(Times.begin(), Times.end());
+                double Max = *std::max_element(Times.begin(), Times.end());
+
+                PrintLn("\n\nBenchmark:");
+                PrintLn("Executions: ", Times.size());
+                PrintLn("Average: ", Average, " ms");
+                PrintLn("----------------");
+                PrintLn("Min: "+std::to_string(Min));
+                PrintLn("Max: "+std::to_string(Max));
             }
         } else if (Entry == "--version") {
 

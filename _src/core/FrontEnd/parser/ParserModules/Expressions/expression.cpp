@@ -29,6 +29,9 @@ namespace ExprUtils {
             case TokenType::MINUS:
                 return Operator::SUB;
 
+            case TokenType::NOT:
+                return Operator::NOT;
+
             case TokenType::STAR:
                 return Operator::MUL;
 
@@ -750,6 +753,7 @@ ExpressionNode* ExpressionParser::Nud(
         
         // ===== UNARYS ===== //
         case TokenType::MINUS:
+        case TokenType::NOT:
         case TokenType::PLUS:
         {
             // Take the Operand | Pega o Operando.

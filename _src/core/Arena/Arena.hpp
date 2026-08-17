@@ -102,7 +102,7 @@ class Arena
     // DELETE A OBJECT | DELETA UM OBJETO.
     template<typename T>
     void Delete(T* Obj)
-        { Obj.~T(); };
+        { Obj->~T(); };
 
     // ALLOC ARRAY | ALOCA ARRAY
     template<typename T>
@@ -119,7 +119,8 @@ class Arena
             new(&Array[i]) T();
 
         return Array;
-    }    // SAVE CURRENT STATE | SALVA ESTADO ATUAL
+    }    
+    // SAVE CURRENT STATE | SALVA ESTADO ATUAL
     CheckPointMarker SaveCheckPoint()
     {
         CheckPointMarker Marker;

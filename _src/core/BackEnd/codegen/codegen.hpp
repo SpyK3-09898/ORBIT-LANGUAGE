@@ -42,7 +42,7 @@ struct CodeGenState
     {
         return Locals.find(Name) != Locals.end();
     }
-    // Get Slot of Local | Pega o Slot do Loca .
+    // Get Slot of Local | Pega o Slot do Local.
     ui32 GetLocal(const string& Name)
     {
         auto It = Locals.find(Name);
@@ -55,6 +55,14 @@ struct CodeGenState
 
         return Index;
     }
+
+    // Create A New Local | Cria um Novo Local.
+    ui32 CreateLocal(const string& Name)
+    {
+        Locals[Name] = Locals.size()+1;
+        return Locals[Name];
+    }
+
 };
 
 

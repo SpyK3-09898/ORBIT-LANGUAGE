@@ -1591,6 +1591,8 @@ void SemanticAnalizer::LookUpBinary(BinaryNode& Node, SAState& State, SAResult& 
             ) {}
             else if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) {}
             else if (LKind == TypeKind::STRING && RKind == TypeKind::STRING) {}
+            else if (LKind == TypeKind::NUMBER && RKind == TypeKind::STRING) {}
+            else if (LKind == TypeKind::STRING && RKind == TypeKind::NUMBER) {}
             else
             {
                 InvalidOperation();

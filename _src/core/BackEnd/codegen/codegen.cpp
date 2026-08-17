@@ -61,7 +61,71 @@ namespace CodeGenUtils {
             
             if constexpr (std::is_same_v<T, std::nullptr_t>) {
                 return NullLitVal{};
-            } else {
+            }
+            else if constexpr (std::is_same_v<T, string>)
+            {
+                string Value;
+
+                for (size_t i = 0; i < arg.size(); i++)
+                {
+                    if (arg[i] == '\\' && i + 1 < arg.size())
+                    {
+                        ++i;
+
+                        switch (arg[i])
+                        {
+                            case 'n':
+                                Value += '\n';
+
+                                if (i + 1 < arg.size() && arg[i + 1] == ' ')
+                                    ++i;
+
+                                break;
+
+                            case 't':
+                                Value += '\t';
+
+                                if (i + 1 < arg.size() && arg[i + 1] == ' ')
+                                    ++i;
+
+                                break;
+
+                            case 'r':
+                                Value += '\r';
+                                break;
+
+                            case '0':
+                                Value += '\0';
+                                break;
+
+                            case '\\':
+                                Value += '\\';
+                                break;
+
+                            case '\'':
+                                Value += '\'';
+                                break;
+
+                            case '"':
+                                Value += '"';
+                                break;
+
+                            default:
+                                Value += '\\';
+                                Value += arg[i];
+                                break;
+                        }
+
+                        continue;
+                    }
+
+                    Value += arg[i];
+                }
+
+                return Value;
+            }
+            else
+            {
                 return arg;
             }
         }, V);
@@ -294,8 +358,8 @@ void CodeGenerator::CompileBinary(BinaryNode* Node, CodeGenState& State, ByteCod
         case Operator::DIV:   op = OpCode::DIV; break;
         case Operator::MOD:   op = OpCode::MOD; break;
         case Operator::POWER: op = OpCode::POWER; break;
-        case Operator::LESS:  op = OpCode::LESS;  break;
-        case Operator::GREATER: op = OpCode::GREATER; break;
+        case Operator::LESS:  op = OpCode::CMP_LT;  break;
+        case Operator::GREATER: op = OpCode::CMP_GT; break;
         case Operator::LESS_EQUAL: op = OpCode::CMP_LE; break;
         case Operator::GREATER_EQUAL: op = OpCode::CMP_GT; break;
 
@@ -467,10 +531,11 @@ void CodeGenerator::CompileVarDecl(VarDeclNode* Node, CodeGenState& State, ByteC
 {
     // Compile | Compila:
     CompileNode(Node->Val, State, BC, SARes, Data, Memory);
+    ui32 ID = State.CreateLocal(Node->Name);
 
     // Gen Inst | Gera a Instrução.
     ByteInstruction* Inst = CodeGenUtils::
-        CreateInst(Node, OpCode::STORE_LOCAL, Node->Name, 0, Data, Memory);
+        CreateInst(Node, OpCode::STORE_LOCAL, ID, 0, Data, Memory);
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 }
 

@@ -106,10 +106,13 @@ class VirtualMachine
 
         opt<StackCall> CallStack;
         int Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& Memory);
+
+        int RunBinary(ByteCode& BC, InstructionPointer& IP, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        int RunComp(const ByteValue& L, const ByteValue& R, OpCode Op);
+        int RunUnary(ByteValue& O, OpCode Op, ByteCode& BC, InstructionPointer& IP, SAResult& Res, RunTimeData& Data, Arena& Memory);
     public:
 
-        void InitVM(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& Memory);
-        
+        void InitVM(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& Memory);        
 };
 
 // EOF

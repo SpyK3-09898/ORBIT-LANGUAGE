@@ -50,8 +50,6 @@ enum class OpCode
     DIV,
     MOD,
     POWER,
-    LESS,
-    GREATER,
 
     // OPS
     NEG,
@@ -127,6 +125,7 @@ struct Chunk
 // ByteCode | ByteCode.
 struct ByteCode
 {
+    int currChunk=0;
     vec<Chunk*> Chunks;
     unord_map<string, ui32> Functions;
 };

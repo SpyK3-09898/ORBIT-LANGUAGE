@@ -251,6 +251,59 @@ void Lexer::Scanners::ReadString(Lexer& Lexer, RunTimeData& Data, LexState& Stat
             return;
         }
 
+        if (C is '\\')
+        {
+            LexUtils::Advance(State, Data);
+
+            C = LexUtils::Peek(State, Data);
+
+            if (C is EOF_CHAR)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Lexing",
+                    "Unterminated <STRING>",
+                    "Expected Character After <ESCAPE>",
+                    "Complete The Escape Sequence",
+                    State.currPos.line,
+                    State.currPos.collumn
+                );
+                return;
+            }
+
+            switch (C)
+            {
+                case 'n':
+                case 't':
+                case 'r':
+                case '0':
+                case '\\':
+                case '\'':
+                case '"':
+                    break;
+
+                default:
+                    if (Data.flags.generateLog)
+                        OrbitLog::SyntaxLog::SyntaxWarn(
+                            "Lexing",
+                            "Unknown <ESCAPE>: \\" + string(1, C) + ". Ignoring '\\'",
+                            "<ESCAPE> is not Mapped or Dont Exists",
+                            "Add A Valid <ESCAPE> Or Check Log File", State.currPos.line, State.currPos.collumn
+                        );
+                    else
+                        OrbitLog::SyntaxLog::SyntaxWarn(
+                            "Lexing",
+                            "Unknown <ESCAPE>: \\" + string(1, C) + ". Ignoring '\\'",
+                            "<ESCAPE> is not Mapped or Dont Exists",
+                            "Add a Valid <ESCAPE>", State.currPos.line, State.currPos.collumn
+                        );
+                    break;
+            }
+
+            ++State.currPos.len;
+            LexUtils::Advance(State, Data);
+            continue;
+        }
+
         if (SType is StringType::SINGLE_QUOTE)
         {
             if (C is '\'')
