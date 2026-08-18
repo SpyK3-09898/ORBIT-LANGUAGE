@@ -33,6 +33,7 @@ struct RunTimeData
     struct {
         bool debugMode=false;
         bool generateLog=false;
+        bool vmConsoleDebug=false;
         bool UnicodeSupport=true;
     } flags;
 };

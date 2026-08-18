@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <string>
 #include <cmath>
+#include <type_traits>
 
 // ========== UTILS =========== //
 
@@ -179,7 +180,7 @@ namespace VM_Utils {
                     ret += "]";
                     return ret;
                 }
-                else {
+                else { 
                     OrbitLog::SyntaxLog::SyntaxError(
                         "RunTime", 
                         "Non Viable Conversion In: <STRING>, To: <UNK>", 
@@ -248,6 +249,22 @@ namespace VM_Utils {
         return 0;
     }
 
+    // Convert Left to String To Debug | Converte Esquerda para a Direita Para Debug.
+    string ConvertByteToString(ByteValue& Val)
+    {
+        if (holds_alt_value<bool>(Val, false)) return "false";
+        else if (holds_alt_value<bool>(Val, true)) return "true";
+        else if (holds_alt<float>(Val)) 
+            return std::to_string(std::get<float>(Val));
+        else if (holds_alt<i64>(Val))
+            return std::to_string(std::get<i64>(Val));
+        else if (holds_alt<string>(Val)) return std::get<string>(Val);
+        else if (holds_alt<NoneLitVal>(Val)) return "None";
+        else if (holds_alt<NullLitVal>(Val)) return "Null";
+        else if (holds_alt<shared_ptr<ByteArray>>(Val)) return "{..}";
+        else return "Iterator";
+    }
+
     // Compare 2 Values | Compara 2 Valores.
     bool CompareEqual(const ByteValue& L, const ByteValue& R)
     {
@@ -281,6 +298,10 @@ namespace VM_Utils {
                 }
 
                 return true;
+            }
+            else if constexpr(std::is_same_v<T, ByteIterator>)
+            {
+                return false;
             }
             else
             {
@@ -502,6 +523,146 @@ int VirtualMachine::RunComp(const ByteValue& L, const ByteValue& R, OpCode Op)
             Result = !Equal;
             break;
 
+        case OpCode::CMP_LT:
+        {
+            std::visit([&](const auto& A, const auto& B) {
+                using T1 = std::decay_t<decltype(A)>;
+                using T2 = std::decay_t<decltype(B)>;
+
+                if constexpr (
+                    std::is_same_v<T1, i64> &&
+                    std::is_same_v<T2, i64>
+                )
+                    Result = A < B;
+
+                else if constexpr (
+                    std::is_same_v<T1, float> &&
+                    std::is_same_v<T2, float>
+                )
+                    Result = A < B;
+
+                else if constexpr (
+                    std::is_same_v<T1, i64> &&
+                    std::is_same_v<T2, float>
+                )
+                    Result = static_cast<float>(A) < B;
+
+                else if constexpr (
+                    std::is_same_v<T1, float> &&
+                    std::is_same_v<T2, i64>
+                )
+                    Result = A < static_cast<float>(B);
+
+            }, L, R);
+
+            break;
+        }
+
+        case OpCode::CMP_LE:
+        {
+            std::visit([&](const auto& A, const auto& B) {
+                using T1 = std::decay_t<decltype(A)>;
+                using T2 = std::decay_t<decltype(B)>;
+
+                if constexpr (
+                    std::is_same_v<T1, i64> &&
+                    std::is_same_v<T2, i64>
+                )
+                    Result = A <= B;
+
+                else if constexpr (
+                    std::is_same_v<T1, float> &&
+                    std::is_same_v<T2, float>
+                )
+                    Result = A <= B;
+
+                else if constexpr (
+                    std::is_same_v<T1, i64> &&
+                    std::is_same_v<T2, float>
+                )
+                    Result = static_cast<float>(A) <= B;
+
+                else if constexpr (
+                    std::is_same_v<T1, float> &&
+                    std::is_same_v<T2, i64>
+                )
+                    Result = A <= static_cast<float>(B);
+
+            }, L, R);
+
+            break;
+        }
+
+        case OpCode::CMP_GT:
+        {
+            std::visit([&](const auto& A, const auto& B) {
+                using T1 = std::decay_t<decltype(A)>;
+                using T2 = std::decay_t<decltype(B)>;
+
+                if constexpr (
+                    std::is_same_v<T1, i64> &&
+                    std::is_same_v<T2, i64>
+                )
+                    Result = A > B;
+
+                else if constexpr (
+                    std::is_same_v<T1, float> &&
+                    std::is_same_v<T2, float>
+                )
+                    Result = A > B;
+
+                else if constexpr (
+                    std::is_same_v<T1, i64> &&
+                    std::is_same_v<T2, float>
+                )
+                    Result = static_cast<float>(A) > B;
+
+                else if constexpr (
+                    std::is_same_v<T1, float> &&
+                    std::is_same_v<T2, i64>
+                )
+                    Result = A > static_cast<float>(B);
+
+            }, L, R);
+
+            break;
+        }
+
+        case OpCode::CMP_GE:
+        {
+            std::visit([&](const auto& A, const auto& B) {
+                using T1 = std::decay_t<decltype(A)>;
+                using T2 = std::decay_t<decltype(B)>;
+
+                if constexpr (
+                    std::is_same_v<T1, i64> &&
+                    std::is_same_v<T2, i64>
+                )
+                    Result = A >= B;
+
+                else if constexpr (
+                    std::is_same_v<T1, float> &&
+                    std::is_same_v<T2, float>
+                )
+                    Result = A >= B;
+
+                else if constexpr (
+                    std::is_same_v<T1, i64> &&
+                    std::is_same_v<T2, float>
+                )
+                    Result = static_cast<float>(A) >= B;
+
+                else if constexpr (
+                    std::is_same_v<T1, float> &&
+                    std::is_same_v<T2, i64>
+                )
+                    Result = A >= static_cast<float>(B);
+
+            }, L, R);
+
+            break;
+        }
+
         default:
             break;
     }
@@ -545,6 +706,17 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
         Chunk* CurrChunk = BC.Chunks[BC.currChunk];
         auto& CurrInst = BC.Chunks[BC.currChunk]->Instructions[IP.Index];
         auto& Insts = CurrChunk->Instructions;
+        if (Data.flags.vmConsoleDebug)
+        {
+            PrintLn(
+                "RUNNING: "+
+                std::to_string(static_cast<int>(CurrInst->C)), 
+                " | REG1: "+
+                VM_Utils::ConvertByteToString(CurrInst->R1)+
+                ", REG2: "+
+                VM_Utils::ConvertByteToString(CurrInst->R2)
+            );
+        }
 
         // Main Switch | Switch Principal:
         switch (OP) {
@@ -568,6 +740,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             case OpCode::POWER:
                 { RunBinary(BC, IP, Res, Data, Memory); break; }
 
+            
             // Comp | Comparaçoes:
             case OpCode::CMP_EQ:
             case OpCode::CMP_NE:
@@ -575,9 +748,13 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             case OpCode::CMP_LE:
             case OpCode::CMP_GT:
             case OpCode::CMP_GE:
-                RunComp
-                (CallStack->GetTop()->Pop(), CallStack->GetTop()->Pop(), CurrInst->C);
+            {
+                ByteValue R = CallStack->GetTop()->Pop();
+                ByteValue L = CallStack->GetTop()->Pop();
+
+                RunComp(L, R, CurrInst->C);
                 break;
+            }
                 
             // Unary | Unarios
             case OpCode::NEG:
@@ -599,8 +776,113 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 CallStack->GetTop()->Locals[std::get<i64>(CurrInst->R1)] = Val;
                 break;
             }
-            
+            case OpCode::STORE_CONST: // Store 'Pop' In A Constant | Guarda o Valor de 'Pop' Em Uma Constante.
+            {
+                
+            }
+            // BUILDS:
+            // Build a Range Iterator | Constroi um Iterador de Intervalo.
+            case OpCode::BUILD_RANGE: 
+            {
+                ByteIterator It
+                (std::get<i64>(CallStack->GetTop()->Pop()), std::get<i64>(CallStack->GetTop()->Pop()), 1);
+                CallStack->GetTop()->PushBack(It);
+
+                break;
+            }
+
+            // ITERS:
+            // Add '.InEnd()' Result in Stack | Adiciona o Resultado a Função: '.InEnd()' Na Stack.
+            case OpCode::ITER_HAS_NEXT:
+            {
+                ByteValue& Val = CallStack->GetTop()->Stack.back();
+
+                if (holds_alt<ByteIterator>(Val))
+                    OrbitLog::Error(
+                        "virtual_machine", 
+                        "Trying to Get a Non-Iterador Object",
+                        true,
+                        ORBIT_ERRORS_CODE::RUNTIME_ERROR
+                    );
+                ByteIterator& It = std::get<ByteIterator>(Val);
+                CallStack->GetTop()->PushBack(!It.InEnd());
+                break;
+            }
+            case OpCode::ITER_NEXT: // Advance Iterator | Avança o Iterador.
+            {
+                ByteValue& Val = CallStack->GetTop()->Stack.back();
+
+                if (holds_alt<ByteIterator>(Val))
+                    OrbitLog::Error(
+                        "virtual_machine", 
+                        "Trying to Get a Non-Iterador Object",
+                        true,
+                        ORBIT_ERRORS_CODE::RUNTIME_ERROR
+                    );
+                ByteIterator& It = std::get<ByteIterator>(Val);
+
+                i64 current = It.Curr;
+                It.Advance();
+
+                CallStack->GetTop()->PushBack(current);
+                break;    
+            }
+
             // CONTROL-FLOW
+            case OpCode::JUMP: // Jump to Another Point in Code | Pula pra Outro Ponto no Codigo
+            {
+                if (std::get<i64>(CurrInst->R1) > BC.Chunks[BC.currChunk]->Instructions.size())
+                {
+                    OrbitLog::Error(
+                        "virtual_machine.cpp", 
+                        "Trying to Acess a Instruction OUT_OF_RANGE: "+std::to_string(std::get<i64>(CurrInst->R1)), 
+                        true, 
+                        ORBIT_ERRORS_CODE::RUNTIME_ERROR
+                    );
+                }
+                IP.Index = std::get<i64>(CurrInst->R1);
+                continue;
+            }
+            case OpCode::JUMP_IF_FALSE: // Jump to Another Point in Code If Cond is 'False' | Pula pra Outro Ponto no Codigo se a Condição for FALSA.
+            {
+                ByteValue Cond = CallStack->GetTop()->Pop();
+
+                if (!holds_alt<bool>(Cond))
+                    OrbitLog::Error(
+                        "virtual_machine.cpp",
+                        "Expected Boolean Condition In Stack. But Got: " +
+                        std::get<string>(
+                            VM_Utils::ConvertValue(
+                                Cond,
+                                TypeKind::STRING,
+                                SubTypeKind::NONE,
+                                CurrInst->Pos,
+                                Data
+                            )
+                        ),
+                        true,
+                        ORBIT_ERRORS_CODE::RUNTIME_ERROR
+                    );
+
+                if (std::get<bool>(Cond) == false)
+                {
+                    IP.Index = std::get<i64>(CurrInst->R1);
+                    continue;
+                }
+
+                if (std::get<i64>(CurrInst->R1) > BC.Chunks[BC.currChunk]->Instructions.size())
+                {
+                    OrbitLog::Error(
+                        "virtual_machine.cpp",
+                        "Trying to Acess a Instruction OUT_OF_RANGE: " +
+                        std::to_string(std::get<i64>(CurrInst->R1)),
+                        true,
+                        ORBIT_ERRORS_CODE::RUNTIME_ERROR
+                    );
+                }
+
+                break;
+            }
 
             // OTHERS:
             case OpCode::ECHO: // Log in Console | Informa no Console:
@@ -625,6 +907,10 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
 // Entry-Point Of Virtual-Machine | Ponto-de-Entrada da Maquina-Virtual.
 void VirtualMachine::InitVM(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
+    for (RunTimeArg Arg : Data.Args)
+        if (Arg.name == "VM_ConsoleLog" && holds_alt_value<bool>(Arg.value, true))
+            Data.flags.vmConsoleDebug=true;
+    
     // Create Call Stack | Cria a Call-Stack
     this->CallStack.emplace(Memory);
 

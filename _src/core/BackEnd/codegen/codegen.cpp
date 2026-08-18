@@ -464,8 +464,8 @@ void CodeGenerator::CompileArrayValue(ArrayValue* Node, CodeGenState& State, Byt
 void CodeGenerator::CompileRange(RangeNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
     // Compile | Compila.
-    CompileNode(Node->Begin, State, BC, SARes, Data, Memory);
     CompileNode(Node->End, State, BC, SARes, Data, Memory);
+    CompileNode(Node->Begin, State, BC, SARes, Data, Memory);
 
     // Generate Inst | Gera a Instrução.
     ByteInstruction* Inst = 
@@ -487,7 +487,7 @@ void CodeGenerator::CompileLValue(ExpressionNode* Node, CodeGenState& State, Byt
         case NodeType::IDENTIFIER:
         {
             IdentifierNode* N = static_cast<IdentifierNode*>(Node);
-            OpCode op = base ? OpCode::STORE_CONST : OpCode::LOAD_LOCAL;
+            OpCode op = base ? OpCode::STORE_LOCAL : OpCode::LOAD_LOCAL;
             ByteInstruction* Inst = CodeGenUtils::
                 CreateInst(Node, op, State.GetLocal(N->Name), 0, Data, Memory);
             BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
@@ -827,3 +827,5 @@ ByteCode CodeGenerator::InitCG(ParseResult& PRes, SAResult& SARes, RunTimeData& 
         PrintIn("ENDOF TASK: 'Compile ORBIT'. .. ...");
     return BC;
 }
+
+// EOF

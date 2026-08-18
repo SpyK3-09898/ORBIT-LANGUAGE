@@ -41,6 +41,8 @@ struct VM_Frame
     }
     ByteValue Pop()
     {
+        if (Stack.size() == 0)
+            OrbitLog::Error("virtual_machine.hpp", "Trying to Make a 'Pop' In Empty Stack", true, ORBIT_ERRORS_CODE::MEMORY_ERROR);
         ByteValue Val = Stack.back();
         Stack.pop_back();
         return Val;
