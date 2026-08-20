@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <string>
 #include <cmath>
+#include <algorithm>
 #include <type_traits>
 
 // ========== UTILS =========== //
@@ -180,6 +181,7 @@ namespace VM_Utils {
                     ret += "]";
                     return ret;
                 }
+                else if (holds_alt<ByteFn*>(Val)) return "Function";
                 else { 
                     OrbitLog::SyntaxLog::SyntaxError(
                         "RunTime", 
@@ -262,7 +264,9 @@ namespace VM_Utils {
         else if (holds_alt<NoneLitVal>(Val)) return "None";
         else if (holds_alt<NullLitVal>(Val)) return "Null";
         else if (holds_alt<shared_ptr<ByteArray>>(Val)) return "{..}";
-        else return "Iterator";
+        else if (holds_alt<ByteIterator*>(Val)) return "Iterator";
+        else if (holds_alt<ByteFn*>(Val)) return "Function";
+        else return "Unk";
     }
 
     // Compare 2 Values | Compara 2 Valores.
@@ -312,11 +316,72 @@ namespace VM_Utils {
     }
 }
 
+// =========== GARBAGE-COLLECTOR ========== //
+
+// Update GC | Atualiza o GC.
+void GarbageCollector::Update(ByteCode& BC, InstructionPointer& IP, SAResult& Res, RunTimeData& Data, Arena& Memory)
+{
+    // Take Stack Objects | Pega os Objetos da Stack.
+    vec<ObjectDescr*> StackObjs{};
+    VM_Frame* CurrFrame = VM->CallStack->GetTop();
+
+    while (CurrFrame)
+    {
+        for (ByteValue& Val : CurrFrame->Stack)
+        {
+            if (holds_alt<ByteFn*>(Val))
+                StackObjs.push_back(std::get<ByteFn*>(Val)->Descr);
+            else if (holds_alt<ByteIterator*>(Val))
+                StackObjs.push_back(std::get<ByteIterator*>(Val)->Descr);
+        }
+        CurrFrame = CurrFrame->Back;
+    }
+
+    // Take Descriptions | Pega as Descriçoes.
+    for (auto It = Descriptions.begin(); It != Descriptions.end();)
+    {
+        ObjectDescr* Descr = *It;
+
+        if (!Descr->changed)
+        {
+            ++It;
+            continue;
+        }
+
+        Descr->changed = false;
+
+        if (!Descr->marked)
+            if (std::find(StackObjs.begin(), StackObjs.end(), Descr) == StackObjs.end())
+            {
+                It = Descriptions.erase(It);
+                Descr->Destroy(Descr->Owner, Memory);
+                continue;
+            }
+
+        ++It;
+    }
+}
+
+// Register A New Object | Regista Um Novo Objeto.
+ObjectDescr* GarbageCollector::Register(void* Object, void (*Destroy)(void*, Arena&), Arena& Memory)
+{
+    ObjectDescr* Descr = Memory.New<ObjectDescr>();
+
+    Descr->Owner = Object;
+    Descr->Destroy = Destroy;
+
+    Descriptions.push_back(Descr);
+
+    return Descr;
+}
+
 // ========== CORE =========== //
 
 // Run Binary Arithmetic Operations | Roda Operações Binarias Aritmeticas.
 int VirtualMachine::RunBinary(ByteCode& BC, InstructionPointer& IP, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
+    auto Start = std::chrono::high_resolution_clock::now();
+
     auto& CurrInst = BC.Chunks[BC.currChunk]->Instructions[IP.Index];
 
     ByteValue R = CallStack->GetTop()->Pop();
@@ -502,12 +567,21 @@ int VirtualMachine::RunBinary(ByteCode& BC, InstructionPointer& IP, SAResult& Re
             OrbitLog::Error("virtual_machine.cpp", "Trying to Make a Aritm Operation Whit Unknow OpCode: "+std::to_string(static_cast<int>(CurrInst->C)), true, 1);
     }
 
+    if (calcExecTime)
+    {
+        auto End = std::chrono::high_resolution_clock::now();
+        auto Duration = End - Start;
+        TimeData["RunFunctions"] += std::chrono::duration<double, std::milli>(Duration).count();
+    }
+
     return 0;
 }
 
 // Compare 2 Values | Compara 2 Valores
 int VirtualMachine::RunComp(const ByteValue& L, const ByteValue& R, OpCode Op)
 {
+    auto Start = std::chrono::high_resolution_clock::now();
+
     VM_Frame* Frame = CallStack->GetTop();
 
     bool Equal = VM_Utils::CompareEqual(L, R);
@@ -668,12 +742,21 @@ int VirtualMachine::RunComp(const ByteValue& L, const ByteValue& R, OpCode Op)
     }
 
     Frame->PushBack(Result);
+    
+    if (calcExecTime)
+    {
+        auto End = std::chrono::high_resolution_clock::now();
+        auto Duration = End - Start;
+        TimeData["RunFunctions"] += std::chrono::duration<double, std::milli>(Duration).count();
+    }
     return 0;
 }
 
 // Set Unary Values | Define Valores Unarios.
 int VirtualMachine::RunUnary(ByteValue& O, OpCode Op, ByteCode& BC, InstructionPointer& IP, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
+    auto Start = std::chrono::high_resolution_clock::now();
+
     // Main Switch | Switch Principal.
     switch (Op) {
     
@@ -691,12 +774,24 @@ int VirtualMachine::RunUnary(ByteValue& O, OpCode Op, ByteCode& BC, InstructionP
         default: CallStack->GetTop()->PushBack(0);
     }
 
+    if (calcExecTime)
+    {
+        auto End = std::chrono::high_resolution_clock::now();
+        auto Duration = End - Start;
+        TimeData["RunFunctions"] += std::chrono::duration<double, std::milli>(Duration).count();
+    }
     return 0;
 }
 
 // Main Function, Run ORBIT | Função Principal, Roda a ORBIT.
 int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
+    fstream file;
+    if (Data.flags.generateLog)
+    {
+        file = fstream(Data.LogDir, std::ios::out | std::ios::app);
+        file << "\n//=========== VIRTUAL-MACHINE ========== //\n\n";
+    }
     BC.currChunk=0;
     InstructionPointer IP = {0};
     size_t codeSize = BC.Chunks[BC.currChunk]->Instructions.size();
@@ -707,6 +802,27 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
         Chunk* CurrChunk = BC.Chunks[BC.currChunk];
         auto& CurrInst = BC.Chunks[BC.currChunk]->Instructions[IP.Index];
         auto& Insts = CurrChunk->Instructions;
+        if (Data.flags.generateLog)
+        {
+            file <<
+                "RUNNING: "+
+                std::to_string(static_cast<int>(CurrInst->C))+ 
+                " | REG1: "+
+                VM_Utils::ConvertByteToString(CurrInst->R1)+
+                ", REG2: "+
+                VM_Utils::ConvertByteToString(CurrInst->R2)+
+                "\nIP: "+std::to_string(IP.Index)
+                +"\nSTACK: ";
+            
+            int i=0;
+            for (ByteValue& Val : CallStack->GetTop()->Stack)
+            {
+                if (i != CallStack->GetTop()->Stack.size())
+                    file << "  ["+std::to_string(i)+"]: " + VM_Utils::ConvertByteToString(Val) + ",\n";
+                else file << "  ["+std::to_string(i)+"]: " + VM_Utils::ConvertByteToString(Val) + "\n";
+            }
+            file << "\n";
+        }
         if (Data.flags.vmConsoleDebug)
         {
             PrintLn(
@@ -715,15 +831,25 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 " | REG1: "+
                 VM_Utils::ConvertByteToString(CurrInst->R1)+
                 ", REG2: "+
-                VM_Utils::ConvertByteToString(CurrInst->R2)
+                VM_Utils::ConvertByteToString(CurrInst->R2)+
+                "\nIP: "+std::to_string(IP.Index)
+                +"\nSTACK: "
             );
+            int i=0;
+            for (ByteValue& Val : CallStack->GetTop()->Stack)
+            {
+                if (i != CallStack->GetTop()->Stack.size())
+                    PrintLn("  ["+std::to_string(i)+"]: ", VM_Utils::ConvertByteToString(Val), ",\n");
+                else PrintLn("  ["+std::to_string(i)+"]: ", VM_Utils::ConvertByteToString(Val), "\n");
+            }
         }
 
         // Main Switch | Switch Principal:
-        switch (OP) {
+        switch (OP) 
+        {
 
             // STACK-CONTROL:
-            case OpCode::PUSH: // Push A New Value to Sack | Coloca Um Novo Valor na Pilha:
+            case OpCode::PUSH: // Push A New Value to Sack | Coloca um Novo Valor na Pilha:
                 CallStack->GetTop()->PushBack(CurrInst->R1);
                 break;
 
@@ -785,10 +911,17 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             // Build a Range Iterator | Constroi um Iterador de Intervalo.
             case OpCode::BUILD_RANGE: 
             {
-                ByteIterator It
-                (std::get<i64>(CallStack->GetTop()->Pop()), std::get<i64>(CallStack->GetTop()->Pop()), 1);
-                CallStack->GetTop()->PushBack(It);
+                i64 end   = std::get<i64>(CallStack->GetTop()->Pop());
+                i64 start = std::get<i64>(CallStack->GetTop()->Pop());
 
+                ByteIterator* It = Memory.New<ByteIterator>(
+                    static_cast<ui32>(start),
+                    static_cast<size_t>(end),
+                    1
+                );
+                It->Descr = GC.Register(It, ByteIterator::Destroy, Memory);
+
+                CallStack->GetTop()->PushBack(It);
                 break;
             }
 
@@ -798,32 +931,32 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             {
                 ByteValue& Val = CallStack->GetTop()->Stack.back();
 
-                if (holds_alt<ByteIterator>(Val))
+                if (!holds_alt<ByteIterator*>(Val))
                     OrbitLog::Error(
                         "virtual_machine", 
                         "Trying to Get a Non-Iterador Object",
                         true,
                         ORBIT_ERRORS_CODE::RUNTIME_ERROR
                     );
-                ByteIterator& It = std::get<ByteIterator>(Val);
-                CallStack->GetTop()->PushBack(!It.InEnd());
+                ByteIterator* It = std::get<ByteIterator*>(Val);
+                CallStack->GetTop()->PushBack(!It->InEnd());
                 break;
             }
             case OpCode::ITER_NEXT: // Advance Iterator | Avança o Iterador.
             {
                 ByteValue& Val = CallStack->GetTop()->Stack.back();
 
-                if (holds_alt<ByteIterator>(Val))
+                if (!holds_alt<ByteIterator*>(Val))
                     OrbitLog::Error(
                         "virtual_machine", 
                         "Trying to Get a Non-Iterador Object",
                         true,
                         ORBIT_ERRORS_CODE::RUNTIME_ERROR
                     );
-                ByteIterator& It = std::get<ByteIterator>(Val);
+                ByteIterator* It = std::get<ByteIterator*>(Val);
 
-                i64 current = It.Curr;
-                It.Advance();
+                i64 current = It->Curr;
+                It->Advance();
 
                 CallStack->GetTop()->PushBack(current);
                 break;    
@@ -844,7 +977,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 IP.Index = std::get<i64>(CurrInst->R1);
                 continue;
             }
-            case OpCode::JUMP_IF_FALSE: // Jump to Another Point in Code If Cond is 'False' | Pula pra Outro Ponto no Codigo se a Condição for FALSA.
+            case OpCode::JUMP_IF_FALSE: // Jump to Another Point in Code If Cond is 'False' | Pula para Outro Ponto no Codigo se a Condição for FALSA.
             {
                 ByteValue Cond = CallStack->GetTop()->Pop();
 
@@ -893,6 +1026,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 Fn->ID =std::get<i64>(CurrInst->R1);
                 Fn->ParamCount = std::get<i64>(CurrInst->R2);
 
+                Fn->Descr = GC.Register(Fn, ByteFn::Destroy, Memory);
                 CallStack->GetTop()->PushBack(Fn);
                 break;
             }
@@ -904,7 +1038,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 
                 ByteFn* B_Fn = std::get<ByteFn*>(CallStack->GetTop()->Stack[fnPos]);
                 
-                // Create A New Frame | Cria um Novo Frame.
+                // Create A New Frame | Cria um Novo Quadro.
                 VM_Frame* New = Memory.New<VM_Frame>();
                 New->Back = CallStack->GetTop();
                 New->retChunk = BC.currChunk;
@@ -944,14 +1078,12 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 if (!Curr->Stack.empty())
                     Caller->PushBack(Curr->Pop());
 
-                // Volta pro chunk original
-                BC.currChunk = Caller->retChunk;
+                // Come Back to Original Chunk | Volta Para o Chunk Original.
+                BC.currChunk = Curr->retChunk;
 
-                // Restaura o IP do caller
+                // Restore Caller IP | Restaura o IP do Caller.
                 IP = CallStack->Pop();
-
                 codeSize = BC.Chunks[BC.currChunk]->Instructions.size();
-
                 break;
             }
             case OpCode::ECHO: // Log in Console | Informa no Console:
@@ -967,18 +1099,41 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 OrbitLog::Error("virtual_machine", "unknow OPCODE: "+std::to_string(static_cast<int>(OP)), false, 404);
                 return 1;
         }
+        if (GC.curr_ipdt == GC.updt_rate)
+        {
+            auto Start = std::chrono::high_resolution_clock::now();
+
+            GC.curr_ipdt = 0;
+            GC.Update(BC, IP, Res, Data, Memory);
+
+            if (calcExecTime)
+            {
+                auto End = std::chrono::high_resolution_clock::now();
+                auto Duration = End - Start;
+                TimeData["GC_Update"] += std::chrono::duration<double, std::milli>(Duration).count();
+            }
+        } else GC.curr_ipdt++;
         IP.Index++;
+    }
+    if (Data.flags.generateLog)
+    {
+        file << "\n//=========== ENDOF: 'VIRTUAL-MACHINE'. .. ... ========== //\n";
+        file.close();
     }
     return 0;
 }
 
-// ========== ENTRY-POINT =========== //
+// =========== ENTRY-POINT ============ //
 // Entry-Point Of Virtual-Machine | Ponto-de-Entrada da Maquina-Virtual.
 void VirtualMachine::InitVM(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
     for (RunTimeArg Arg : Data.Args)
+    {
         if (Arg.name == "VM_ConsoleLog" && holds_alt_value<bool>(Arg.value, true))
             Data.flags.vmConsoleDebug=true;
+        if (Arg.name == "VM_ExecLog" && holds_alt_value<bool>(Arg.value, true))
+            calcExecTime=true;
+    }     
     
     // Create Call Stack | Cria a Call-Stack
     this->CallStack.emplace(Memory);
@@ -990,8 +1145,42 @@ void VirtualMachine::InitVM(ByteCode& BC, SAResult& Res, RunTimeData& Data, Aren
     // Set Entry | Define a Entrada.
     InstructionPointer EntryIP = {0}; 
     this->CallStack->Push(MainF, &EntryIP);
+    GC.VM = this;
+    GC.updt_rate = 10000;
 
-    auto Return = Run(BC, Res, Data, Memory);
+    // Time Calc | Calculo de Tempo de Execução.
+    if (calcExecTime)
+    {
+        TimeData["RunFunctions"] = 0.0;
+        TimeData["GC_Update"] = 0.0;
+
+        auto Start = std::chrono::high_resolution_clock::now();
+
+        int Return = Run(BC, Res, Data, Memory);
+
+        auto End = std::chrono::high_resolution_clock::now();
+
+        auto Duration = End - Start;
+        double Seconds = std::chrono::duration<double>(Duration).count();
+        double Milliseconds = std::chrono::duration<double, std::milli>(Duration).count();
+
+        PrintLn(
+            "\n\n// ----- TIME-LOG ----- //\n\n",
+            "\n// --- RUNTIME --- //\n",
+            "\nTotal VM Execution Time: ",
+            std::fixed, std::setprecision(6),
+            Seconds, " s | ",
+            Milliseconds, " ms\n",
+            "\nRuntimeFuncs: " + std::to_string(TimeData["RunFunctions"]),
+            "\n\n// ----- GARBAGE-COLLECTOR --- //\n",
+            "\nGC_Update: " + std::to_string(TimeData["GC_Update"]),
+            "\n\n// ----- ENDOF: 'TIME-LOG'. .. ... ----- //\n\n"
+        );
+    }
+    else
+    {
+        auto Return = Run(BC, Res, Data, Memory);
+    }
 
 };
 

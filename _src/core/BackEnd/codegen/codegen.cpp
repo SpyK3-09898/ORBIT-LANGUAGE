@@ -757,6 +757,12 @@ void CodeGenerator::CompileReturn(ReturnNode* Node, CodeGenState& State, ByteCod
     // Compile Expr | Compila a Expressão:
     if (Node->Value)
         CompileNode(Node->Value, State, BC, SARes, Data, Memory);
+    else
+    {
+        ByteInstruction* NullInst = CodeGenUtils::
+            CreateInst(Node, OpCode::PUSH, NullLitVal{}, 0, Data, Memory);
+        BC.Chunks[State.currChunk]->Instructions.push_back(NullInst);
+    }
 
     // Gen Inst | Gera a Instrução.
     ByteInstruction* Inst = CodeGenUtils::

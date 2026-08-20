@@ -17,6 +17,7 @@
 #include "tools/console.hpp"
 #include "../../RunTimeData.hpp"
 #include <cstddef>
+class VirtualMachine;
 
 // STRUCTS
 
@@ -102,12 +103,33 @@ class StackCall
         }
 };
 
-// MAIN CLASS | CLASSE PRINCIPAL
-class VirtualMachine
+// Garbage Collector | Coletor de Bagagem.
+class GarbageCollector
 {
     private:
 
-        opt<StackCall> CallStack;
+        vec<ObjectDescr*> Descriptions;
+    public:
+
+        size_t updt_rate=0;
+        size_t curr_ipdt=0;
+
+        VirtualMachine* VM;
+        void Update(ByteCode& BC, InstructionPointer& IP, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        ObjectDescr* Register(void* Object, void (*Destroy)(void*, Arena&), Arena& Memory);
+}; 
+
+// MAIN CLASS | CLASSE PRINCIPAL
+class VirtualMachine
+{
+    friend class GarbageCollector;
+    private:
+
+        opt<StackCall> CallStack{};
+        unord_map<string, double> TimeData{};
+        GarbageCollector GC;
+        bool calcExecTime=false;
+        
         int Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& Memory);
 
         int RunBinary(ByteCode& BC, InstructionPointer& IP, SAResult& Res, RunTimeData& Data, Arena& Memory);

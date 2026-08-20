@@ -17,6 +17,10 @@
 
 size_t constexpr _1KB = 1024;
 size_t constexpr _1MB = _1KB * _1KB;
+size_t constexpr _2MB = _1MB*2;
+size_t constexpr _4MB = _2MB*2;
+size_t constexpr _8MB = _4MB*2;
+size_t constexpr _16MB = _8MB*2;
 
 // =========== CORE ========== //
 
@@ -51,6 +55,17 @@ class Arena
 
     // Current Active Block | Bloco Atualmente Usado
     ArenaBlock* CurrBlock;
+
+
+    // Freed Memory Block | Bloco de Memoria Liberado
+    struct FreeBlock
+    {
+        byte* Begin;
+        size_t Size;
+    };
+
+
+    vec<FreeBlock> FreeBlocks;
 
 
     // CheckPoint For Temporary Allocations
@@ -89,6 +104,54 @@ class Arena
     template<typename T, typename... Args>
     T* New(Args&&... args)
     {
+        for (auto It = FreeBlocks.begin(); It != FreeBlocks.end(); ++It)
+        {
+            byte* Address = AlignForward(
+                It->Begin,
+                alignof(T)
+            );
+
+            size_t Offset =
+                static_cast<size_t>(Address - It->Begin);
+
+            if (Offset + sizeof(T) <= It->Size)
+            {
+                void* Memory = Address;
+
+                if (Offset == 0 && sizeof(T) == It->Size)
+                {
+                    FreeBlocks.erase(It);
+                }
+                else if (Offset == 0)
+                {
+                    It->Begin += sizeof(T);
+                    It->Size -= sizeof(T);
+                }
+                else
+                {
+                    size_t Remaining =
+                        It->Size - Offset - sizeof(T);
+
+                    byte* OldBegin = It->Begin;
+
+                    It->Begin = Address + sizeof(T);
+                    It->Size = Remaining;
+
+                    if (Offset > 0)
+                    {
+                        FreeBlocks.push_back({
+                            OldBegin,
+                            Offset
+                        });
+                    }
+                }
+
+                return new(Memory) T(
+                    std::forward<Args>(args)...
+                );
+            }
+        }
+
         void* Memory = Alloc(
             sizeof(T),
             alignof(T)
@@ -99,10 +162,22 @@ class Arena
         );
     }
 
+
     // DELETE A OBJECT | DELETA UM OBJETO.
     template<typename T>
     void Delete(T* Obj)
-        { Obj->~T(); };
+    {
+        if (!Obj)
+            return;
+
+        Obj->~T();
+
+        FreeBlocks.push_back({
+            reinterpret_cast<byte*>(Obj),
+            sizeof(T)
+        });
+    };
+
 
     // ALLOC ARRAY | ALOCA ARRAY
     template<typename T>
@@ -119,7 +194,9 @@ class Arena
             new(&Array[i]) T();
 
         return Array;
-    }    
+    }
+
+
     // SAVE CURRENT STATE | SALVA ESTADO ATUAL
     CheckPointMarker SaveCheckPoint()
     {
@@ -160,6 +237,7 @@ class Arena
         }
 
         CurrBlock = FirstBlock;
+        FreeBlocks.clear();
     }
 
 
@@ -221,6 +299,7 @@ class Arena
 
         return Count;
     }
+
 
     // GET CURRENT BLOCK | PEGAR BLOCO ATUAL
     ArenaBlock* CurrentBlock() const

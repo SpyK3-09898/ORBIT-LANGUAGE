@@ -17,23 +17,20 @@
 // Create a New Memory Block | Cria Um Novo Bloco De Memoria
 ArenaBlock* Arena::NewBlock(size_t Size)
 {
-    ArenaBlock* Block = 
+    ArenaBlock* Block =
         static_cast<ArenaBlock*>(std::malloc(sizeof(ArenaBlock)));
 
     Block->Begin =
         static_cast<byte*>(std::malloc(Size));
-
 
     Block->Current = Block->Begin;
 
     Block->End =
         Block->Begin + Size;
 
-
     Block->Size = Size;
 
     Block->Next = nullptr;
-
 
     return Block;
 }
@@ -46,12 +43,10 @@ byte* Arena::AlignForward(byte* Address, size_t Alignment)
     uintptr_t Ptr =
         reinterpret_cast<uintptr_t>(Address);
 
-
     uintptr_t Aligned =
         (Ptr + Alignment - 1)
         &
         ~(Alignment - 1);
-
 
     return reinterpret_cast<byte*>(Aligned);
 }
@@ -63,27 +58,21 @@ Arena::Arena(size_t Size)
 {
     MaxSize = Size;
 
-
     // Each Block Uses 1/16 Of Total Memory
     // Cada Bloco Usa 1/16 Da Memoria Total
     DefBlockSize = MaxSize / 16;
 
-
     if (DefBlockSize == 0)
         DefBlockSize = MaxSize;
 
-
     Reserved = 0;
     Blocks = 0;
-
 
     FirstBlock = NewBlock(
         DefBlockSize
     );
 
-
     CurrBlock = FirstBlock;
-
 
     Reserved += DefBlockSize;
     Blocks++;
@@ -108,7 +97,6 @@ void* Arena::Alloc(size_t Size, size_t Alignment)
             Alignment
         );
 
-
     // CHECK IF MEMORY FITS
     // VERIFICA SE A MEMORIA CABE
 
@@ -120,38 +108,32 @@ void* Arena::Alloc(size_t Size, size_t Alignment)
                 Size
             );
 
-
         if (Reserved + BlockSize > MaxSize)
         {
             size_t Overflow =
                 (Reserved + BlockSize) - MaxSize;
-
             OrbitLog::Error(
-                "Arena.cpp", 
-                "Arena 'OutOfRange', Memory limit Exceeded(Bad Alloc): Limit: "+
+                "Arena.cpp",
+                "Arena 'OutOfRange', Memory limit Exceeded(Bad Alloc): Limit:"+
                 std::to_string(MaxSize)
                 +" | Used: "+std::to_string(Reserved)
-                +" | OverFlow: "=std::to_string(Overflow),
+                +" | OverFlow: "+std::to_string(Overflow),
                 true,
                 MEMORY_ERROR
             );
         }
-
 
         ArenaBlock* New =
             NewBlock(
                 BlockSize
             );
 
-
         CurrBlock->Next = New;
 
         CurrBlock = New;
 
-
         Reserved += BlockSize;
         Blocks++;
-
 
         Ptr =
             AlignForward(
@@ -160,10 +142,8 @@ void* Arena::Alloc(size_t Size, size_t Alignment)
             );
     }
 
-
     CurrBlock->Current =
         Ptr + Size;
-
 
     return Ptr;
 }
@@ -182,11 +162,9 @@ void Arena::Finalize()
         ArenaBlock* Next =
             Block->Next;
 
-
         std::free(Block->Begin);
 
         std::free(Block);
-
 
         Block = Next;
     }
@@ -196,6 +174,7 @@ void Arena::Finalize()
     CurrBlock = nullptr;
     Reserved = 0;
     Blocks = 0;
+    FreeBlocks.clear();
 }
 
 

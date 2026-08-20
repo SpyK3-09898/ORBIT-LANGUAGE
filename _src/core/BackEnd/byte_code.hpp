@@ -15,15 +15,73 @@
 #include "tools/console.hpp"
 #include "../RunTimeData.hpp"
 
+// Description of Object.
+struct ObjectDescr
+{
+    // Data
+    int references=0;
+    bool marked=true;
+    bool changed=true;
+
+    // Reference Data | Data de Referencias.
+    vec<ObjectDescr*> References;
+    vec<ObjectDescr*> ReferencedBy;
+
+    // Object | Objeto.
+    void* Owner;
+	void (*Destroy)(void*, Arena& Memory);
+
+    // UTILS
+
+    // Connect a New Object | Conecta Um Novo Objeto.
+    void Reference(ObjectDescr* Obj)
+    {
+        References.push_back(Obj);
+        Obj->ReferencedBy.push_back(this);
+
+        references = ReferencedBy.size();
+        marked=true;
+        changed=true;
+    }
+
+    // Disconnect A Obj | Desconecta Um Obj.
+    void Unreference(ObjectDescr* Obj)
+    {
+        auto It = std::find(References.begin(), References.end(), Obj);
+
+        if (It == References.end())
+            return;
+
+        References.erase(It);
+
+        auto RefIt = std::find(Obj->ReferencedBy.begin(), Obj->ReferencedBy.end(), this);
+
+        if (RefIt != Obj->ReferencedBy.end())
+            Obj->ReferencedBy.erase(RefIt);
+
+        Obj->references--;
+        if (references == 0)
+            marked=false;
+        changed = true;
+    }
+};
+
 // Iterator | Iterador.
 struct ByteIterator
 {
     // DATA
     ui32 Start; size_t End; i32 Step; int Curr;
+    ObjectDescr* Descr;
 
     // CONSTRUCTOR
     ByteIterator(ui32 St, size_t E, i32 S)
-        : Start(St), Step(S), End(E), Curr(St) {};
+        : Start(St), Step(S), End(E), Curr(St) {}; // GC | CB:
+    ~ByteIterator() = default;
+    static void Destroy(void* Ptr, Arena& Memory)
+    {
+        ByteIterator* It = static_cast<ByteIterator*>(Ptr);
+        It->~ByteIterator();
+    }
 
     // UTILS
     bool InEnd() // Return if In End of It | Retorna se Esta no Fim do it:
@@ -35,6 +93,20 @@ struct ByteIterator
     void Advance() // Advance it | Avança o Iterador:
     {
         if (!InEnd()) Curr++;
+    }
+};
+
+// Function Repr | Representação de Função.
+struct ByteFn
+{
+    ui16 ID;
+    ui8 ParamCount=0;
+    ObjectDescr* Descr;
+
+    static void Destroy(void* Ptr, Arena& Memory)
+    {
+        ByteFn* Fn = static_cast<ByteFn*>(Ptr);
+        Memory.Delete(Fn);
     }
 };
 
@@ -50,7 +122,7 @@ using ByteValue = variant<
     NullLitVal,
     shared_ptr<ByteArray>,
     ByteFn*,
-    ByteIterator
+    ByteIterator*
 >;
 struct ByteArray : vec<ByteValue>
 {
@@ -196,13 +268,6 @@ struct ByteInstruction
 
     ByteValue RX1; ByteValue RX2;   // Extras.
     ByteValue LX1; ByteValue LX2;  //  Extras.
-};
-
-// Function Repr | Representação de Função.
-struct ByteFn
-{
-    ui16 ID;
-    ui8 ParamCount=0;
 };
 
 // ByteCode Chunks | Chunks de ByteCode
