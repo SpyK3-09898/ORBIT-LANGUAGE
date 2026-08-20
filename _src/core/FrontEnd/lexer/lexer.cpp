@@ -475,7 +475,8 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
             "Token"+std::to_string(i)+": "
             "TypeId: "+std::to_string(static_cast<int>(Tok->Type))+"\n"
             "Lexeme: "+Tok->Lexeme(Data)+"\n"
-            "Pos(line/index): "+std::to_string(Tok->pos.line)+";"+std::to_string(Tok->pos.collumn)+"\n\n";
+            "Pos(line/index): "+std::to_string(Tok->pos.line)+";"+std::to_string(Tok->pos.collumn)+
+            "\nIndent: "+std::to_string(Tok->pos.indent)+"\n\n";
         i++;
     }
     text += "\n// ============ ENDOF: LEXER =========== // ";
@@ -528,8 +529,8 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
         }
         else if (C is '\n')
         {
-            State.currPos.indent = 0;
             MakeToken(Res, State, Data, TokenType::NEW_LINE, Memory);
+            State.currPos.indent = 0;
             continue;
         }
         else if (C is '\t') { State.currPos.indent++; continue; } 

@@ -39,6 +39,7 @@ struct ByteIterator
 };
 
 struct ByteArray;
+struct ByteFn;
 using ByteValue = variant<
 
     bool,
@@ -48,6 +49,7 @@ using ByteValue = variant<
     NoneLitVal,
     NullLitVal,
     shared_ptr<ByteArray>,
+    ByteFn*,
     ByteIterator
 >;
 struct ByteArray : vec<ByteValue>
@@ -196,10 +198,18 @@ struct ByteInstruction
     ByteValue LX1; ByteValue LX2;  //  Extras.
 };
 
+// Function Repr | Representação de Função.
+struct ByteFn
+{
+    ui16 ID;
+    ui8 ParamCount=0;
+};
+
 // ByteCode Chunks | Chunks de ByteCode
 struct Chunk
 {
     vec<ByteInstruction*> Instructions;
+    int ParamCount;
 };
 
 // ByteCode | ByteCode.

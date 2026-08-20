@@ -773,7 +773,10 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
                 ExprParser.
                     ParseExpression(Inst, State, Res, Data, Memory);
 
-        // INDENT SYSTEM
+        if (!State.consumedInst)
+            ParserUtils::AddInst<ASTNode>(Node, State, Res, Memory);
+
+        // INDENT SYSTEM | SISTEMA DE INDENTAÇÃO
         if (I + 1 < Instructions.size() and I > 0)
         {
             size_t PrevIndent = !Instructions[I - 1].Tokens.empty()
@@ -790,21 +793,88 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
                 ? NextInst.Tokens[0]->pos.indent
                 : NextInst.Modifiers[0]->pos.indent;
 
-            if (
-                State.Bodys.size() > 1 and
-                PrevIndent < InstIndent and
-                NextIndent < InstIndent and
-                State.CurrBody->Type != BodyTypes::PROGRAM
-            ) ParserUtils::PopBodyStack(State, Data);
-        }
+            // INDENT SYSTEM | SISTEMA DE INDENTAÇÃO
+            if (I > 0)
+            {
+                size_t PrevIndent = !Instructions[I - 1].Tokens.empty()
+                    ? Instructions[I - 1].Tokens[0]->pos.indent
+                    : (!Instructions[I - 1].Modifiers.empty() ? Instructions[I - 1].Modifiers[0]->pos.indent : 0);
 
-        if (!State.consumedInst)
-            ParserUtils::AddInst<ASTNode>(Node, State, Res, Memory);
+                size_t InstIndent = !Inst.Tokens.empty()
+                    ? Inst.Tokens[0]->pos.indent
+                    : (!Inst.Modifiers.empty() ? Inst.Modifiers[0]->pos.indent : 0);
+
+                bool ShouldPop = false;
+
+                if (I + 1 < Instructions.size())
+                {
+                    Instruction& NextInst = Instructions[I + 1];
+
+                    size_t NextIndent = !NextInst.Tokens.empty()
+                        ? NextInst.Tokens[0]->pos.indent
+                        : (!NextInst.Modifiers.empty() ? NextInst.Modifiers[0]->pos.indent : 0);
+
+                    bool IsNextControlBlock = false;
+
+                    if (!NextInst.Tokens.empty())
+                    {
+                        string Lex = NextInst.Tokens[0]->Lexeme(Data);
+
+                        if (
+                            Lex == "else" or
+                            Lex == "elif" or
+                            Lex == "end"
+                        )
+                            IsNextControlBlock = true;
+                    }
+
+                    if (
+                        InstIndent > PrevIndent and
+                        InstIndent > NextIndent and
+                        !IsNextControlBlock
+                    )
+                    {
+                        ShouldPop = true;
+                    }
+                }
+                else
+                {
+                    if (InstIndent > PrevIndent)
+                    {
+                        ShouldPop = true;
+                    }
+                }
+
+                if (
+                    ShouldPop and
+                    State.Bodys.size() > 1 and
+                    State.CurrBody->Type != BodyTypes::PROGRAM
+                )
+                {
+                    ParserUtils::PopBodyStack(State, Data);
+                }
+            }
+        }
         I++;
     }
+    if (State.Bodys.size() > 1)
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Parsing", 
+            "UnClosed Body", 
+            "Body Has Not Been Closed", 
+            "Close Body Whit 'End'",
+            State.Bodys.back()->pos.line,
+            State.Bodys.back()->pos.collumn
+        );
+        if (Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+    }
+
     if (Data.flags.generateLog)
         GenerateParserLog(Res, Data);
     if (Data.flags.debugMode)
         PrintIn("ENDOF TASK: Parsing. .. ...");
     return Res;
 }
+
+// EOF

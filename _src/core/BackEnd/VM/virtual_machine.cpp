@@ -697,6 +697,7 @@ int VirtualMachine::RunUnary(ByteValue& O, OpCode Op, ByteCode& BC, InstructionP
 // Main Function, Run ORBIT | Função Principal, Roda a ORBIT.
 int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
+    BC.currChunk=0;
     InstructionPointer IP = {0};
     size_t codeSize = BC.Chunks[BC.currChunk]->Instructions.size();
     while (IP.Index < codeSize) // Main Loop | Loop principal:
@@ -885,6 +886,74 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             }
 
             // OTHERS:
+            case OpCode::LOAD_FN: // Load a Function | Carrega Uma Função.
+            {
+                ByteFn* Fn = Memory.New<ByteFn>();
+
+                Fn->ID =std::get<i64>(CurrInst->R1);
+                Fn->ParamCount = std::get<i64>(CurrInst->R2);
+
+                CallStack->GetTop()->PushBack(Fn);
+                break;
+            }
+            case OpCode::CALL: // Call a Function | Chama uma Função.
+            {
+                // Take Data | Pega a Data.
+                i64 argCount = std::get<i64>(CurrInst->R1);
+                i64 fnPos = static_cast<i64>(CallStack->GetTop()->Stack.size()) - argCount - 1;
+                
+                ByteFn* B_Fn = std::get<ByteFn*>(CallStack->GetTop()->Stack[fnPos]);
+                
+                // Create A New Frame | Cria um Novo Frame.
+                VM_Frame* New = Memory.New<VM_Frame>();
+                New->Back = CallStack->GetTop();
+                New->retChunk = BC.currChunk;
+
+                // Define Args | Define os Argumentos.
+                for (int i = 0; i < B_Fn->ParamCount; i++)
+                {
+                    if (i < argCount)
+                        New->Locals[i] = CallStack->GetTop()->Stack[fnPos + i + 1];
+                    else
+                        New->Locals[i] = NullLitVal{};
+                }
+
+                // Remove Args | Remove os Argumentos:
+                for (int i = 0; i < argCount; i++)
+                    CallStack->GetTop()->Pop();
+
+                // Remove a função da stack também
+                CallStack->GetTop()->Pop();
+
+                // Finalize | Finalize:
+                BC.currChunk = B_Fn->ID;
+                CallStack->Push(New, &IP);
+
+                IP.Index = 0; // começa do início da função
+                codeSize = BC.Chunks[BC.currChunk]->Instructions.size();
+
+                continue;
+            }
+            case OpCode::RETURN: // Exit a Function And Return A Value | Sai da Func e Retorna um Valor.
+            {
+                // Take Data | Pega a Data.
+                VM_Frame* Curr = CallStack->GetTop();
+                VM_Frame* Caller = Curr->Back;
+
+                // Set Return Value | Define o Valor de Retorno.
+                if (!Curr->Stack.empty())
+                    Caller->PushBack(Curr->Pop());
+
+                // Volta pro chunk original
+                BC.currChunk = Caller->retChunk;
+
+                // Restaura o IP do caller
+                IP = CallStack->Pop();
+
+                codeSize = BC.Chunks[BC.currChunk]->Instructions.size();
+
+                break;
+            }
             case OpCode::ECHO: // Log in Console | Informa no Console:
             {
                 ByteValue Val = CallStack->GetTop()->Pop();

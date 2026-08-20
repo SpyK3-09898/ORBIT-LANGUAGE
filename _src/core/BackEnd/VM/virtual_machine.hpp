@@ -34,6 +34,7 @@ struct VM_Frame
 
     unord_map<ui32, ByteValue> Locals;
     vec<ByteValue> Stack;
+    int retChunk;
 
     void PushBack(ByteValue Val)
     {

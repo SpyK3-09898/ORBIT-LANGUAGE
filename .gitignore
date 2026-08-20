@@ -91,6 +91,7 @@ Desktop.ini
 
 _tests/logs/**
 !_tests/logs/log.txt
+!_tests/logs/1/**
 
 _tests/scripts/**
 !_tests/scripts/.ORBIT

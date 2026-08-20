@@ -292,13 +292,15 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
     auto& S = It->second->Type;
 
     ByteInstruction* Inst;
-    if (S == SymbolTypes::IDENTIFIER or S == SymbolTypes::VAR)
+    if (S == SymbolTypes::IDENTIFIER or S == SymbolTypes::VAR or S == SymbolTypes::PARAM)
         Inst = CodeGenUtils::CreateInst
             (Node, OpCode::LOAD_LOCAL, State.GetLocal(Node->Name), 0, Data, Memory);
     else if (S == SymbolTypes::FN)
+    {
+        i64 id = BC.Functions.at(Node->Name);
         Inst = CodeGenUtils::CreateInst
-            (Node, OpCode::LOAD_FN, BC.Functions.at(Node->Name), 0, Data, Memory);
-    else
+            (Node, OpCode::LOAD_FN, id, BC.Chunks[id]->ParamCount, Data, Memory);
+    } else
     {
         OrbitLog::Error
         ("codegen.cpp", "Invalid Symbol Type for: "+Node->Name+", Type: "+std::to_string(static_cast<int>(S)), true, 400);
@@ -529,6 +531,9 @@ void CodeGenerator::CompileLValue(ExpressionNode* Node, CodeGenState& State, Byt
 // Compile Variable Declaration | Compila Declaração de Variável
 void CodeGenerator::CompileVarDecl(VarDeclNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
+    if (SARes.SymbolTable[Node->Name]->read_count == 0 and SARes.SymbolTable[Node->Name]->write_count == 0)
+        return;
+
     // Compile | Compila:
     CompileNode(Node->Val, State, BC, SARes, Data, Memory);
     ui32 ID = State.CreateLocal(Node->Name);
@@ -542,15 +547,13 @@ void CodeGenerator::CompileVarDecl(VarDeclNode* Node, CodeGenState& State, ByteC
 // Compile Function Declaration | Compila Declaração de Função
 void CodeGenerator::CompileFnDecl(FnDecl* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
-    if (SARes.SymbolTable.find(Node->Name)->second->read_count == 0 and SARes.SymbolTable.find(Node->Name)->second->write_count == 0)
-        return;
-
     // Data
     int PrevC = State.currChunk;
     int FnC = BC.Chunks.size();
 
     // Create Chunk | Cria a Chunk
     BC.Chunks.push_back(Memory.New<Chunk>());
+    BC.Chunks.back()->ParamCount = Node->Params.size();
     BC.Functions[Node->Name] = FnC;
     State.currChunk = FnC;
 

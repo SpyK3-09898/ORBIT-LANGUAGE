@@ -441,9 +441,7 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
                 Res.ExpressionTypes[Node] = *TInfo;
                 return &Res.ExpressionTypes[Node];
             }
-
-            Sym->read_count++;
-
+            
             Res.ExpressionTypes[Node] = *Sym->TInfo;
             return &Res.ExpressionTypes[Node];
         }
