@@ -317,7 +317,7 @@ namespace VM_Utils {
 // Run Binary Arithmetic Operations | Roda Operações Binarias Aritmeticas.
 int VirtualMachine::RunBinary(ByteCode& BC, InstructionPointer& IP, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
-    auto& CurrInst = BC.Chunks[0]->Instructions[IP.Index];
+    auto& CurrInst = BC.Chunks[BC.currChunk]->Instructions[IP.Index];
 
     ByteValue R = CallStack->GetTop()->Pop();
     ByteValue L = CallStack->GetTop()->Pop();
@@ -499,7 +499,7 @@ int VirtualMachine::RunBinary(ByteCode& BC, InstructionPointer& IP, SAResult& Re
         }
 
         default:
-            OrbitLog::Error("virtual_machine.cpp", "Trying to Make a Aritm Operation Whit Unknow OpCode", true, 1);
+            OrbitLog::Error("virtual_machine.cpp", "Trying to Make a Aritm Operation Whit Unknow OpCode: "+std::to_string(static_cast<int>(CurrInst->C)), true, 1);
     }
 
     return 0;

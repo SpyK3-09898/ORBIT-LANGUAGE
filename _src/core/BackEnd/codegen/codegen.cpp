@@ -560,10 +560,15 @@ void CodeGenerator::CompileFnDecl(FnDecl* Node, CodeGenState& State, ByteCode& B
     // Compile | Compila
     CompileNode(Node->Body, State, BC, SARes, Data, Memory);
 
-    // Gen Inst | Gera a Instrução.
+    // Gen Insts | Gera as Instruções.
+    ByteInstruction* RetValueInst =
+        CodeGenUtils::CreateInst(Node, OpCode::PUSH, NullLitVal{}, 0, Data, Memory);
     ByteInstruction* ReturnInst =
         CodeGenUtils::CreateInst(Node, OpCode::RETURN, 0, 0, Data, Memory);
+    
+    BC.Chunks[State.currChunk]->Instructions.push_back(RetValueInst);
     BC.Chunks[State.currChunk]->Instructions.push_back(ReturnInst);
+    
     State.currChunk = PrevC;
 }
 
