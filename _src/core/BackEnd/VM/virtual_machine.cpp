@@ -563,6 +563,38 @@ int VirtualMachine::RunBinary(ByteCode& BC, InstructionPointer& IP, SAResult& Re
             break;
         }
 
+        case OpCode::MOD:
+        {
+            if (holds_alt<float>(L) || holds_alt<float>(R))
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "RunTime", 
+                    "Cannot Make <MOD> Whit Float Numbers", 
+                    "<FLOAT> And <FLOAT> DONT MAKE SENSE", 
+                    "Convert to <INT>",
+                    BC.Chunks[BC.currChunk]->Instructions[IP.Index]->Pos.line,
+                    BC.Chunks[BC.currChunk]->Instructions[IP.Index]->Pos.collumn
+                );
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            }
+            else
+            {
+                ByteValue Left = VM_Utils::ConvertValue
+                (L, TypeKind::NUMBER, SubTypeKind::INT, CurrInst->Pos, Data);
+
+                ByteValue Right = VM_Utils::ConvertValue
+                (R, TypeKind::NUMBER, SubTypeKind::INT, CurrInst->Pos, Data);
+
+                CallStack->GetTop()->PushBack(
+                    static_cast<i64>(
+                        std::get<i64>(Left) %
+                        std::get<i64>(Right)
+                    )
+                );
+            }
+            break;
+        }
+
         default:
             OrbitLog::Error("virtual_machine.cpp", "Trying to Make a Aritm Operation Whit Unknow OpCode: "+std::to_string(static_cast<int>(CurrInst->C)), true, 1);
     }
@@ -820,6 +852,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 if (i != CallStack->GetTop()->Stack.size())
                     file << "  ["+std::to_string(i)+"]: " + VM_Utils::ConvertByteToString(Val) + ",\n";
                 else file << "  ["+std::to_string(i)+"]: " + VM_Utils::ConvertByteToString(Val) + "\n";
+                i++;
             }
             file << "\n";
         }
@@ -865,6 +898,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             case OpCode::MUL:
             case OpCode::DIV:
             case OpCode::POWER:
+            case OpCode::MOD:
                 { RunBinary(BC, IP, Res, Data, Memory); break; }
 
             
@@ -998,11 +1032,44 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                         ORBIT_ERRORS_CODE::RUNTIME_ERROR
                     );
 
+                if (std::get<i64>(CurrInst->R1) > BC.Chunks[BC.currChunk]->Instructions.size())
+                {
+                    OrbitLog::Error(
+                        "virtual_machine.cpp",
+                        "Trying to Acess a Instruction OUT_OF_RANGE: " +
+                        std::to_string(std::get<i64>(CurrInst->R1)),
+                        true,
+                        ORBIT_ERRORS_CODE::RUNTIME_ERROR
+                    );
+                }
                 if (std::get<bool>(Cond) == false)
                 {
                     IP.Index = std::get<i64>(CurrInst->R1);
                     continue;
                 }
+
+                break;
+            }
+            case OpCode::JUMP_IF_TRUE: // Jump to Another Point in Code If Cond is 'True' | Pula para Outro Ponto no Codigo se a Condição for VERDADEIRA.
+            {
+                ByteValue Cond = CallStack->GetTop()->Pop();
+
+                if (!holds_alt<bool>(Cond))
+                    OrbitLog::Error(
+                        "virtual_machine.cpp",
+                        "Expected Boolean Condition In Stack. But Got: " +
+                        std::get<string>(
+                            VM_Utils::ConvertValue(
+                                Cond,
+                                TypeKind::STRING,
+                                SubTypeKind::NONE,
+                                CurrInst->Pos,
+                                Data
+                            )
+                        ),
+                        true,
+                        ORBIT_ERRORS_CODE::RUNTIME_ERROR
+                    );
 
                 if (std::get<i64>(CurrInst->R1) > BC.Chunks[BC.currChunk]->Instructions.size())
                 {
@@ -1014,8 +1081,13 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                         ORBIT_ERRORS_CODE::RUNTIME_ERROR
                     );
                 }
+                if (std::get<bool>(Cond) == true)
+                {
+                    IP.Index = std::get<i64>(CurrInst->R1);
+                    continue;
+                }
 
-                break;
+                break;                
             }
 
             // OTHERS:

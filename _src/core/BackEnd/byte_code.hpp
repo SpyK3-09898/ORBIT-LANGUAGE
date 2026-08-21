@@ -131,33 +131,34 @@ struct ByteArray : vec<ByteValue>
 
 // ENUMS | ENUMERAÇÕES
 
-/* OPCODE-TABLE
-    NOP            / -> '0'
+/* OPCODE-TABLE:
 
-    POP            / -> '1'
-    PUSH           / -> '2'
+    NOP            / -> '0' 
 
-    ADD            / -> '3'
-    SUB            / -> '4'
-    MUL            / -> '5'
-    DIV            / -> '6'
-    MOD            / -> '7'
-    POWER          / -> '8'
+    POP            / -> '1' - X
+    PUSH           / -> '2' - X
 
-    NEG            / -> '9'
-    NOT            / -> '10'
+    ADD            / -> '3' - X
+    SUB            / -> '4' - X
+    MUL            / -> '5' - X
+    DIV            / -> '6' - X
+    MOD            / -> '7' - X
+    POWER          / -> '8' - X
 
-    CMP_EQ         / -> '11'
-    CMP_NE         / -> '12'
-    CMP_LT         / -> '13'
-    CMP_LE         / -> '14'
-    CMP_GT         / -> '15'
-    CMP_GE         / -> '16'
+    NEG            / -> '9' - X
+    NOT            / -> '10' - X
 
-    LOAD_LOCAL     / -> '17'
-    STORE_LOCAL    / -> '18'
-    LOAD_CONST     / -> '19'
-    STORE_CONST    / -> '20'
+    CMP_EQ         / -> '11' - X
+    CMP_NE         / -> '12' - X
+    CMP_LT         / -> '13' - X
+    CMP_LE         / -> '14' - X
+    CMP_GT         / -> '15' - X
+    CMP_GE         / -> '16' - X
+
+    LOAD_LOCAL     / -> '17' - X
+    STORE_LOCAL    / -> '18' - X
+    LOAD_CONST     / -> '19' - X
+    STORE_CONST    / -> '20' - X
 
     GET_MEMBER     / -> '21'
     LOAD_MEMBER    / -> '22'
@@ -167,24 +168,27 @@ struct ByteArray : vec<ByteValue>
     LOAD_INDEX     / -> '25'
     STORE_INDEX    / -> '26'
 
-    LOAD_FN        / -> '27'
+    LOAD_FN        / -> '27' - X
 
     BUILD_ARRAY    / -> '28'
     BUILD_TABLE    / -> '29'
-    BUILD_RANGE    / -> '30'
+    BUILD_RANGE    / -> '30' - X
 
     SET_TKEY       / -> '31'
 
-    ITER_NEXT      / -> '32'
-    ITER_HAS_NEXT  / -> '33'
+    ITER_NEXT      / -> '32' - X
+    ITER_HAS_NEXT  / -> '33' - X
 
-    JUMP           / -> '34'
-    JUMP_IF_FALSE  / -> '35'
-    JUMP_FOR       / -> '36'
+    JUMP           / -> '34' - X
+    JUMP_IF_FALSE  / -> '35' - X
+    JUMP_IF_TRUE   / -> '36'
 
-    ECHO           / -> '37'
-    CALL           / -> '38'
-    RETURN         / -> '39'
+    ECHO           / -> '37' - X
+    CALL           / -> '38' - X
+    RETURN         / -> '39' - X
+
+    OR             / -> '40'
+    AND            / -> '41'
 */
 
 // OpCodes | OpCodes.
@@ -246,12 +250,15 @@ enum class OpCode
     // CONTROL-FLOW
     JUMP,
     JUMP_IF_FALSE,
-    JUMP_FOR,
+    JUMP_IF_TRUE,
 
     // OTHERS
     ECHO,
     CALL,
-    RETURN
+    RETURN,
+
+    AND,
+    OR
 };
 
 // STRUCTS

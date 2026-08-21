@@ -346,6 +346,43 @@ void CodeGenerator::CompileUnary(UnaryNode* Node, CodeGenState& State, ByteCode&
 // Compile Binary Operation | Compila Operação Binária
 void CodeGenerator::CompileBinary(BinaryNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
+    if (Node->Op == Operator::AND)
+    {
+        CompileNode(Node->L, State, BC, SARes, Data, Memory);
+
+        ByteInstruction* Jump = CodeGenUtils::CreateInst
+            (Node, OpCode::JUMP_IF_FALSE, -1, 0, Data, Memory);
+        BC.Chunks[State.currChunk]->Instructions.push_back(Jump);
+
+        ByteInstruction* Pop = CodeGenUtils::CreateInst
+            (Node, OpCode::POP, 0, 0, Data, Memory);
+        BC.Chunks[State.currChunk]->Instructions.push_back(Pop);
+
+        CompileNode(Node->R, State, BC, SARes, Data, Memory);
+
+        Jump->R1 = static_cast<i64>(BC.Chunks[State.currChunk]->Instructions.size());
+
+        return;
+    }
+    else if (Node->Op == Operator::OR)
+    {
+        CompileNode(Node->L, State, BC, SARes, Data, Memory);
+
+        ByteInstruction* Jump = CodeGenUtils::CreateInst
+            (Node, OpCode::JUMP_IF_TRUE, -1, 0, Data, Memory);
+        BC.Chunks[State.currChunk]->Instructions.push_back(Jump);
+
+        ByteInstruction* Pop = CodeGenUtils::CreateInst
+            (Node, OpCode::POP, 0, 0, Data, Memory);
+        BC.Chunks[State.currChunk]->Instructions.push_back(Pop);
+
+        CompileNode(Node->R, State, BC, SARes, Data, Memory);
+
+        Jump->R1 = static_cast<i64>(BC.Chunks[State.currChunk]->Instructions.size());
+
+        return;
+    }
+
     CompileNode(Node->L, State, BC, SARes, Data, Memory);
     CompileNode(Node->R, State, BC, SARes, Data, Memory);
 
@@ -354,16 +391,19 @@ void CodeGenerator::CompileBinary(BinaryNode* Node, CodeGenState& State, ByteCod
     switch (Node->Op) {
         
         // ARITMETIC | ARITMETICOS.
-        case Operator::ADD:   op = OpCode::ADD; break;
-        case Operator::SUB:   op = OpCode::SUB; break;
-        case Operator::MUL:   op = OpCode::MUL; break;
-        case Operator::DIV:   op = OpCode::DIV; break;
-        case Operator::MOD:   op = OpCode::MOD; break;
-        case Operator::POWER: op = OpCode::POWER; break;
-        case Operator::LESS:  op = OpCode::CMP_LT;  break;
-        case Operator::GREATER: op = OpCode::CMP_GT; break;
-        case Operator::LESS_EQUAL: op = OpCode::CMP_LE; break;
-        case Operator::GREATER_EQUAL: op = OpCode::CMP_GT; break;
+        case Operator::ADD:           op = OpCode::ADD;   break;
+        case Operator::SUB:           op = OpCode::SUB;   break;
+        case Operator::MUL:           op = OpCode::MUL;   break;
+        case Operator::DIV:           op = OpCode::DIV;   break;
+        case Operator::MOD:           op = OpCode::MOD;    break;
+        case Operator::POWER:         op = OpCode::POWER;  break;
+        case Operator::LESS:          op = OpCode::CMP_LT; break;
+        case Operator::GREATER:       op = OpCode::CMP_GT; break;
+        case Operator::LESS_EQUAL:    op = OpCode::CMP_LE; break;
+        case Operator::GREATER_EQUAL: op = OpCode::CMP_GE; break;
+
+        // case Operator::AND:           op = OpCode::AND;    break;
+        // case Operator::OR:           op = OpCode::OR;      break;
 
         default:
             if (Data.flags.generateLog)
@@ -466,8 +506,8 @@ void CodeGenerator::CompileArrayValue(ArrayValue* Node, CodeGenState& State, Byt
 void CodeGenerator::CompileRange(RangeNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
     // Compile | Compila.
-    CompileNode(Node->End, State, BC, SARes, Data, Memory);
     CompileNode(Node->Begin, State, BC, SARes, Data, Memory);
+    CompileNode(Node->End, State, BC, SARes, Data, Memory);
 
     // Generate Inst | Gera a Instrução.
     ByteInstruction* Inst = 

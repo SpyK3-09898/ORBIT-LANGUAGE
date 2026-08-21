@@ -727,10 +727,8 @@ ExpressionNode* ExpressionParser::Nud(
     Arena& Memory
 )
 {
-    // Take Current Token
-    // Pega o Token Atual
+    // Take Current Token | Pega o Token Atual
     Token* Entry = Inst.Advance();
-    ParserUtils::UpdateStatePos(Entry, State);
     if (!Entry)
     {
         OrbitLog::SyntaxLog::SyntaxError(
@@ -747,6 +745,7 @@ ExpressionNode* ExpressionParser::Nud(
         return ParserUtils::
         MakeNode<ErrorExprNode>(State, Res, Memory);
     }
+    ParserUtils::UpdateStatePos(Entry, State);
 
     // RUN TYPES | PERCORRE O TIPO.
     switch (Entry->Type) {
