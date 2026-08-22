@@ -1208,17 +1208,19 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             // Set Table Keys | Define As Chaves de Tabela.
             case OpCode::SET_TKEY:
             {
-                // Take Key Name | Pega O Nome da Chave.
-                ByteValue NV = CallStack->GetTop()->Pop();
-                ByteValue VV = CallStack->GetTop()->Pop();
-                string Str = std::get<string>(VM_Utils::ConvertValue
-                    (NV, TypeKind::STRING, SubTypeKind::NONE, CurrInst->Pos, Data));
+                // Stack: ... | Table | Key | Value  (topo)
+                ByteValue Value = CallStack->GetTop()->Pop();  // Value
+                ByteValue Key   = CallStack->GetTop()->Pop();  // Key
+
+                string Str = std::get<string>(VM_Utils::ConvertValue(
+                    Key, TypeKind::STRING, SubTypeKind::NONE, CurrInst->Pos, Data
+                ));
+
                 auto& Table = *std::get<shared_ptr<ByteTable>>(
-                CallStack->GetTop()->Top()
+                    CallStack->GetTop()->Top()
                 );
 
-                // Set Key | Seta a key.
-                Table.push_back({Str, VV});
+                Table.push_back({Str, Value});
                 break;
             }
 
