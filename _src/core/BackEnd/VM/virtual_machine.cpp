@@ -1011,18 +1011,18 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             // Build a Range Iterator | Constroi um Iterador de Intervalo.
             case OpCode::BUILD_RANGE: 
             {
-                i64 start = std::get<i64>(CallStack->GetTop()->Pop())-1;
                 i64 end   = std::get<i64>(CallStack->GetTop()->Pop());
+                i64 start = std::get<i64>(CallStack->GetTop()->Pop());
+
+                i32 step = start <= end ? 1 : -1;
 
                 ByteIterator* It = Memory.New<ByteIterator>(
-                    static_cast<ui32>(start),
+                    static_cast<ui32>(start - step),
                     static_cast<size_t>(end),
-                    start < end ? 1 : -1
+                    step
                 );
                 It->Descr = GC.Register(It, ByteIterator::Destroy, Memory);
-
                 CallStack->GetTop()->PushBack(It);
-                break;
                 break;
             }
             case OpCode::BUILD_ARRAY: // Build a Array Value | Constroi Um Valor de Matriz.
@@ -1134,18 +1134,22 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                             Data
                         ));
 
-                    auto& Arr = *std::get<shared_ptr<ByteArray>>(Object);
-                    if (Val < 0 || Val >= (i64)Arr.size())
+                    if (Val < 0)
                     {
                         OrbitLog::SyntaxLog::SyntaxError(
                             "RunTime", 
                             "Index <OUT-OF-RANGE>", 
-                            "Trying to Acess a <ARRAY> In OTR Index, Index: "+std::to_string(Val)+" Size: "+std::to_string(Arr.size()), 
+                            "Trying to Acess a <ARRAY> In OTR Index, Index: "+std::to_string(Val), 
                             "Add a Valid Index",
                             CurrInst->Pos.line, CurrInst->Pos.collumn
                         );
                         OrbitLog::SyntaxLog::ThrowLog(Data);
                     }
+
+                    auto& Arr = *std::get<shared_ptr<ByteArray>>(Object);
+
+                    if (Val >= (i64)Arr.size())
+                        Arr.resize(Val + 1);
 
                     Arr[Val] = Value;
                 }
@@ -1156,17 +1160,22 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                     if (holds_alt<i64>(Index))
                     {
                         i64 Val = std::get<i64>(Index);
-                        if (Val < 0 || Val >= (i64)Table.size())
+
+                        if (Val < 0)
                         {
-                        OrbitLog::SyntaxLog::SyntaxError(
-                            "RunTime", 
-                            "Index <OUT-OF-RANGE>", 
-                            "Trying to Acess a <ARRAY> In OTR Index, Index: "+std::to_string(Val)+" Size: "+std::to_string(Table.size()), 
-                            "Add a Valid Index",
-                            CurrInst->Pos.line, CurrInst->Pos.collumn
-                        );
-                        OrbitLog::SyntaxLog::ThrowLog(Data);
+                            OrbitLog::SyntaxLog::SyntaxError(
+                                "RunTime", 
+                                "Index <OUT-OF-RANGE>", 
+                                "Trying to Acess a <TABLE> In OTR Index, Index: "+std::to_string(Val), 
+                                "Add a Valid Index",
+                                CurrInst->Pos.line, CurrInst->Pos.collumn
+                            );
+                            OrbitLog::SyntaxLog::ThrowLog(Data);
                         }
+
+                        if (Val >= (i64)Table.size())
+                            Table.resize(Val + 5);
+
                         Table[Val].second = Value;
                     }
                     else
@@ -1180,14 +1189,20 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                                 Data
                             ));
 
+                        bool Found = false;
+
                         for (auto& Entry : Table)
                         {
                             if (Entry.first == Key)
                             {
                                 Entry.second = Value;
+                                Found = true;
                                 break;
                             }
                         }
+
+                        if (!Found)
+                            Table.push_back({Key, Value});
                     }
                 }
                 else
