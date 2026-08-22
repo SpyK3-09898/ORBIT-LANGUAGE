@@ -1063,7 +1063,10 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
 
                     auto& Arr = *std::get<shared_ptr<ByteArray>>(Object);
 
-                    CallStack->GetTop()->PushBack(Arr[Val]);
+                    if (Val < 0 || Val >= (i64)Arr.size())
+                        CallStack->GetTop()->PushBack(NullLitVal{});
+                    else
+                        CallStack->GetTop()->PushBack(Arr[Val]);
                 }
                 else if (holds_alt<shared_ptr<ByteTable>>(Object))
                 {
@@ -1071,9 +1074,12 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
 
                     if (holds_alt<i64>(Index))
                     {
-                        i64 Val = std::get<i64>(Index);
+                        i64 I = std::get<i64>(Index);
 
-                        CallStack->GetTop()->PushBack(Table[Val].second);
+                        if (I < 0 || I >= (i64)Table.size())
+                            CallStack->GetTop()->PushBack(NullLitVal{});
+                        else
+                            CallStack->GetTop()->PushBack(Table[I].second);
                     }
                     else
                     {
@@ -1086,14 +1092,17 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                                 Data
                             ));
 
+                        bool finded = false;
                         for (auto& Entry : Table)
                         {
                             if (Entry.first == Key)
                             {
+                                finded = true;
                                 CallStack->GetTop()->PushBack(Entry.second);
                                 break;
                             }
                         }
+                        if (!finded) CallStack->GetTop()->PushBack(NullLitVal{});
                     }
                 }
                 else
@@ -1111,9 +1120,9 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
 
             case OpCode::STORE_INDEX: // Store Index of Arr | Pega o Indice do Arr.
             {
-                ByteValue Value = CallStack->GetTop()->Pop();
-                ByteValue Object = CallStack->GetTop()->Pop();
-                ByteValue Index = CallStack->GetTop()->Pop();
+                ByteValue Index = CallStack->GetTop()->Pop(); // Acess Index | Indice de Acesso
+                ByteValue Object = CallStack->GetTop()->Pop(); // Obj to Acess | Objeto Que Vai Ser Acessado.
+                ByteValue Value = CallStack->GetTop()->Pop(); // Value to Store | Valor para Guardar
                 
                 if (holds_alt<shared_ptr<ByteArray>>(Object))
                 {
@@ -1127,6 +1136,17 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                         ));
 
                     auto& Arr = *std::get<shared_ptr<ByteArray>>(Object);
+                    if (Val < 0 || Val >= (i64)Arr.size())
+                    {
+                        OrbitLog::SyntaxLog::SyntaxError(
+                            "RunTime", 
+                            "Index <OUT-OF-RANGE>", 
+                            "Trying to Acess a <ARRAY> In OTR Index, Index: "+std::to_string(Val)+" Size: "+std::to_string(Arr.size()), 
+                            "Add a Valid Index",
+                            CurrInst->Pos.line, CurrInst->Pos.collumn
+                        );
+                        OrbitLog::SyntaxLog::ThrowLog(Data);
+                    }
 
                     Arr[Val] = Value;
                 }
@@ -1137,7 +1157,17 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                     if (holds_alt<i64>(Index))
                     {
                         i64 Val = std::get<i64>(Index);
-
+                        if (Val < 0 || Val >= (i64)Table.size())
+                        {
+                        OrbitLog::SyntaxLog::SyntaxError(
+                            "RunTime", 
+                            "Index <OUT-OF-RANGE>", 
+                            "Trying to Acess a <ARRAY> In OTR Index, Index: "+std::to_string(Val)+" Size: "+std::to_string(Table.size()), 
+                            "Add a Valid Index",
+                            CurrInst->Pos.line, CurrInst->Pos.collumn
+                        );
+                        OrbitLog::SyntaxLog::ThrowLog(Data);
+                        }
                         Table[Val].second = Value;
                     }
                     else
@@ -1180,10 +1210,9 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             {
                 // Take Key Name | Pega O Nome da Chave.
                 ByteValue NV = CallStack->GetTop()->Pop();
+                ByteValue VV = CallStack->GetTop()->Pop();
                 string Str = std::get<string>(VM_Utils::ConvertValue
                     (NV, TypeKind::STRING, SubTypeKind::NONE, CurrInst->Pos, Data));
-                // Take Value Name | Pega O Valor da Chave.
-                ByteValue VV = CallStack->GetTop()->Pop();
                 auto& Table = *std::get<shared_ptr<ByteTable>>(
                 CallStack->GetTop()->Top()
                 );
