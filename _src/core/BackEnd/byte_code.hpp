@@ -84,15 +84,23 @@ struct ByteIterator
     }
 
     // UTILS
-    bool InEnd() // Return if In End of It | Retorna se Esta no Fim do it:
+    bool InEnd() // Return if In End of It WHITOUT Step | Retorna se Esta no Fim do It DESCONSIDERANDO O Passo:
     {
-        if (Curr+Step > End)
-            return true;
-        else return false;
+        if (Step > 0)
+            return Curr > End;
+        else
+            return Curr < End;
+    }
+    bool HasNext() // Return if In End of It | Retorna se Esta no Fim do it:
+    {
+        if (Step > 0)
+            return Curr + Step <= End;
+        else
+            return Curr + Step >= End;       
     }
     void Advance() // Advance it | Avança o Iterador:
     {
-        if (!InEnd()) Curr++;
+        if (!InEnd()) Curr+=Step;
     }
 };
 
@@ -110,9 +118,10 @@ struct ByteFn
     }
 };
 
-struct ByteArray;
-struct ByteFn;
-using ByteValue = variant<
+struct ByteArray; // Array Repr
+struct ByteTable; // Table Repr
+struct ByteFn; // Functions Repr
+using  ByteValue = variant<
 
     bool,
     float,
@@ -121,12 +130,17 @@ using ByteValue = variant<
     NoneLitVal,
     NullLitVal,
     shared_ptr<ByteArray>,
+    shared_ptr<ByteTable>,
     ByteFn*,
     ByteIterator*
 >;
 struct ByteArray : vec<ByteValue>
 {
     using vec<ByteValue>::vector;
+};
+struct ByteTable : vec<pair<string, ByteValue>>
+{
+    using vec<pair<string, ByteValue>>::vector;
 };
 
 // ENUMS | ENUMERAÇÕES
@@ -241,6 +255,7 @@ enum class OpCode
     BUILD_TABLE,
     BUILD_RANGE,
 
+    // SETS
     SET_TKEY,
 
     // ITERS

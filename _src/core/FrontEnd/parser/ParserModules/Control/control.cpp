@@ -20,6 +20,7 @@
 
 // ======== UTILS ======= //
 
+// namespace ControlUtils.
 namespace ControlUtils {
     
     // Parse If Controls | Parser Ifs
@@ -102,6 +103,7 @@ namespace ControlUtils {
         // UPDATE STACK | ATUALIZA A PILHA.
         State.consumedInst = true;
         ParserUtils::AddInst<IfNode>(Ctrl, State, Res, Memory);
+        State.IfStack.push_back(Ctrl);
         ParserUtils::UpdateBodyStack(Body, State, Data);
         State.lastIndent = Body->pos.indent;
         
@@ -120,14 +122,13 @@ namespace ControlUtils {
         Arena& Memory
     )
     {
-        // ERROR PREVENTION | PREVENÇÃO DE ERROS.
-        if (State.CurrBody->Type != BodyTypes::CONTROL_IF)
+        if (State.IfStack.empty())
         {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",
                 "Invalid <ELIF_CONTROL> Statement",
-                "<IF_CONTROL> Statement Expected Before Elif",
-                "~",
+                "<IF_CONTROL> Statement Expected Before Elif, But Got: " + (State.CurrBody->Data.empty() ? "<EMPTY>" : State.CurrBody->Data.back()->GetNodeType()),
+                "Move Statement to Right Place",
                 State.Pos.line,
                 State.Pos.collumn
             );
@@ -136,7 +137,7 @@ namespace ControlUtils {
             return ParserUtils::MakeNode<ErrorStmtNode>(State, Res, Memory);
         }
 
-        IfNode* IfFather = static_cast<IfNode*>(State.CurrBody->Father);
+        IfNode* IfFather = State.IfStack.back();
 
         if (IfFather->ElseBody != nullptr)
         {
@@ -229,20 +230,19 @@ namespace ControlUtils {
     )
     {
      
-        // ERROR PREVENTION | PREVENÇÃO DE ERROS.
-        if (State.CurrBody->Type != BodyTypes::CONTROL_IF) 
-        { 
-            OrbitLog::SyntaxLog::SyntaxError( 
-                "Parsing", 
-                "Invalid <ELSE_CONTROL> Statement", 
-                "<IF_CONTROL> Statement Expected Before Else", 
-                "~", 
-                State.Pos.line, 
-                State.Pos.collumn 
-            ); 
-            if (!Data.flags.debugMode) 
-                OrbitLog::SyntaxLog::ThrowLog(Data); 
-            return ParserUtils::MakeNode<ErrorStmtNode>(State, Res, Memory); 
+        if (State.IfStack.empty())
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Invalid <ELSE_CONTROL> Statement",
+                "<IF_CONTROL> Statement Expected Before Else",
+                "~",
+                State.Pos.line,
+                State.Pos.collumn
+            );
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorStmtNode>(State, Res, Memory);
         }
 
         // CREATE PREV.
@@ -255,7 +255,7 @@ namespace ControlUtils {
         Body->Type = BodyTypes::CONTROL_IF;
 
         // SET IF | DEFINE IF.
-        IfNode* PrevIfFather = static_cast<IfNode*>(State.CurrBody->Father);
+        IfNode* PrevIfFather = State.IfStack.back();
         PrevIfFather->ElseBody = Else;
 
         // UPDATE STACK | ATUALIZA A PILHA.
@@ -264,7 +264,6 @@ namespace ControlUtils {
         ParserUtils::UpdateBodyStack(Body, State, Data);
         State.lastIndent = Body->pos.indent;
 
-        // FINALIZE | FINALIZA.
         return Else;
     }
 
@@ -350,7 +349,7 @@ namespace ControlUtils {
         Body->Type = BodyTypes::LOOP_WHILE;
         Cntrl->Body = Body;
 
-        // UPDATE STACK | ATUALIZA A PILHA.
+        // UPDATE STACK | ATUALIZA O PILHA.
         State.consumedInst = true;
         ParserUtils::AddInst<WhileNode>(Cntrl, State, Res, Memory);
         ParserUtils::UpdateBodyStack(Body, State, Data);
@@ -610,7 +609,7 @@ namespace ControlUtils {
         Token* E = Inst.Advance();
         ParserUtils::UpdateStatePos(E, State);
         
-        // Error Prevention | Prevenção de Erros.
+        // Error Prevention | Prevenção de erros.
         if (Inst.Peek() and Inst.Peek()->Type != TokenType::CNTXT_KW)
         {
             OrbitLog::SyntaxLog::SyntaxError(
@@ -710,6 +709,23 @@ ControlNode* ControlParser::ParseControl(
                 return ControlUtils::ParseEcho(Inst, State, Res, Data, DeclParser, ExprParser, Memory);    
             else if (Lexeme == "end")
                 {
+                    if (
+                        State.CurrBody->Father &&
+                        State.CurrBody->Father->Type == NodeType::IF_CONTROL &&
+                        !State.IfStack.empty() &&
+                        State.IfStack.back() == static_cast<IfNode*>(State.CurrBody->Father)
+                    )
+                        State.IfStack.pop_back();
+                    else if (
+                        State.CurrBody->Father &&
+                        (
+                            State.CurrBody->Father->Type == NodeType::ELIF_CONTROL ||
+                            State.CurrBody->Father->Type == NodeType::ELSE_CONTROL
+                        ) &&
+                        !State.IfStack.empty()
+                    )
+                        State.IfStack.pop_back();
+
                     ParserUtils::PopBodyStack(State, Data); 
                     State.consumedInst=true;  
                     return nullptr;

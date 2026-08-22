@@ -700,6 +700,7 @@ struct ParseState
     bool SingleStatement = false;
     bool consumedInst=false;
     NodePos Pos; // Current Pos of Parser | Posição Atual do Lexer.
+    vec<IfNode*> IfStack;
     vec<BodyNode*> Bodys;
     BodyNode* CurrBody;
 

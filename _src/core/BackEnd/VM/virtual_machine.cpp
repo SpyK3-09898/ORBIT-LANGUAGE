@@ -16,6 +16,7 @@
 #include "tools/console.hpp"
 #include "../../RunTimeData.hpp"
 #include <cstddef>
+#include <memory>
 #include <string>
 #include <cmath>
 #include <algorithm>
@@ -29,7 +30,7 @@ namespace VM_Utils {
     // Convert Left To Right | Converte Esquerda para a Direita.
     ByteValue ConvertValue(ByteValue& Val, TypeKind K1, SubTypeKind K2, NodePos& Pos, RunTimeData& Data)
     {
-        switch (K1) {
+         switch (K1) {
         
             // INT & FLOATS
             case TypeKind::NUMBER:
@@ -181,6 +182,33 @@ namespace VM_Utils {
                     ret += "]";
                     return ret;
                 }
+                else if (holds_alt<shared_ptr<ByteTable>>(Val)) {
+                    shared_ptr<ByteTable> Table = std::get<shared_ptr<ByteTable>>(Val);
+                    string ret = "{";
+                    int i = 0;
+
+                    for (const auto& [Key, Value] : *Table)
+                    {
+                        ret += "\"" + Key + "\": ";
+                        ret += std::get<string>(
+                            ConvertValue(
+                                const_cast<ByteValue&>(Value),
+                                TypeKind::STRING,
+                                SubTypeKind::NONE,
+                                Pos,
+                                Data
+                            )
+                        );
+
+                        if (i < static_cast<int>(Table->size()) - 1)
+                            ret += ", ";
+
+                        i++;
+                    }
+
+                    ret += "}";
+                    return ret;
+                }
                 else if (holds_alt<ByteFn*>(Val)) return "Function";
                 else { 
                     OrbitLog::SyntaxLog::SyntaxError(
@@ -228,11 +256,11 @@ namespace VM_Utils {
                 }
                 break;
             }
-            // BYTE ARRAY
+            // BYTE TABLE
             case TypeKind::TABLE:
             {
-                if (holds_alt<shared_ptr<ByteArray>>(Val))
-                    return std::get<shared_ptr<ByteArray>>(Val);
+                if (holds_alt<shared_ptr<ByteTable>>(Val))
+                    return std::get<shared_ptr<ByteTable>>(Val);
                 else {
                     OrbitLog::SyntaxLog::SyntaxError(
                         "RunTime", 
@@ -263,7 +291,45 @@ namespace VM_Utils {
         else if (holds_alt<string>(Val)) return std::get<string>(Val);
         else if (holds_alt<NoneLitVal>(Val)) return "None";
         else if (holds_alt<NullLitVal>(Val)) return "Null";
-        else if (holds_alt<shared_ptr<ByteArray>>(Val)) return "{..}";
+        else if (holds_alt<shared_ptr<ByteArray>>(Val))
+        {
+            shared_ptr<ByteArray> Arr = std::get<shared_ptr<ByteArray>>(Val);
+            string ret = "[";
+            int i = 0;
+
+            for (ByteValue Value : *Arr)
+            {
+                ret += ConvertByteToString(Value);
+
+                if (i < static_cast<int>(Arr->size()) - 1)
+                    ret += ", ";
+
+                i++;
+            }
+
+            ret += "]";
+            return ret;
+        }
+        else if (holds_alt<shared_ptr<ByteTable>>(Val))
+        {
+            shared_ptr<ByteTable> Table = std::get<shared_ptr<ByteTable>>(Val);
+            string ret = "{";
+            int i = 0;
+
+            for (const auto& [Key, Value] : *Table)
+            {
+                ret += "\"" + Key + "\": ";
+                ret += ConvertByteToString(const_cast<ByteValue&>(Value));
+
+                if (i < static_cast<int>(Table->size()) - 1)
+                    ret += ", ";
+
+                i++;
+            }
+
+            ret += "}";
+            return ret;
+        }
         else if (holds_alt<ByteIterator*>(Val)) return "Iterator";
         else if (holds_alt<ByteFn*>(Val)) return "Function";
         else return "Unk";
@@ -948,14 +1014,182 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 i64 end   = std::get<i64>(CallStack->GetTop()->Pop());
                 i64 start = std::get<i64>(CallStack->GetTop()->Pop());
 
+
                 ByteIterator* It = Memory.New<ByteIterator>(
                     static_cast<ui32>(start),
                     static_cast<size_t>(end),
-                    1
+                    start < end ? 1 : -1
                 );
                 It->Descr = GC.Register(It, ByteIterator::Destroy, Memory);
 
                 CallStack->GetTop()->PushBack(It);
+                break;
+                break;
+            }
+            case OpCode::BUILD_ARRAY: // Build a Array Value | Constroi Um Valor de Matriz.
+            {
+                ByteArray A{};
+                shared_ptr<ByteArray> Arr = std::make_shared<ByteArray>();
+
+                for (int i = 0; i < std::get<i64>(CurrInst->R1); i++)
+                    Arr->push_back(CallStack->GetTop()->Pop());
+                CallStack->GetTop()->PushBack(Arr);
+                break;
+            }
+            case OpCode::BUILD_TABLE: // Build a Table Value | Constroi um Valor de Tabelas.
+            {
+                ByteTable T;
+                shared_ptr Tab = std::make_shared<ByteTable>(T);
+                CallStack->GetTop()->PushBack(Tab);
+
+                break;
+            }
+
+            case OpCode::GET_INDEX: // Get Index of Arr | Pega o Indice do Arr.
+            {
+                ByteValue Index = CallStack->GetTop()->Pop();
+                ByteValue Object = CallStack->GetTop()->Pop();
+
+                if (holds_alt<shared_ptr<ByteArray>>(Object))
+                {
+                    i64 Val =
+                        std::get<i64>(VM_Utils::ConvertValue(
+                            Index,
+                            TypeKind::NUMBER,
+                            SubTypeKind::INT,
+                            CurrInst->Pos,
+                            Data
+                        ));
+
+                    auto& Arr = *std::get<shared_ptr<ByteArray>>(Object);
+
+                    CallStack->GetTop()->PushBack(Arr[Val]);
+                }
+                else if (holds_alt<shared_ptr<ByteTable>>(Object))
+                {
+                    auto& Table = *std::get<shared_ptr<ByteTable>>(Object);
+
+                    if (holds_alt<i64>(Index))
+                    {
+                        i64 Val = std::get<i64>(Index);
+
+                        CallStack->GetTop()->PushBack(Table[Val].second);
+                    }
+                    else
+                    {
+                        string Key =
+                            std::get<string>(VM_Utils::ConvertValue(
+                                Index,
+                                TypeKind::STRING,
+                                SubTypeKind::NONE,
+                                CurrInst->Pos,
+                                Data
+                            ));
+
+                        for (auto& Entry : Table)
+                        {
+                            if (Entry.first == Key)
+                            {
+                                CallStack->GetTop()->PushBack(Entry.second);
+                                break;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "RunTime",
+                        "Trying to Get a Non-<BYTE_ARRAY/BYTE_TABLE>",
+                        "This Object Cannot be Acessed By Index",
+                        "~", CurrInst->Pos.line, CurrInst->Pos.collumn
+                    );
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                }
+                break;
+            }
+
+            case OpCode::STORE_INDEX: // Store Index of Arr | Pega o Indice do Arr.
+            {
+                ByteValue Value = CallStack->GetTop()->Pop();
+                ByteValue Object = CallStack->GetTop()->Pop();
+                ByteValue Index = CallStack->GetTop()->Pop();
+                
+                if (holds_alt<shared_ptr<ByteArray>>(Object))
+                {
+                    i64 Val =
+                        std::get<i64>(VM_Utils::ConvertValue(
+                            Index,
+                            TypeKind::NUMBER,
+                            SubTypeKind::INT,
+                            CurrInst->Pos,
+                            Data
+                        ));
+
+                    auto& Arr = *std::get<shared_ptr<ByteArray>>(Object);
+
+                    Arr[Val] = Value;
+                }
+                else if (holds_alt<shared_ptr<ByteTable>>(Object))
+                {
+                    auto& Table = *std::get<shared_ptr<ByteTable>>(Object);
+
+                    if (holds_alt<i64>(Index))
+                    {
+                        i64 Val = std::get<i64>(Index);
+
+                        Table[Val].second = Value;
+                    }
+                    else
+                    {
+                        string Key =
+                            std::get<string>(VM_Utils::ConvertValue(
+                                Index,
+                                TypeKind::STRING,
+                                SubTypeKind::NONE,
+                                CurrInst->Pos,
+                                Data
+                            ));
+
+                        for (auto& Entry : Table)
+                        {
+                            if (Entry.first == Key)
+                            {
+                                Entry.second = Value;
+                                break;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "RunTime",
+                        "Trying to Store a Non-<BYTE_ARRAY/BYTE_TABLE>",
+                        "This Object Cannot be Acessed By Index",
+                        "~", CurrInst->Pos.line, CurrInst->Pos.collumn
+                    );
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                }
+                break;
+            }
+
+            // SETS:
+            // Set Table Keys | Define As Chaves de Tabela.
+            case OpCode::SET_TKEY:
+            {
+                // Take Key Name | Pega O Nome da Chave.
+                ByteValue NV = CallStack->GetTop()->Pop();
+                string Str = std::get<string>(VM_Utils::ConvertValue
+                    (NV, TypeKind::STRING, SubTypeKind::NONE, CurrInst->Pos, Data));
+                // Take Value Name | Pega O Valor da Chave.
+                ByteValue VV = CallStack->GetTop()->Pop();
+                auto& Table = *std::get<shared_ptr<ByteTable>>(
+                CallStack->GetTop()->Top()
+                );
+
+                // Set Key | Seta a key.
+                Table.push_back({Str, VV});
                 break;
             }
 
@@ -973,7 +1207,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                         ORBIT_ERRORS_CODE::RUNTIME_ERROR
                     );
                 ByteIterator* It = std::get<ByteIterator*>(Val);
-                CallStack->GetTop()->PushBack(!It->InEnd());
+                CallStack->GetTop()->PushBack(It->HasNext());
                 break;
             }
             case OpCode::ITER_NEXT: // Advance Iterator | Avança o Iterador.
@@ -1013,7 +1247,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             }
             case OpCode::JUMP_IF_FALSE: // Jump to Another Point in Code If Cond is 'False' | Pula para Outro Ponto no Codigo se a Condição for FALSA.
             {
-                ByteValue Cond = CallStack->GetTop()->Pop();
+                ByteValue Cond = CallStack->GetTop()->Top();
 
                 if (!holds_alt<bool>(Cond))
                     OrbitLog::Error(
@@ -1052,7 +1286,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             }
             case OpCode::JUMP_IF_TRUE: // Jump to Another Point in Code If Cond is 'True' | Pula para Outro Ponto no Codigo se a Condição for VERDADEIRA.
             {
-                ByteValue Cond = CallStack->GetTop()->Pop();
+                ByteValue Cond = CallStack->GetTop()->Top();
 
                 if (!holds_alt<bool>(Cond))
                     OrbitLog::Error(

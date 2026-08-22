@@ -823,7 +823,7 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
                         if (
                             Lex == "else" or
                             Lex == "elif" or
-                            Lex == "end"
+                            ( Lex == "end" and NextInst.Tokens[0]->pos.indent == InstIndent)
                         )
                             IsNextControlBlock = true;
                     }

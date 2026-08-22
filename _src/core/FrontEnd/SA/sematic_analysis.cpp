@@ -1018,11 +1018,15 @@ void SemanticAnalizer::LookUpFor(ForNode& Node, SAState& State, SAResult& Res, R
         (Node.Identifier->Name, Node, State, Res, Memory);
 
     // Set Symbol Def Config | Define a Configuração Padrao dos Simbolos.    
-    Sym->InferType->Kind = TypeKind::NUMBER;    
-    Sym->InferType->SubKind = SubTypeKind::INT;    
-    Sym->Mut=MutableTypes::MUT;
-    Sym->inited=true;
+    Sym->Type               = SymbolTypes::PARAM;
+    Sym->TInfo->Kind        = TypeKind::NUMBER;
+    Sym->TInfo->SubKind     = SubTypeKind::INT;
+    Sym->InferType->Kind    = TypeKind::NUMBER;
+    Sym->InferType->SubKind = SubTypeKind::INT;
+    Sym->Mut                = MutableTypes::MUT;
+    Sym->inited             = true;
 
+    // LookUp The 'For' Body | Olha o Corpo do 'For'.
     LookUpBody(*Node.Body, State, Res, Data, Memory, S);
 }
 

@@ -4,7 +4,7 @@
 // Developed By: SpyK3(2026) | License: GitHub(MIT).
 
 // INCLUDE HEADERS 'N DEPENDENCES
-#include "codegen.hpp"
+#include "codegen.hpp" // HEADER FILE | CABEÇALHO
 
 #include "../byte_code.hpp"
 #include "../../FrontEnd/parser/AST/AST.hpp"
@@ -14,7 +14,7 @@
 
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
-#include "../../RunTimeData.hpp"
+#include "../../RunTimeData.hpp" // LIBRARIES | BIBLIOTECAS:
 #include <algorithm>
 #include <cstddef>
 #include <string>
@@ -290,7 +290,7 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
 
     // Resolve Type | Resolve o tipo:
     auto& S = It->second->Type;
-
+    
     ByteInstruction* Inst;
     if (S == SymbolTypes::IDENTIFIER or S == SymbolTypes::VAR or S == SymbolTypes::PARAM)
         Inst = CodeGenUtils::CreateInst
@@ -303,7 +303,7 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
     } else
     {
         OrbitLog::Error
-        ("codegen.cpp", "Invalid Symbol Type for: "+Node->Name+", Type: "+std::to_string(static_cast<int>(S)), true, 400);
+        ("codegen.cpp", "Invalid Symbol Type for: '"+Node->Name+"', Type: "+std::to_string(static_cast<int>(S)), true, 400);
         return;
     }
     // Set | Define:
@@ -377,7 +377,6 @@ void CodeGenerator::CompileBinary(BinaryNode* Node, CodeGenState& State, ByteCod
         BC.Chunks[State.currChunk]->Instructions.push_back(Pop);
 
         CompileNode(Node->R, State, BC, SARes, Data, Memory);
-
         Jump->R1 = static_cast<i64>(BC.Chunks[State.currChunk]->Instructions.size());
 
         return;
@@ -386,24 +385,29 @@ void CodeGenerator::CompileBinary(BinaryNode* Node, CodeGenState& State, ByteCod
     CompileNode(Node->L, State, BC, SARes, Data, Memory);
     CompileNode(Node->R, State, BC, SARes, Data, Memory);
 
+    // Main Switch | Switch Principal.
     OpCode op = OpCode::ADD;
-
     switch (Node->Op) {
         
         // ARITMETIC | ARITMETICOS.
-        case Operator::ADD:           op = OpCode::ADD;   break;
-        case Operator::SUB:           op = OpCode::SUB;   break;
-        case Operator::MUL:           op = OpCode::MUL;   break;
-        case Operator::DIV:           op = OpCode::DIV;   break;
-        case Operator::MOD:           op = OpCode::MOD;    break;
-        case Operator::POWER:         op = OpCode::POWER;  break;
-        case Operator::LESS:          op = OpCode::CMP_LT; break;
-        case Operator::GREATER:       op = OpCode::CMP_GT; break;
-        case Operator::LESS_EQUAL:    op = OpCode::CMP_LE; break;
-        case Operator::GREATER_EQUAL: op = OpCode::CMP_GE; break;
+        case Operator::ADD:           op = OpCode::ADD;       break;
+        case Operator::SUB:           op = OpCode::SUB;       break;
+        case Operator::MUL:           op = OpCode::MUL;       break;
+        case Operator::DIV:           op = OpCode::DIV;       break;
+        case Operator::MOD:           op = OpCode::MOD;       break;
+        case Operator::POWER:         op = OpCode::POWER;     break;
 
-        // case Operator::AND:           op = OpCode::AND;    break;
-        // case Operator::OR:           op = OpCode::OR;      break;
+        // COMP | COMPARAÇOES.
+        case Operator::EQUAL:         op = OpCode::CMP_EQ;    break;
+        case Operator::NOT_EQUAL:     op = OpCode::CMP_NE;    break;
+        case Operator::LESS:          op = OpCode::CMP_LT;    break;
+        case Operator::GREATER:       op = OpCode::CMP_GT;    break;
+        case Operator::LESS_EQUAL:    op = OpCode::CMP_LE;    break;
+        case Operator::GREATER_EQUAL: op = OpCode::CMP_GE;    break;
+
+        // LOGICAL | LOGICOS.
+        case Operator::AND:           op = OpCode::AND;       break;
+        case Operator::OR:            op = OpCode::OR;        break;
 
         default:
             if (Data.flags.generateLog)
@@ -597,6 +601,12 @@ void CodeGenerator::CompileFnDecl(FnDecl* Node, CodeGenState& State, ByteCode& B
     BC.Functions[Node->Name] = FnC;
     State.currChunk = FnC;
 
+    for (ExpressionNode* Param : Node->Params)
+    {
+        IdentifierNode* P = static_cast<IdentifierNode*>(Param);
+        State.CreateLocal(P->Name);
+    }
+
     // Compile | Compila
     CompileNode(Node->Body, State, BC, SARes, Data, Memory);
 
@@ -631,7 +641,11 @@ void CodeGenerator::CompileIf(IfNode* Node, CodeGenState& State, ByteCode& BC, S
         CompileNode(Node->Cond, State, BC, SARes, Data, Memory);
         ByteInstruction* JFALSE_Inst = CodeGenUtils::CreateInst
             (Node, OpCode::JUMP_IF_FALSE, -1, 0, Data, Memory);
+        ByteInstruction* POP_Inst = CodeGenUtils::CreateInst
+            (Node, OpCode::POP, -1, 0, Data, Memory);
+         
         BC.Chunks[State.currChunk]->Instructions.push_back(JFALSE_Inst);
+        BC.Chunks[State.currChunk]->Instructions.push_back(POP_Inst);
 
         CompileNode(Node->IfBody, State, BC, SARes, Data, Memory);
 
@@ -641,6 +655,9 @@ void CodeGenerator::CompileIf(IfNode* Node, CodeGenState& State, ByteCode& BC, S
         State.IfStates.back().EndJumps.push_back(JEND_Inst);
 
         JFALSE_Inst->R1 = static_cast<i64>(BC.Chunks[State.currChunk]->Instructions.size());
+        ByteInstruction* POP_False_Inst = CodeGenUtils::CreateInst
+            (Node, OpCode::POP, -1, 0, Data, Memory);
+        BC.Chunks[State.currChunk]->Instructions.push_back(POP_False_Inst);
     }
     else
     {
@@ -670,6 +687,7 @@ void CodeGenerator::CompileElse(ElseNode* Node, CodeGenState& State, ByteCode& B
     CompileNode(Node->Body, State, BC, SARes, Data, Memory);
 }
 
+// Compile Conditional 'elif' Block | Compila Bloco Condicional 'elif'
 void CodeGenerator::CompileElif(ElifNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
     // Inst1
@@ -677,7 +695,12 @@ void CodeGenerator::CompileElif(ElifNode* Node, CodeGenState& State, ByteCode& B
 
     ByteInstruction* JFALSE_Inst = CodeGenUtils::CreateInst
         (Node, OpCode::JUMP_IF_FALSE, static_cast<i64>(-1), 0, Data, Memory);
+    ByteInstruction* POP_True_Inst = CodeGenUtils::CreateInst
+        (Node, OpCode::POP, -1, 0, Data, Memory);
+
     BC.Chunks[State.currChunk]->Instructions.push_back(JFALSE_Inst);
+    BC.Chunks[State.currChunk]->Instructions.push_back(POP_True_Inst);
+
     CompileNode(Node->Body, State, BC, SARes, Data, Memory);
 
     // Inst2
@@ -685,9 +708,13 @@ void CodeGenerator::CompileElif(ElifNode* Node, CodeGenState& State, ByteCode& B
         (Node, OpCode::JUMP, static_cast<i64>(-1), 0, Data, Memory);
     BC.Chunks[State.currChunk]->Instructions.push_back(JUMP_Inst);
 
-    // Finalize
     State.IfStates.back().EndJumps.push_back(JUMP_Inst);
+
     JFALSE_Inst->R1 = static_cast<i64>(BC.Chunks[State.currChunk]->Instructions.size());
+
+    ByteInstruction* POP_False_Inst = CodeGenUtils::CreateInst
+        (Node, OpCode::POP, -1, 0, Data, Memory);
+    BC.Chunks[State.currChunk]->Instructions.push_back(POP_False_Inst);
 }
 
 // Compile 'while' Loop | Compila Laço de Repetição 'while'
@@ -757,11 +784,14 @@ void CodeGenerator::CompileFor(ForNode* Node, CodeGenState& State, ByteCode& BC,
     ByteInstruction* ExitJump = CodeGenUtils::
         CreateInst(Node, OpCode::JUMP_IF_FALSE, 0, 0, Data, Memory);
     Insts.push_back(ExitJump);
+    ByteInstruction* PopCond = CodeGenUtils::
+        CreateInst(Node, OpCode::POP, 0, 0, Data, Memory);
+    Insts.push_back(PopCond);
     ByteInstruction* Next = CodeGenUtils::
         CreateInst(Node, OpCode::ITER_NEXT, 0, 0, Data, Memory);
     Insts.push_back(Next);
 
-    int slot = State.GetLocal(Node->Identifier->Name);
+    int slot = State.CreateLocal(Node->Identifier->Name);
     ByteInstruction* Store = CodeGenUtils::
         CreateInst(Node, OpCode::STORE_LOCAL, slot, 0, Data, Memory);
     Insts.push_back(Store);
@@ -778,6 +808,9 @@ void CodeGenerator::CompileFor(ForNode* Node, CodeGenState& State, ByteCode& BC,
     ExitJump->R1 = static_cast<i64>(LoopEnd);
 
     // Remove Iter | Remove o Iterador.
+    ByteInstruction* PopCondEnd = CodeGenUtils::
+        CreateInst(Node, OpCode::POP, 0, 0, Data, Memory);
+    Insts.push_back(PopCondEnd);
     ByteInstruction* Pop = CodeGenUtils::
         CreateInst(Node, OpCode::POP, 0, 0, Data, Memory);
     Insts.push_back(Pop);
@@ -787,7 +820,7 @@ void CodeGenerator::CompileFor(ForNode* Node, CodeGenState& State, ByteCode& BC,
 void CodeGenerator::CompileForEach(ForEachNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {}
 
-// Compile 'for' Loop Default Node | Compila Nó de do Laço 'for' Padrão.
+// Compile 'for' Loop Default Node | Compila Nó de do Laço de Repetição 'for' Padrão.
 void CodeGenerator::CompileForDef(ForDefNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {}
 
@@ -829,7 +862,7 @@ void CodeGenerator::CompileErrorStmt(ErrorStmtNode* Node, CodeGenState& State, B
 }
 
 
-// ========== ENTRY-POINT ========== //
+// ========== ENTRY-POINT =========== //
 
 // Generate CodeGen Log | Gera o Log de CodeGen.
 void GenerateCodeGenLog(ByteCode& BC, RunTimeData& Data)

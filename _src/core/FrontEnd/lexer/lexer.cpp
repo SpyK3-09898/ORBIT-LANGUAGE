@@ -662,22 +662,29 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
 
             case '!':
                 if (N == '=')
+                {
                     MakeToken(Res, State, Data, TokenType::NOT_EQUAL, Memory);
-                else
+                    LexUtils::Advance(State, Data);
+                } else
                     MakeToken(Res, State, Data, TokenType::NOT, Memory);
                 continue;
 
             case '<':
                 if (N == '=')
+                {
                     MakeToken(Res, State, Data, TokenType::LESSEQ, Memory);
+                    LexUtils::Advance(State, Data);
+                }    
                 else
                     MakeToken(Res, State, Data, TokenType::LESS, Memory);
                 continue;    
 
             case '>':
                 if (N == '=')
+                {
                     MakeToken(Res, State, Data, TokenType::GREATEQ, Memory);
-                else
+                    LexUtils::Advance(State, Data);
+                } else
                     MakeToken(Res, State, Data, TokenType::GREATER, Memory);
                 continue;  
 

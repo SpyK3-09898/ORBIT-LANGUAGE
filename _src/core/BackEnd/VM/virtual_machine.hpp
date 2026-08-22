@@ -49,6 +49,12 @@ struct VM_Frame
         Stack.pop_back();
         return Val;
     }
+    ByteValue Top()
+    {
+        if (Stack.size() == 0)
+            OrbitLog::Error("virtual_machine.hpp", "Trying to Get a 'Top' In Empty Stack", true, ORBIT_ERRORS_CODE::MEMORY_ERROR);
+        return Stack.back();
+    }
 };
 
 // Stack of Calls | Pilha de Chamadas.

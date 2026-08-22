@@ -50,17 +50,28 @@ struct CodeGenState
         if (It != Locals.end())
             return It->second;
 
-        ui32 Index = localCount++;
-        Locals[Name] = Index;
+        OrbitLog::Error(
+            "codegen.cpp",
+            "Cannot Find Local: " + Name,
+            true,
+            404
+        );
 
-        return Index;
+        return 0;
     }
 
     // Create A New Local | Cria um Novo Local.
     ui32 CreateLocal(const string& Name)
     {
-        Locals[Name] = Locals.size()+1;
-        return Locals[Name];
+        auto It = Locals.find(Name);
+
+        if (It != Locals.end())
+            return It->second;
+
+        ui32 Index = localCount++;
+        Locals[Name] = Index;
+
+        return Index;
     }
 
 };
