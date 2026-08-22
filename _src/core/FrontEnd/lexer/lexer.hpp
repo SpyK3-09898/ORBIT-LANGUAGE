@@ -112,6 +112,7 @@ enum class TokenType: uint8_t
     DOT,
     COMMA,
     RANGE,
+    ITERATOR_ACESS,
     AMPERSAND,
 
     // BLOCKS
@@ -190,6 +191,7 @@ struct Token
             case TokenType::PIPE:         return "<PIPE>";
             case TokenType::POWER:        return "<POWER>";
             case TokenType::MOD:          return "<MOD>";
+            case TokenType::ITERATOR_ACESS:
             case TokenType::POT:          return "<POT>";
             case TokenType::HOLE:         return "<HOLE>";
 

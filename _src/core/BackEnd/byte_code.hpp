@@ -86,17 +86,12 @@ struct ByteIterator
     // UTILS
     bool InEnd() // Return if In End of It WHITOUT Step | Retorna se Esta no Fim do It DESCONSIDERANDO O Passo:
     {
-        if (Step > 0)
-            return Curr > End;
-        else
-            return Curr < End;
+        if (Step > 0) return Curr > End;
+        else          return Curr < End;
     }
     bool HasNext() // Return if In End of It | Retorna se Esta no Fim do it:
     {
-        if (Step > 0)
-            return Curr + Step <= End;
-        else
-            return Curr + Step >= End;       
+        return !InEnd();   
     }
     void Advance() // Advance it | Avança o Iterador:
     {

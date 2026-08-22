@@ -535,13 +535,21 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
         }
         else if (C is '\t') { State.currPos.indent++; continue; } 
         else if (C is '\r') continue;
-        else if (C == '.')
+        else if (C == '.') {
+
             if (N == '.')
                 {
                     LexUtils::Advance(State, Data);
                     MakeToken(Res, State, Data, TokenType::RANGE, Memory);
                     continue;
                 }
+            else if (N == '*')
+                {
+                    LexUtils::Advance(State, Data);
+                    MakeToken(Res, State, Data, TokenType::RANGE, Memory);
+                    continue;
+                }
+        }
         // DEF CHARS
         if (IS_ALPHA(C))
         {

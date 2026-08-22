@@ -1011,9 +1011,8 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             // Build a Range Iterator | Constroi um Iterador de Intervalo.
             case OpCode::BUILD_RANGE: 
             {
+                i64 start = std::get<i64>(CallStack->GetTop()->Pop())-1;
                 i64 end   = std::get<i64>(CallStack->GetTop()->Pop());
-                i64 start = std::get<i64>(CallStack->GetTop()->Pop());
-
 
                 ByteIterator* It = Memory.New<ByteIterator>(
                     static_cast<ui32>(start),
@@ -1254,9 +1253,9 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                     );
                 ByteIterator* It = std::get<ByteIterator*>(Val);
 
-                i64 current = It->Curr;
                 It->Advance();
-
+                i64 current = It->Curr;
+                
                 CallStack->GetTop()->PushBack(current);
                 break;    
             }
