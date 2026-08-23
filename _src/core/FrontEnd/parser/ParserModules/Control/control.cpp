@@ -84,7 +84,7 @@ namespace ControlUtils {
         IfNode* Ctrl = ParserUtils::MakeNode<IfNode>(State, Res, Memory);
 
         // PARSE CONDITION | FAZ O PARSER DA CONDIÇÃO.
-        Instruction ICond{{}, Cond};
+        Instruction ICond{Inst.Modifiers, Cond};
         Ctrl->Cond = ExprParser.ParseExpression(
             ICond, 
             State, 
@@ -200,7 +200,7 @@ namespace ControlUtils {
         BodyNode* Body = ParserUtils::MakeNode<BodyNode>(State, Res, Memory);
 
         // PARSE CONDITION | PARSEIA A COND
-        Instruction ICond{{}, Cond};
+        Instruction ICond{Inst.Modifiers, Cond};
         Elif->Cond = ExprParser.ParseExpression(ICond, State, Res, Data, Memory);
 
         // SET BODY | DEFINE O BODY
@@ -312,7 +312,7 @@ namespace ControlUtils {
         // CREATE PREV.
         WhileNode* Cntrl = ParserUtils::MakeNode<WhileNode>(State, Res, Memory);
         Cntrl->Type = LoopTypes::WHILE;
-        Instruction PrevInst{{}, Cond};
+        Instruction PrevInst{Inst.Modifiers, Cond};
         Cntrl->Cond = ExprParser.ParseExpression(
             PrevInst,
             State,
@@ -326,18 +326,6 @@ namespace ControlUtils {
         {
             if (Arg->Lexeme(Data) == "do")
                 Cntrl->alwaysExecuteFirst=true;
-            else {
-
-                string argLexeme = Arg->Lexeme(Data);
-                OrbitLog::SyntaxLog::SyntaxWarn(
-                    "Parsing",
-                    "Unexpected <MODIFIER>",
-                    "This Mod: " + argLexeme + " Is Not Allowed Here",
-                    "Remove",
-                    Arg->pos.line,
-                    Arg->pos.collumn
-                );
-            }
         }
 
         // CREATE A NEW BODY | CRIA UM NOVO BODY
@@ -492,7 +480,7 @@ namespace ControlUtils {
         }
         Cond.pop_back();
 
-        Instruction RangeInst{{}, Cond};
+        Instruction RangeInst{Inst.Modifiers, Cond};
         ExpressionNode* Range = ExprParser.ParseExpression(RangeInst, State, Res, Data, Memory);
         
         // ERROR PREV | PREVENÇÃO DE ERROS.
@@ -578,7 +566,7 @@ namespace ControlUtils {
         }
 
         // INSTRUCTION COND
-        Instruction ICond{{}, Cond};
+        Instruction ICond{Inst.Modifiers, Cond};
         ExpressionNode* CondNode = ExprParser.
             ParseExpression(ICond, State,Res, Data, Memory);
         
@@ -666,7 +654,7 @@ namespace ControlUtils {
         }
 
         // INSTRUCTION COND
-        Instruction ICond{{}, Cond};
+        Instruction ICond{Inst.Modifiers, Cond};
         ExpressionNode* CondNode = ExprParser.
             ParseExpression(ICond, State,Res, Data, Memory);
         Cntrl->Value = CondNode;

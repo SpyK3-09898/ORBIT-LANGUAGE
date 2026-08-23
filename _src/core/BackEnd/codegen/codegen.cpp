@@ -95,7 +95,7 @@ namespace CodeGenUtils {
                                 break;
 
                             case '0':
-                                Value += '\0';
+                                Value += "<NULL-CHAR>";
                                 break;
 
                             case '\\':
@@ -453,6 +453,7 @@ void CodeGenerator::CompileIndexAccess(IndexAccessNode* Node, CodeGenState& Stat
     // Generate Instruction | Gera uma Instrução.
     ByteInstruction* Inst = 
         CodeGenUtils::CreateInst(Node, OpCode::GET_INDEX, 0, 0, Data, Memory);
+    Inst->LX1 = Node->fallback;    
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 }
 

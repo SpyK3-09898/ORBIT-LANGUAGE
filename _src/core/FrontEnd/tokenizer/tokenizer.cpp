@@ -46,7 +46,7 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
     };
     vec<string> Modifiers
     {
-        "const"
+        "const", "fallback"
     };
     vec<string> LitTypes
     {

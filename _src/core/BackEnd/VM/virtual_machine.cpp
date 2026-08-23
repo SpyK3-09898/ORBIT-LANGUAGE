@@ -30,7 +30,7 @@ namespace VM_Utils {
     // Convert Left To Right | Converte Esquerda para a Direita.
     ByteValue ConvertValue(ByteValue& Val, TypeKind K1, SubTypeKind K2, NodePos& Pos, RunTimeData& Data)
     {
-         switch (K1) {
+        switch (K1) {
         
             // INT & FLOATS
             case TypeKind::NUMBER:
@@ -169,11 +169,14 @@ namespace VM_Utils {
                 else if (holds_alt<NullLitVal>(Val)) 
                     return "<NULL>";
                 else if (holds_alt<shared_ptr<ByteArray>>(Val)) {
+                    
                     shared_ptr<ByteArray> Arr = std::get<shared_ptr<ByteArray>>(Val);
                     string ret = "[";
                     int i=0;
                     for (ByteValue Val : *Arr)
                     {
+                        if (holds_alt<nullptr_t>(Val))
+                            continue;
                         ret += std::get<string>(ConvertValue(Val, TypeKind::STRING, SubTypeKind::NONE, Pos, Data));
                         if (i < static_cast<int>(Arr->size()) - 1)
                             ret += ", ";
@@ -183,12 +186,15 @@ namespace VM_Utils {
                     return ret;
                 }
                 else if (holds_alt<shared_ptr<ByteTable>>(Val)) {
+                    
                     shared_ptr<ByteTable> Table = std::get<shared_ptr<ByteTable>>(Val);
                     string ret = "{";
                     int i = 0;
 
                     for (const auto& [Key, Value] : *Table)
-                    {
+                    { 
+                        if (holds_alt<nullptr_t>(Value))
+                            continue;
                         ret += "\"" + Key + "\": ";
                         ret += std::get<string>(
                             ConvertValue(
@@ -301,9 +307,8 @@ namespace VM_Utils {
             {
                 ret += ConvertByteToString(Value);
 
-                if (i < static_cast<int>(Arr->size()) - 1)
+                if (i != static_cast<int>(Arr->size()))
                     ret += ", ";
-
                 i++;
             }
 
@@ -321,9 +326,8 @@ namespace VM_Utils {
                 ret += "\"" + Key + "\": ";
                 ret += ConvertByteToString(const_cast<ByteValue&>(Value));
 
-                if (i < static_cast<int>(Table->size()) - 1)
+                if (i != static_cast<int>(Table->size()))
                     ret += ", ";
-
                 i++;
             }
 
@@ -910,7 +914,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 ", REG2: "+
                 VM_Utils::ConvertByteToString(CurrInst->R2)+
                 "\nIP: "+std::to_string(IP.Index)
-                +"\nSTACK: ";
+                +"\nSTACK: \n";
             
             int i=0;
             for (ByteValue& Val : CallStack->GetTop()->Stack)
@@ -932,7 +936,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 ", REG2: "+
                 VM_Utils::ConvertByteToString(CurrInst->R2)+
                 "\nIP: "+std::to_string(IP.Index)
-                +"\nSTACK: "
+                +"\nSTACK: \n"
             );
             int i=0;
             for (ByteValue& Val : CallStack->GetTop()->Stack)
@@ -1016,11 +1020,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
 
                 i32 step = start <= end ? 1 : -1;
 
-                ByteIterator* It = Memory.New<ByteIterator>(
-                    static_cast<ui32>(start - step),
-                    static_cast<size_t>(end),
-                    step
-                );
+                ByteIterator* It = Memory.New<ByteIterator>(start, end, step);
                 It->Descr = GC.Register(It, ByteIterator::Destroy, Memory);
                 CallStack->GetTop()->PushBack(It);
                 break;
@@ -1058,7 +1058,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                             SubTypeKind::INT,
                             CurrInst->Pos,
                             Data
-                        ));
+                        ))-1;
 
                     auto& Arr = *std::get<shared_ptr<ByteArray>>(Object);
 
@@ -1073,7 +1073,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
 
                     if (holds_alt<i64>(Index))
                     {
-                        i64 I = std::get<i64>(Index);
+                        i64 I = std::get<i64>(Index)-1;
 
                         if (I < 0 || I >= (i64)Table.size())
                             CallStack->GetTop()->PushBack(NullLitVal{});
@@ -1103,6 +1103,28 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                         }
                         if (!finded) CallStack->GetTop()->PushBack(NullLitVal{});
                     }
+                }
+                else if (holds_alt<string>(Object))
+                {
+                    auto Text = std::get<string>(Object);
+                    i64 I = std::get<i64>(Index)-1;
+
+                    if (I < 0 || I >= static_cast<i64>(Text.size()))
+                    {
+                        if (!std::get<bool>(CurrInst->LX1))
+                        {
+                            OrbitLog::SyntaxLog::SyntaxError(
+                                "RunTime", 
+                                "Trying Acess a <OUT-OF-RANGE> Index",
+                                "Trying to Acess A Invalid <INDEX> Of String", 
+                                "Acess a Valid <INDEX>",
+                                CurrInst->Pos.line, CurrInst->Pos.collumn
+                            );
+                            OrbitLog::SyntaxLog::ThrowLog(Data);
+                        } else {
+                            CallStack->GetTop()->PushBack(string(1, '\0'));
+                        }
+                    } else CallStack->GetTop()->PushBack(string(1, Text[I]));
                 }
                 else
                 {
@@ -1149,7 +1171,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                     auto& Arr = *std::get<shared_ptr<ByteArray>>(Object);
 
                     if (Val >= (i64)Arr.size())
-                        Arr.resize(Val + 1);
+                        Arr.resize(Val + 1, nullptr);
 
                     Arr[Val] = Value;
                 }
@@ -1173,10 +1195,21 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                             OrbitLog::SyntaxLog::ThrowLog(Data);
                         }
 
-                        if (Val >= (i64)Table.size())
-                            Table.resize(Val + 5);
+                        string Key = std::to_string(Val);
+                        bool Found = false;
 
-                        Table[Val].second = Value;
+                        for (auto& Entry : Table)
+                        {
+                            if (Entry.first == Key)
+                            {
+                                Entry.second = Value;
+                                Found = true;
+                                break;
+                            }
+                        }
+
+                        if (!Found)
+                            Table.push_back({Key, Value});
                     }
                     else
                     {
@@ -1269,9 +1302,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 ByteIterator* It = std::get<ByteIterator*>(Val);
 
                 It->Advance();
-                i64 current = It->Curr;
-                
-                CallStack->GetTop()->PushBack(current);
+                CallStack->GetTop()->PushBack(It->Curr);
                 break;    
             }
 

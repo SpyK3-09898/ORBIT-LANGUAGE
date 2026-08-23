@@ -447,6 +447,7 @@ struct IndexAccessNode : ExpressionNode
     // DATA
     ExpressionNode* Object;
     ExpressionNode* Index;
+    bool fallback=false;
 
     // CONSTRUCTOR | CONSTRUTOR
     IndexAccessNode(NodePos P)

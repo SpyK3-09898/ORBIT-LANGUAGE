@@ -14,6 +14,7 @@
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../RunTimeData.hpp"
+#include <cstddef>
 
 // Description of Object.
 struct ObjectDescr
@@ -67,16 +68,21 @@ struct ObjectDescr
 };
 
 // Iterator | Iterador.
+
 struct ByteIterator
 {
     // DATA
-    ui32 Start; size_t End; i32 Step; int Curr;
-    ObjectDescr* Descr;
+    i64 Curr;
+    i64 End;
+    i32 Step;
+    ObjectDescr* Descr = nullptr;
 
     // CONSTRUCTOR
-    ByteIterator(ui32 St, size_t E, i32 S)
-        : Start(St), Step(S), End(E), Curr(St) {}; // GC | CB:
+    ByteIterator(i64 start, i64 end, i32 step)
+        : Curr(start - step), End(end), Step(step) {}
+
     ~ByteIterator() = default;
+
     static void Destroy(void* Ptr, Arena& Memory)
     {
         ByteIterator* It = static_cast<ByteIterator*>(Ptr);
@@ -84,18 +90,17 @@ struct ByteIterator
     }
 
     // UTILS
-    bool InEnd() // Return if In End of It WHITOUT Step | Retorna se Esta no Fim do It DESCONSIDERANDO O Passo:
+    bool HasNext() const // Return if In End of It | Retorna se Esta no Fim do it:
     {
-        if (Step > 0) return Curr > End;
-        else          return Curr < End;
+        if (Step > 0)
+            return Curr + Step <= End;
+        else
+            return Curr + Step >= End;
     }
-    bool HasNext() // Return if In End of It | Retorna se Esta no Fim do it:
-    {
-        return !InEnd();   
-    }
+
     void Advance() // Advance it | Avança o Iterador:
     {
-        if (!InEnd()) Curr+=Step;
+        Curr += Step;
     }
 };
 
@@ -127,7 +132,8 @@ using  ByteValue = variant<
     shared_ptr<ByteArray>,
     shared_ptr<ByteTable>,
     ByteFn*,
-    ByteIterator*
+    ByteIterator*,
+    nullptr_t
 >;
 struct ByteArray : vec<ByteValue>
 {

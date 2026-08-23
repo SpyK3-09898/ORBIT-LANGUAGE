@@ -742,8 +742,7 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
     InstVec Instructions = SeparateInstructions(LRes, Data);
     for (Instruction& Inst : Instructions) // PARSE ALL INSTRUCTIONS | PARSEIA TODAS AS INTRUÇOES
     {
-
-        State.consumedInst=false;
+        State.consumedInst = false;
 
         // PARSE TOKENS
         ASTNode* Node = nullptr; // CREATE BASE NODE
@@ -757,7 +756,7 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
             ExprParser,
             Memory
         );
-        
+
         if (Node == nullptr and !State.consumedInst)
             Node = DeclParser.ParseDeclaration(
                 Inst,
@@ -777,84 +776,72 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
             ParserUtils::AddInst<ASTNode>(Node, State, Res, Memory);
 
         // INDENT SYSTEM | SISTEMA DE INDENTAÇÃO
-        if (I + 1 < Instructions.size() and I > 0)
+        if (I > 0)
         {
             size_t PrevIndent = !Instructions[I - 1].Tokens.empty()
                 ? Instructions[I - 1].Tokens[0]->pos.indent
-                : Instructions[I - 1].Modifiers[0]->pos.indent;
+                : (!Instructions[I - 1].Modifiers.empty()
+                    ? Instructions[I - 1].Modifiers[0]->pos.indent
+                    : 0);
 
             size_t InstIndent = !Inst.Tokens.empty()
                 ? Inst.Tokens[0]->pos.indent
-                : Inst.Modifiers[0]->pos.indent;
+                : (!Inst.Modifiers.empty()
+                    ? Inst.Modifiers[0]->pos.indent
+                    : 0);
 
-            Instruction& NextInst = Instructions[I + 1];
+            bool ShouldPop = false;
 
-            size_t NextIndent = !NextInst.Tokens.empty()
-                ? NextInst.Tokens[0]->pos.indent
-                : NextInst.Modifiers[0]->pos.indent;
-
-            // INDENT SYSTEM | SISTEMA DE INDENTAÇÃO
-            if (I > 0)
+            if (I + 1 < Instructions.size())
             {
-                size_t PrevIndent = !Instructions[I - 1].Tokens.empty()
-                    ? Instructions[I - 1].Tokens[0]->pos.indent
-                    : (!Instructions[I - 1].Modifiers.empty() ? Instructions[I - 1].Modifiers[0]->pos.indent : 0);
+                Instruction& NextInst = Instructions[I + 1];
 
-                size_t InstIndent = !Inst.Tokens.empty()
-                    ? Inst.Tokens[0]->pos.indent
-                    : (!Inst.Modifiers.empty() ? Inst.Modifiers[0]->pos.indent : 0);
+                size_t NextIndent = !NextInst.Tokens.empty()
+                    ? NextInst.Tokens[0]->pos.indent
+                    : (!NextInst.Modifiers.empty()
+                        ? NextInst.Modifiers[0]->pos.indent
+                        : 0);
 
-                bool ShouldPop = false;
+                bool IsNextControlBlock = false;
 
-                if (I + 1 < Instructions.size())
+                if (!NextInst.Tokens.empty())
                 {
-                    Instruction& NextInst = Instructions[I + 1];
-
-                    size_t NextIndent = !NextInst.Tokens.empty()
-                        ? NextInst.Tokens[0]->pos.indent
-                        : (!NextInst.Modifiers.empty() ? NextInst.Modifiers[0]->pos.indent : 0);
-
-                    bool IsNextControlBlock = false;
-
-                    if (!NextInst.Tokens.empty())
-                    {
-                        string Lex = NextInst.Tokens[0]->Lexeme(Data);
-
-                        if (
-                            Lex == "else" or
-                            Lex == "elif" or
-                            ( Lex == "end" and NextInst.Tokens[0]->pos.indent == InstIndent)
-                        )
-                            IsNextControlBlock = true;
-                    }
+                    string Lex = NextInst.Tokens[0]->Lexeme(Data);
 
                     if (
-                        InstIndent > PrevIndent and
-                        InstIndent > NextIndent and
-                        !IsNextControlBlock
+                        Lex == "end" and
+                        NextIndent == InstIndent
                     )
                     {
-                        ShouldPop = true;
-                    }
-                }
-                else
-                {
-                    if (InstIndent > PrevIndent)
-                    {
-                        ShouldPop = true;
+                        IsNextControlBlock = true;
                     }
                 }
 
                 if (
-                    ShouldPop and
-                    State.Bodys.size() > 1 and
-                    State.CurrBody->Type != BodyTypes::PROGRAM
+                    InstIndent > PrevIndent and
+                    InstIndent > NextIndent and
+                    !IsNextControlBlock
                 )
                 {
-                    ParserUtils::PopBodyStack(State, Data);
+                    ShouldPop = true;
                 }
             }
+            else
+            {
+                if (InstIndent > PrevIndent)
+                    ShouldPop = true;
+            }
+
+            if (
+                ShouldPop and
+                State.Bodys.size() > 1 and
+                State.CurrBody->Type != BodyTypes::PROGRAM
+            )
+            {
+                ParserUtils::PopBodyStack(State, Data);
+            }
         }
+
         I++;
     }
     if (State.Bodys.size() > 1)

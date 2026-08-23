@@ -383,6 +383,37 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
                 return &Res.ExpressionTypes[Node];
             }
 
+            if (ObjInfo->Kind == TypeKind::STRING)
+            {
+                TypeInfo ExpectedIndex;
+                ExpectedIndex.Kind = TypeKind::NUMBER;
+                ExpectedIndex.SubKind = SubTypeKind::INT;
+
+                if (!TypesEqual(*IndexInfo, ExpectedIndex))
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "Semantic",
+                        "Invalid Index value Type",
+                        "Expected <INT> For <STRING>, But Got: "+SAUtils::GetStringOfKind(IndexInfo->Kind),
+                        "Add a Valid Type Or Convert",
+                        Index.Index->pos.line, Index.Index->pos.collumn
+                    );
+
+                    if (!Data.flags.debugMode)
+                        OrbitLog::SyntaxLog::ThrowLog(Data);
+
+                    TInfo->Kind = TypeKind::UNK;
+                    Res.ExpressionTypes[Node] = *TInfo;
+                    return &Res.ExpressionTypes[Node];
+                }
+
+                TInfo->Kind = TypeKind::STRING;
+                TInfo->SubKind = SubTypeKind::NONE;
+
+                Res.ExpressionTypes[Node] = *TInfo;
+                return &Res.ExpressionTypes[Node];
+            }
+
             if (
                 ObjInfo->Kind == TypeKind::MONO_STATE ||
                 ObjInfo->Kind == TypeKind::UNK
@@ -2053,6 +2084,26 @@ void SemanticAnalizer::LookUpIndexAccess(IndexAccessNode& Node, SAState& State, 
             if (!Data.flags.debugMode)
                 OrbitLog::SyntaxLog::ThrowLog(Data);
 
+            return;
+        }
+    }
+    else if (ObjInfo->Kind == TypeKind::STRING)
+    {
+        TypeInfo ExpectedIndex;
+        ExpectedIndex.Kind = TypeKind::NUMBER;
+        ExpectedIndex.SubKind = SubTypeKind::INT;
+
+        if (!TypesEqual(*IndexInfo, ExpectedIndex))
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                "Invalid Index value Type",
+                "Expected <INT> For <STRING>, But Got: "+SAUtils::GetStringOfKind(IndexInfo->Kind),
+                "Add a Valid Type Or Convert",
+                Node.Index->pos.line, Node.Index->pos.collumn
+            );
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
             return;
         }
     }

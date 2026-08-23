@@ -202,7 +202,13 @@ namespace ExprUtils {
             );
 
         Index->Object = L;
-
+        for (Token* M : Inst.Modifiers)
+        {
+            if (M->Lexeme(Data) == "fallback")
+            {
+                Index->fallback=true;
+            }
+        }
         ExpressionNode* Expr =
             ExpressionParser::ParseExpression(
                 Inst,

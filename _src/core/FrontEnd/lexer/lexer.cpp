@@ -14,9 +14,11 @@
 #include <cstdint> 
 #include <cerrno>
 #include <cstring>
+#include <cctype>
 #include <string>
 #include <fstream>
 #include <filesystem>
+#include <algorithm>
 using fstream=std::fstream;
 namespace fs=std::filesystem;
 
@@ -440,7 +442,7 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
         if (id.size() > 15)
             id.resize(15);
 
-        fileName = "__" + id + "__.txt";
+        fileName = "__" + id + "__.log";
     }
     fs::path dir = Data.LogDir;
     if (!fs::exists(dir))
@@ -450,7 +452,7 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
     Data.LogDir = p;
     fstream file(p, std::ios::out | std::ios::trunc); 
     if (not file.is_open())
-        { 
+        {
             OrbitLog::Error(
                 "Lexer.cpp",
                 "Cannot Open File! Why: "+string(std::strerror(errno)), 
@@ -503,6 +505,9 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
         std::istreambuf_iterator<char>(file),
         std::istreambuf_iterator<char>()
     );
+    if (std::all_of(Data.source.begin(), Data.source.end(), [](unsigned char C) {
+        return std::isspace(C);
+    })) throw runt_err("[ERROR] Empty File Recived. .. ...");
 
     // ENTRY-POINT TOKEN | TOKEN DE 'ENTRY_POINT'
     MakeToken(Res, State, Data, TokenType::ENTRY_POINT, Memory);

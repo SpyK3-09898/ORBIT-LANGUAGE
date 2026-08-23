@@ -64,17 +64,6 @@ namespace DeclUtils {
 
             if (argLexeme == "const")
                 Decl->MutType = MutableTypes::CONST;
-            else
-            {
-                OrbitLog::SyntaxLog::SyntaxWarn(
-                    "Parsing",
-                    "Unexpected <MODIFIER>",
-                    "This Mod: " + argLexeme + " Is Not Allowed Here",
-                    "Remove",
-                    Arg->pos.line,
-                    Arg->pos.collumn
-                );
-            }
         }
 
         string name = NameToken->Lexeme(Data);
@@ -91,7 +80,7 @@ namespace DeclUtils {
                 ParserUtils::UpdateStatePos(E, State);
 
                 Instruction NewInst{
-                    {},
+                    Inst.Modifiers,
                     vec<Token*>(
                         Inst.Tokens.begin() + Inst.pos.curr,
                         Inst.Tokens.end()
@@ -133,7 +122,7 @@ namespace DeclUtils {
                     ParserUtils::UpdateStatePos(E, State);
 
                     Instruction NewInst{
-                        {},
+                        Inst.Modifiers,
                         vec<Token*>(
                             Inst.Tokens.begin() + Inst.pos.curr,
                             Inst.Tokens.end()
@@ -381,7 +370,7 @@ namespace DeclUtils {
                         {
                             // Take Only The Current Param Slice | Pega Apenas o Pedaço do Parâmetro Atual.
                             Instruction CondInst(
-                                {},
+                                Inst.Modifiers,
                                 vec<Token*>(Cond.begin() + start, Cond.begin() + i)
                             );
 
@@ -403,7 +392,7 @@ namespace DeclUtils {
             if (start < (int)Cond.size())
             {
                 Instruction CondInst(
-                    {},
+                    Inst.Modifiers,
                     vec<Token*>(Cond.begin() + start, Cond.end())
                 );
 
