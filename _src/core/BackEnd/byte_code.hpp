@@ -15,6 +15,7 @@
 #include "tools/console.hpp"
 #include "../RunTimeData.hpp"
 #include <cstddef>
+#include <cstdint>
 
 // Description of Object.
 struct ObjectDescr
@@ -206,7 +207,7 @@ struct ByteTable : vec<pair<string, ByteValue>>
 */
 
 // OpCodes | OpCodes.
-enum class OpCode
+enum class OpCode: uint8_t
 {
     // OT
     NOP,

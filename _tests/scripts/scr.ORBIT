@@ -1,0 +1,11 @@
+
+_extension ORBIT;
+
+_library __STD_LIB__; 
+\\ __STD_LIB__ e o nome INTERNO, stdlib e o nome do projeto, consequentemente da lib tamem.
+
+_export namespace Math: \\ Isso vira um Modulo, quando exportado, DEIXA de ser uma namespace.
+
+    export func PI():
+        return 3.1415;
+end

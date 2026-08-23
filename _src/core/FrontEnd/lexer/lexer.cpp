@@ -420,6 +420,7 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
 
     string fileName;
     if (true) {
+        
         std::hash<string> Hasher;
         size_t Hash = Hasher(Data.source);
 

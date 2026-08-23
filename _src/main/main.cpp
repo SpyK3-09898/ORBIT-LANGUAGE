@@ -9,6 +9,8 @@
 #include "../core/RunTimeData.hpp"
 
 #include <chrono>
+#include <thread>
+#include <filesystem>
 #include <numeric>
 #include <limits>
 #include <string>
@@ -74,6 +76,11 @@ void ParseRunTimeArgs(const vec<string>& args, RunTimeData& Data)
     }
 }
 
+void Await(int Time)
+{
+    std::this_thread::sleep_for(std::chrono::milliseconds(Time));
+}
+
 // ===== MAIN FN ====== //
 int main(int argc, char* argv[])
 {
@@ -88,11 +95,89 @@ int main(int argc, char* argv[])
 
         // PROJECTS | PROJETOS
         if (Entry == "--new") {
+
+            if (argc == 2)
+                throw runt_err("Expected Instace to Create. .. ...");
+            string inst=argv[2] ;
+            if (inst == "project") {
+                
+                if (argc == 3)
+                    throw runt_err("Expected Project-Path to Create. .. ...");
+
+                fs::path ProjectDir(argv[3]);
+                string ProjectName = "_project";
+
+                ParseRunTimeArgs(vec<string>(argv + 4, argv + argc), Data);
+                for (RunTimeArg& Arg : Data.Args)
+                {
+                    if (
+                        Arg.name == "Name"
+                        && holds_alt<string>(Arg.value)
+                    )
+                    {
+                        ProjectName = std::get<string>(Arg.value);
+                        break;
+                    }
+                }
+
+                fs::path filePath = ProjectDir / ProjectName;
+
+                if (fs::exists(filePath))
+                    throw runt_err("Project Already Exists");
+
+                fs::create_directories(ProjectDir);
+                fs::path TemplatePath =
+                    fs::absolute(argv[0]).parent_path().parent_path() /
+                    "_templates/_project";
+
+                if (!fs::exists(TemplatePath))
+                    throw runt_err("Project Template Not Found");   
             
+                PrintLn("\nSTARTING TASK: Copy Project Template");
+                Await(250);
+                PrintIn("[########----------] 50%");
+
+                fs::copy(
+                    TemplatePath,
+                    filePath,
+                    fs::copy_options::recursive
+                );
+                
+                Await(250);
+                PrintIn("[##################] 100%");
+                Await(250);
+                PrintInLn("ENDOF TASK: 'Copy Project Template'. .. ...");
+                Await(250);
+                PrintInLn("");  
+                
+
+            } else if (inst == "script")  {
+
+                if (argc == 3)
+                    throw runt_err("Expected Script-Path to Create. .. ...");
+ 
+                fs::path filePath(argv[3]);
+                if (filePath.extension() != ".ORBIT")
+                    throw runt_err("Try Create a Non-.ORBIT File");
+                if (fs::exists(filePath))
+                    throw runt_err("File Already Exists");
+                
+                fs::create_directories(filePath.parent_path());
+                std::ofstream file(filePath);
+                if (!file)
+                    throw runt_err("Cannot Write Temporary Data");
+                file << 
+                    "\n_extends ORBIT;\n"
+                    "\n_import stdlib=standart;"
+                    "\n_typedef using std=standart.*;"
+                    "\n\n_method In;\n\n";
+
+                file.close();
+            }
         }
 
         // RUN ORBIT | RODANDO A ORBIT
-        if (Entry == "--run") {
+        else if (Entry == "--run") {
             if (argc < 3)
                 throw runt_err("File Expected after commandd '--run'");
             else {
