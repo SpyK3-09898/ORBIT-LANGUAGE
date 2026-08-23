@@ -68,7 +68,6 @@ struct ObjectDescr
 };
 
 // Iterator | Iterador.
-
 struct ByteIterator
 {
     // DATA
@@ -179,17 +178,17 @@ struct ByteTable : vec<pair<string, ByteValue>>
     LOAD_MEMBER    / -> '22'
     STORE_MEMBER   / -> '23'
 
-    GET_INDEX      / -> '24'
-    LOAD_INDEX     / -> '25'
-    STORE_INDEX    / -> '26'
+    GET_INDEX      / -> '24' - X
+    LOAD_INDEX     / -> '25' - X
+    STORE_INDEX    / -> '26' - X
 
     LOAD_FN        / -> '27' - X
 
-    BUILD_ARRAY    / -> '28'
-    BUILD_TABLE    / -> '29'
+    BUILD_ARRAY    / -> '28' - X
+    BUILD_TABLE    / -> '29' - X
     BUILD_RANGE    / -> '30' - X
 
-    SET_TKEY       / -> '31'
+    SET_TKEY       / -> '31' - X
 
     ITER_NEXT      / -> '32' - X
     ITER_HAS_NEXT  / -> '33' - X
@@ -202,8 +201,8 @@ struct ByteTable : vec<pair<string, ByteValue>>
     CALL           / -> '38' - X
     RETURN         / -> '39' - X
 
-    OR             / -> '40'
-    AND            / -> '41'
+    OR             / -> '40' - X
+    AND            / -> '41' - X
 */
 
 // OpCodes | OpCodes.

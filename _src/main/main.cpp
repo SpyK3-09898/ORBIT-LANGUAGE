@@ -85,6 +85,13 @@ int main(int argc, char* argv[])
         
         RunTimeData Data;
         string Entry = argv[1];
+
+        // PROJECTS | PROJETOS
+        if (Entry == "--new") {
+            
+        }
+
+        // RUN ORBIT | RODANDO A ORBIT
         if (Entry == "--run") {
             if (argc < 3)
                 throw runt_err("File Expected after commandd '--run'");

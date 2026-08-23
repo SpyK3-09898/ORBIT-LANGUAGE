@@ -809,8 +809,7 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
                     string Lex = NextInst.Tokens[0]->Lexeme(Data);
 
                     if (
-                        (Lex == "end" or Lex == "elif" or Lex == "else") and
-                        NextIndent == InstIndent
+                        (Lex == "end" or Lex == "elif" or Lex == "else")
                     ) IsNextControlBlock = true;
                 }
 
