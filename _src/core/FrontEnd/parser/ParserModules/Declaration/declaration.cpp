@@ -490,6 +490,9 @@ namespace DeclUtils {
         ParserUtils::UpdateBodyStack(Body, State, Data);
         State.lastIndent = Body->pos.indent;        
 
+        if (State.Bodys.size() != 0 and State.Bodys.back()->Type == BodyTypes::NAMESPACE)
+            Decl->isNested=true;
+
         // FINALIZE | FINALIZA:
         return Decl;
     }

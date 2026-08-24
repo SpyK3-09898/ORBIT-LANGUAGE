@@ -24,6 +24,29 @@
 // Semantic Analysis Utils | Utilidades do Analisador.
 namespace SAUtils {
 
+    // Find Scope Whit Type | Encontra O Escopo Com o Tupo.
+    Scope* FindScopeType(BodyTypes Type, SAState& State)
+    {
+        Scope* S;
+        while (S)
+        {
+            if (S->Type == Type)
+                return S;
+            else S = S->Parent;
+        }
+        return nullptr;
+    }
+
+    // In Object Scopes | Em Escopos de Objetos.
+    Scope* InObjScope(SAState& State)
+    {
+        return 
+            FindScopeType(BodyTypes::NAMESPACE, State)
+            //or
+            //FindScopeType(BodyTypes::, State)
+        ;
+    }
+
     // Create A New Symbol | Cria um Novo Simbolo.
     Symbol* CreateSymbol(const string& Name, ASTNode& Node, SAState& State, SAResult& Res, Arena& Memory)
     {
@@ -285,11 +308,12 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
 
         case NodeType::MEMBER_ACCESS:
         {
+            // Take Object | Pega O Objeto
             MemberAccessNode& Ma = static_cast<MemberAccessNode&>(*Node);
-
             TypeInfo* ObjInfo = GetExpressionType
             (Ma.Object, State, Res, Data, Memory);
 
+            // MonoState or Unknow | Estado Desconhecido ou Não-Definido.
             if (
                 ObjInfo->Kind == TypeKind::MONO_STATE ||
                 ObjInfo->Kind == TypeKind::UNK
@@ -301,6 +325,69 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
             {
                 TInfo->Kind = TypeKind::MONO_STATE;
             }
+
+            // Take Object Data | Pega Os Dados Do Objeto.
+            string ObjName = SAUtils::GetIValueName(Ma.Object);
+            Symbol* ObjSym = State.CurrScope->FindSym(ObjName);
+
+            // Undeclared Object | Objeto Não Declarado.
+            if (!ObjSym)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Semantic", 
+                    "Trying to Get Symbol of Undeclared Object", 
+                    "Object Has Not Been Declared", 
+                    "Declare Object, or Ajust Name",
+                    Node->pos.line, Node->pos.collumn
+                );
+                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+                TInfo->Kind = TypeKind::UNK;
+            }
+
+            // NAMESPACES
+            if (ObjSym->Type == SymbolTypes::NAMESPACE && ObjSym->LinkedScope)
+            {
+                // Take Member Name | Pega O Nome Do Membro.
+                string M_Name;
+                if (Ma.Member && Ma.Member->Type == NodeType::IDENTIFIER)
+                    M_Name = static_cast<IdentifierNode*>(Ma.Member)->Name;
+                else if (Ma.Member && Ma.Member->Type == NodeType::MEMBER_ACCESS)
+                    return GetExpressionType(Ma.Member, State, Res, Data, Memory);
+                else { // Invalid Acess | Acesso Invalido:
+
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "Semantic", 
+                        "Trying To Acess A Invalid Member", 
+                        "Member Of Type: " +Ma.GetNodeType()+" Cannot Be Acessed",
+                        "Acess A Valid Member",
+                        Ma.pos.line, Ma.pos.collumn
+                    );
+                    if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+                    TInfo->Kind = TypeKind::UNK;
+                }
+
+                // Take Symbol of Member | Pega O Simbolo Do Membro.
+                Symbol* MemberSym = ObjSym->LinkedScope->FindSymLocal(M_Name);
+                if (!MemberSym)
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "Semantic",
+                        "Trying To Acess A Undeclared Member ",
+                        "Member '" +M_Name+ "' Not Found in Namespace '" + ObjName + "'",
+                        "Check the Name or Declare-It",
+                        Ma.pos.line, Ma.pos.collumn
+                    );
+                    if (!Data.flags.debugMode)
+                        OrbitLog::SyntaxLog::ThrowLog(Data);
+
+                    TInfo->Kind = TypeKind::UNK;
+                }
+                else // Try Copy Sym | Tenta Copiar O Simbolo:
+                {
+                    *TInfo = *MemberSym->TInfo;
+                }
+            } else // OTHERS:
+                TInfo->Kind = TypeKind::MONO_STATE;
 
             Res.ExpressionTypes[Node] = *TInfo;
             return &Res.ExpressionTypes[Node];
@@ -941,6 +1028,11 @@ void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, 
             (static_cast<FnDecl&>(Node), State, Res, Data, Memory);
             break;
 
+        case NodeType::NAMESPACE_DECL:
+            LookUpNamespace
+            (static_cast<NameSpaceDecl&>(Node), State, Res, Data, Memory);
+            break;        
+
         // EXPRESSIONS
         case NodeType::LITERAL:
             LookUpLiteral
@@ -1430,6 +1522,8 @@ void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult
     // Take Kind
     Sym->InferType->Kind = InferType->Kind;
     Sym->InferType->SubKind = InferType->SubKind;
+    if (SAUtils::InObjScope(State))
+        Sym->LinkedScope = SAUtils::InObjScope(State);
 
     // Type Prev | Prevenção de Tipos.
     if (!Node.Val)
@@ -1486,6 +1580,8 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
     FnSym->InferType->Kind = TypeKind::FN;
     FnSym->InferType->SubKind = SubTypeKind::NONE;
     FnSym->inited = true;
+    if (SAUtils::InObjScope(State))
+        FnSym->LinkedScope = SAUtils::InObjScope(State);
 
     Scope* PreviousScope = State.CurrScope;
     BodyNode* Body = Node.Body;
@@ -1494,7 +1590,6 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
         return;
 
     Scope* S = EntryScope(*Body, State, Res, Data, Memory);
-
 
     for (ExpressionNode* Parm : Node.Params)
     {
@@ -1538,8 +1633,59 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
     }
 
     LookUpBody(*Body, State, Res, Data, Memory, S);
-
     State.CurrScope = PreviousScope;
+}
+
+// LookUp NameSpace Decl Node | Olha um NameSpaceDeclNode.
+void SemanticAnalizer::LookUpNamespace(NameSpaceDecl& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+{
+    // Check Redeclaration | Verifica Redeclaração.
+    Symbol* Existing = State.CurrScope->FindSymLocal(Node.Name);
+    if (Existing)
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            "Namespace Redeclaration",
+            "Namespace '" + Node.Name + "' Already Declared in This Scope",
+            "Use a Different Name or Nest It",
+            Node.pos.line, Node.pos.collumn
+        );
+        if (!Data.flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;
+    }
+
+    // Create Symbol | Cria o Simbolo.
+    Symbol* NsSym = SAUtils::CreateSymbol(Node.Name, Node, State, Res, Memory);
+    NsSym->Type               = SymbolTypes::MODULE;
+    NsSym->TInfo->Kind        = TypeKind::NAMESPACE;
+    NsSym->TInfo->SubKind     = SubTypeKind::NONE;
+    NsSym->InferType->Kind    = TypeKind::NAMESPACE;
+    NsSym->InferType->SubKind = SubTypeKind::NONE;
+    NsSym->inited             = true;
+
+    // Create Scope for Namespace | Cria Escopo do Namespace.
+    Scope* NsScope  = Memory.New<Scope>();
+    NsScope->Parent = State.CurrScope;
+    NsScope->Owner  = &Node;
+    NsScope->Type   = BodyTypes::OTHER;
+
+    NsSym->LinkedScope = NsScope;
+    if (SAUtils::InObjScope(State))
+        NsSym->LinkedScope = SAUtils::InObjScope(State);
+
+    // Enter Scope | Entra no Escopo.
+    Scope* PreviousScope = State.CurrScope;
+    State.ScopeStack.push_back(NsScope);
+    State.CurrScope = NsScope;
+
+    // Analyze Body | Analisa o Corpo.
+    if (Node.Body)
+        LookUpBody(*Node.Body, State, Res, Data, Memory, NsScope);
+
+    // Exit Scope | Sai do Escopo.
+    State.CurrScope = PreviousScope;
+    State.ScopeStack.pop_back();
 }
 
 // ===== EXPRESSIONS ===== //

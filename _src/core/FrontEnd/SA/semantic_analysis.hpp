@@ -71,6 +71,9 @@ enum class TypeKind
     // OBJ
     STRUCT,
     CLASS,
+    NAMESPACE,
+    MODULE,
+    LIBRARIE,
     ITERATOR,
 
     // OTHERS | OUTROS.
@@ -100,6 +103,7 @@ struct Symbol
     TypeInfo* TInfo;
     TypeInfo* InferType;
     Scope* DeclaredScope;
+    Scope* LinkedScope;
 
     vec<pair<string, TypeInfo*>> Objs;
 
@@ -201,6 +205,7 @@ class SemanticAnalizer
 
         void LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         void LookUpFunction(FnDecl& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
+        void LookUpNamespace(NameSpaceDecl& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
 
         void LookUpIf(IfNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         void LookUpElif(ElifNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
