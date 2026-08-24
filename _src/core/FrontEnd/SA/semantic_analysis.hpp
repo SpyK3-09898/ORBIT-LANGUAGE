@@ -30,6 +30,7 @@ enum class SymbolTypes: ui8
     VAR,
     FN,
     IDENTIFIER,
+    NAMESPACE,
     PARAM,
     ARRAY,
     TABLE,

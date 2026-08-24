@@ -16,7 +16,7 @@
 
 namespace DeclUtils {
 
-    // PARSER VAR DECLARATIONS | PARSEIA DECLARAÇOES DE VARIAVEIS.
+    // PARSE VAR DECLARATIONS | PARSEIA DECLARAÇOES DE VARIAVEIS.
     DeclarationNode* ParseVarDecl(
         Token* Entry,
         Instruction& Inst,
@@ -207,6 +207,7 @@ namespace DeclUtils {
         return Decl;
     }
 
+    // PARSE FN DECLS | PARSEIA DECLARAÇÕES DE FUNÇÕES.
     DeclarationNode* ParseFnDecl(
         Token* Entry,
         Instruction& Inst,
@@ -234,7 +235,6 @@ namespace DeclUtils {
                 ::MakeNode<ErrorDeclNode>(State, Res, Memory);
         }
 
-        // consome "func"
         Token* E = Inst.Advance();
         ParserUtils::UpdateStatePos(E, State);
 
@@ -260,7 +260,6 @@ namespace DeclUtils {
         ParserUtils::UpdateStatePos(E, State);
         string Name = E->Lexeme(Data);
 
-        // espera '('
         if (!Inst.Peek() || Inst.Peek()->Type != TokenType::LPARENT)
         {
             OrbitLog::SyntaxLog::SyntaxError(
@@ -422,6 +421,76 @@ namespace DeclUtils {
         State.lastIndent = Body->pos.indent;
 
         // FINALIZE | FINALIZA.
+        return Decl;
+    }
+
+    // PARSE NAMESPACE DECLARATIONS | PARSEIA DECLARAÇÃO DE NAMESPACES
+    DeclarationNode* ParseNamespace(
+        Token* Entry,
+        Instruction& Inst,
+        ParseState& State,
+        ParseResult& Res,
+        RunTimeData& Data,
+        ExpressionParser& ExprParser,
+        Arena& Memory    
+    )
+    {
+        // ADVANCE | AVANÇA
+        Token* E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+
+        E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State); // ERROR PREV | PREVENÇÃO DE ERROS:
+        if (!E or E->Type != TokenType::IDENTIFIER)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing", 
+                "Expected <NAMESPACE> Name", 
+                "Namespace Need a Name to Be Created", 
+                "Add A Valid Name After 'namespace'",
+                E->pos.line, E->pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::
+                MakeNode<ErrorDeclNode>(State, Res, Memory);
+        }
+
+        // CREATE NAMESPACCE
+        NameSpaceDecl* Decl = ParserUtils::MakeNode<NameSpaceDecl>(State, Res, Memory);
+        Decl->Name = E->Lexeme(Data);
+
+        // ERROR PREVENTION | PREVENÇÃO DE ERROS
+        E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+        if (!E or E->Type != TokenType::COLON)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing", 
+                "Expected ':'", 
+                "Expected ':' After <NAMESPACE> Name", 
+                "Add A Valid Symbol After 'namespace'",
+                E->pos.line, E->pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::
+                MakeNode<ErrorDeclNode>(State, Res, Memory);
+        }
+
+        // CREATE BODY | CRIA O BODY.
+        BodyNode* Body = ParserUtils::MakeNode<BodyNode>(State, Res, Memory);
+        Body->Type = BodyTypes::NAMESPACE;
+        Body->Father = Decl;
+
+        // SET BODY | DEFINE O BODY;
+        Decl->Body = Body;
+
+        // UPDATE STACK | ATUALIZA A PILHA
+        State.consumedInst = true;
+        ParserUtils::AddInst<NameSpaceDecl>(Decl, State, Res, Memory);
+        ParserUtils::UpdateBodyStack(Body, State, Data);
+        State.lastIndent = Body->pos.indent;        
+
+        // FINALIZE | FINALIZA:
         return Decl;
     }
 }

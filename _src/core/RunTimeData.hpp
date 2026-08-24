@@ -36,4 +36,5 @@ struct RunTimeData
         bool vmConsoleDebug=false;
         bool UnicodeSupport=true;
     } flags;
+    char** argv;
 };

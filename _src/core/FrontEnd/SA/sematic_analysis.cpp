@@ -2014,7 +2014,48 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
         : nullptr;
 
     if (Sym)
+    {
         Sym->read_count++;
+        switch (Sym->Type) {
+        
+            case SymbolTypes::NAMESPACE:
+            {
+                
+            }
+            case SymbolTypes::STRUCT:
+            {
+
+            }
+            case SymbolTypes::CLASS:
+            {
+
+            }
+            default:
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Parsing", 
+                    "Trying to Acess A Non-Object", 
+                    "<OBJECT> Cannot Be Acessed, Because  Dont Have Members",
+                    "Use A Valid <OBJECT>",
+                    Node.pos.line, Node.pos.collumn
+                );
+                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+                return;
+            }
+        }
+    }
+    else {
+
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Parsing", 
+            "Trying to Acess a Undeclared Object", 
+            "<OBJECT> Cannot Be Acessed, Because Dont Exists",
+            "Declare <OBJECT>",
+            Node.pos.line, Node.pos.collumn
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;
+    }
 }
 
 // LookUp IndexAcessNode | Olha um IndexAcessNode.

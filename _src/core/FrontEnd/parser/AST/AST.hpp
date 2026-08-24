@@ -114,9 +114,14 @@ enum class NodeType : uint8_t
     RETURN,
     ECHO,
 
+    IMPORT,
+    LIBRARY,
+    METHOD,
+
     // DECLARATIONS
     VAR_DECL,
     FN_DECL,
+    NAMESPACE_DECL,
 
     // EXPRESSIONS
     LITERAL,
@@ -141,6 +146,7 @@ enum class BodyTypes: uint8_t
     PROGRAM,
     CONTROL_IF,
     FUNCTION,
+    NAMESPACE,
     LOOP_WHILE,
     LOOP_FOR,
     OTHER
@@ -274,8 +280,13 @@ struct ASTNode
             case NodeType::RETURN:         return "<RETURN>";
             case NodeType::ECHO:           return "<ECHO>";
 
+            case NodeType::IMPORT:         return "<IMPORT>";
+            case NodeType::LIBRARY:        return "<LIBRARY>";
+            case NodeType::METHOD:         return "<METHOD>";
+
             case NodeType::VAR_DECL:       return "<VAR_DECL>";
             case NodeType::FN_DECL:        return "<FN_DECL>";
+            case NodeType::NAMESPACE_DECL: return "<NAMESPACE>";
 
             case NodeType::LITERAL:        return "<LITERAL>";
             case NodeType::IDENTIFIER:     return "<IDENTIFIER>";
@@ -545,6 +556,20 @@ struct FnDecl : DeclarationNode
         : DeclarationNode(NodeType::FN_DECL, P) {};
 };
 
+// Namespace Decl | Declaraç~eos de NameSpace.
+
+struct NameSpaceDecl : DeclarationNode
+{
+    // DATA
+    string Name;
+    BodyNode* Body;
+    bool isNested=false;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    NameSpaceDecl(NodePos& P)
+        : DeclarationNode(NodeType::NAMESPACE_DECL, P) {};
+};
+
 // ERRORS | ERROS
 struct ErrorDeclNode : DeclarationNode
 {
@@ -682,6 +707,17 @@ struct EchoNode : ControlNode
 
     EchoNode(NodePos P)
         : ControlNode(NodeType::ECHO, P) {};
+};
+
+// Library Defiens | Definições de Bibliotecas.
+struct LibraryNode : ControlNode
+{
+    // DATA
+    string Name;
+
+    // CONSTRUCTOR
+    LibraryNode(NodePos& Pos)
+        : ControlNode(NodeType::LIBRARY, Pos) {};
 };
 
 // Error Statements Nodes | Errors de Nos de Statement.

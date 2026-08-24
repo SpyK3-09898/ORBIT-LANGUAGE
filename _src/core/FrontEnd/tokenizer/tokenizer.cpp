@@ -33,20 +33,23 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
     }
     vec<string> KeyWords
     {
-        "var", "list", 
+        "var", "list",  "namespace",
         "if", "else", "elif",
         "while", "for", 
         "func", "fn", "return",
         "end",
-        "echo"
+        "echo",
+        "_extend", "_library", "_import", "_import_from", "_method", "_typedef"
     };
     vec<string> CntxtKW
     {
-        "new", "in", "cout", "cerr"
+        "new", "in", "cout", "cerr", 
+        "In", "Out", "Dual", "as", 
+        "using", "shared"
     };
     vec<string> Modifiers
     {
-        "const", "fallback"
+        "const", "fallback", "export"
     };
     vec<string> LitTypes
     {

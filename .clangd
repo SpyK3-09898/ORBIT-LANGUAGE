@@ -2,6 +2,8 @@
 CompileFlags:
   Add:
     - -Wno-unused-include
+    - -Wno-macro-redefined
+    - -Wno-invalid-constexpr
 
 Diagnostics:
-  UnusedIncludes: None 
+  UnusedIncludes: None

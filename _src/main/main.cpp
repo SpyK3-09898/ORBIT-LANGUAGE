@@ -5,6 +5,7 @@
 
 // INCLUDE HEADERS 'N DEPENDENCES | INCLUDE HEADERS E DEPENDENCIAS
 #include "utils/aliases.hpp"
+#include "utils/file.hpp"
 #include "commands/run_file.hpp"
 #include "../core/RunTimeData.hpp"
 
@@ -30,9 +31,7 @@ void ParseRunTimeArgs(const vec<string>& args, RunTimeData& Data)
             continue;
 
         RunTimeArg runtimeArg;
-
         runtimeArg.name = arg.substr(2, eqPos - 2);
-
         string value = arg.substr(eqPos + 1);
 
         if (value == "ON")
@@ -91,6 +90,7 @@ int main(int argc, char* argv[])
             throw runt_err("Non commands provided");
         
         RunTimeData Data;
+        Data.argv = argv;
         string Entry = argv[1];
 
         // PROJECTS | PROJETOS
@@ -193,7 +193,7 @@ int main(int argc, char* argv[])
                         && holds_alt_value<bool>(Arg.value, true)
                     ) Data.flags.generateLog=true;
                 }
-                Data.LogDir = fs::absolute(argv[0]).parent_path().parent_path() / "_tests/logs";
+                Data.LogDir = GetOrbitOrigin(argv) / "_tests/logs";
                 RunOrbit(argv[2], Data);
             }
         } else if (Entry == "--benchmark") {
@@ -222,7 +222,7 @@ int main(int argc, char* argv[])
                     ) times = std::get<int>(Arg.value);
                 }
 
-                Data.LogDir = fs::absolute(argv[0]).parent_path().parent_path() / "_tests/logs";
+                Data.LogDir = GetOrbitOrigin(argv) / "_tests/logs";
 
                 for (int i = 0; i < 10; i++)
                     RunOrbit(argv[2], Data);
