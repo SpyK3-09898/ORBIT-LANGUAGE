@@ -29,7 +29,7 @@ struct IfCompileState
 // State of ByteCode Generator | Estado do Gerador de ByteCodes.
 struct CodeGenState 
 {
-    unord_map<string, ui32> Locals;
+    unord_map<ui16, ui32> Locals;
     unord_map<Symbol*, ui32> LocalsSym;
     unord_map<Symbol*, i64> Functions;
     Symbol* CurrNamespace = nullptr;
@@ -41,22 +41,22 @@ struct CodeGenState
     // UTILS:
 
     // Return if Have a Local | Retorna se Tem um Local.
-    bool HasLocal(const string& Name)
+    bool HasLocal(ui16 Id)
     {
-        return Locals.find(Name) != Locals.end();
+        return Locals.find(Id) != Locals.end();
     }
 
     // Get Slot of Local | Pega o Slot do Local.
-    ui32 GetLocal(const string& Name)
+    ui32 GetLocal(ui16 Id)
     {
-        auto It = Locals.find(Name);
+        auto It = Locals.find(Id);
 
         if (It != Locals.end())
             return It->second;
 
         OrbitLog::Error(
             "codegen.cpp",
-            "Cannot Find Local: " + Name,
+            "Cannot Find Local, Id: "+std::to_string(static_cast<int>(Id)),
             true,
             404
         );
@@ -65,30 +65,30 @@ struct CodeGenState
     }
 
     // Create A New Local | Cria um Novo Local.
-    ui32 CreateLocal(const string& Name)
+    ui32 CreateLocal(ui16 Id)
     {
-        auto It = Locals.find(Name);
+        auto It = Locals.find(Id);
 
         if (It != Locals.end())
             return It->second;
 
         ui32 Index = localCount++;
-        Locals[Name] = Index;
+        Locals[Id] = Index;
 
         return Index;
     }
 
     // Create A New Local Whit Symbols | Cria Um Novo Local Com Simbolos.
-    ui32 CreateLocalForSym(Symbol* Sym, const string& Name)
+    ui32 CreateLocalForSym(Symbol* Sym, ui16 Id)
     {
-        ui32 Index = CreateLocal(Name);
+        ui32 Index = CreateLocal(Id);
         if (Sym)
             LocalsSym[Sym] = Index;
         return Index;
     }
 
     // Get Local Whit Symbol | Pega O Local Pelo Simbolo.
-    ui32 GetLocalForSym(Symbol* Sym, const string& Name)
+    ui32 GetLocalForSym(Symbol* Sym, ui16 Id)
     {
         if (Sym)
         {
@@ -96,7 +96,7 @@ struct CodeGenState
             if (It != LocalsSym.end())
                 return It->second;
         }
-        return GetLocal(Name);
+        return GetLocal(Id);
     }
 
 };

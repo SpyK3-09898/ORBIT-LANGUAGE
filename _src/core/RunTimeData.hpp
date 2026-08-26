@@ -15,6 +15,16 @@
 
 // DATA
 
+struct CodePosition
+{
+    int indent = 0;
+    ui32 start = 0;
+    ui32 len = 0;
+
+    ui32 line = 0;
+    ui32 collumn = 0;
+};
+
 struct RunTimeArg
 {
     string name;

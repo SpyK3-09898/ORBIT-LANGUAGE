@@ -1,4 +1,5 @@
 
+
 // ============= SEMANTIC ANALIZER =========== //
 // Analyzes the Code for Semantic Errors | Analiza o Codigo em Busca de Erros Semanticos.
 // Developed By: SpyK3(2026) | License: GitHub(MIT).
@@ -73,6 +74,10 @@ namespace SAUtils {
             State.CurrScope->Symbols[Sym->Name] = Sym;
 
         Res.SymbolTable[Sym->Name] = Sym;
+        Res.Symbols[State.nextId]  = Sym;
+        Node.SymbolId              = State.nextId;
+        Sym->Id                    = Node.SymbolId;
+        State.nextId++;
 
         return Sym;
     }
@@ -388,6 +393,8 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
                 else // Try Copy Sym | Tenta Copiar O Simbolo:
                 {
                     *TInfo = *MemberSym->TInfo;
+                    if (Ma.Member)
+                        Ma.Member->SymbolId = MemberSym->Id;
                 }
             } else // OTHERS:
                 TInfo->Kind = TypeKind::MONO_STATE;
@@ -555,6 +562,8 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
                 Res.ExpressionTypes[Node] = *TInfo;
                 return &Res.ExpressionTypes[Node];
             }
+
+            Id.SymbolId = Sym->Id;
 
             if (!Sym->inited)
             {
@@ -1151,6 +1160,7 @@ void SemanticAnalizer::LookUpFor(ForNode& Node, SAState& State, SAResult& Res, R
     Sym->InferType->SubKind = SubTypeKind::INT;
     Sym->Mut                = MutableTypes::MUT;
     Sym->inited             = true;
+    Node.Identifier->SymbolId = Sym->Id;
 
     // LookUp The 'For' Body | Olha o Corpo do 'For'.
     LookUpBody(*Node.Body, State, Res, Data, Memory, S);
@@ -1621,13 +1631,14 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
             Symbol* ParamSym = SAUtils::CreateSymbol
             (Id.Name, *Parm, State, Res, Memory);
 
-            ParamSym->Type = SymbolTypes::PARAM;
-            ParamSym->Mut = MutableTypes::MUT;
-            ParamSym->TInfo->Kind = TypeKind::MONO_STATE;
-            ParamSym->TInfo->SubKind = SubTypeKind::NONE;
-            ParamSym->InferType->Kind = TypeKind::MONO_STATE;
+            ParamSym->Type               = SymbolTypes::PARAM;
+            ParamSym->Mut                = MutableTypes::MUT;
+            ParamSym->TInfo->Kind        = TypeKind::MONO_STATE;
+            ParamSym->TInfo->SubKind     = SubTypeKind::NONE;
+            ParamSym->InferType->Kind    = TypeKind::MONO_STATE;
             ParamSym->InferType->SubKind = SubTypeKind::NONE;
-            ParamSym->inited = true;
+            ParamSym->inited             = true;
+            Id.SymbolId                  = ParamSym->Id;
         }
         else
         {
@@ -1723,7 +1734,6 @@ void SemanticAnalizer::LookUpIdentifier(IdentifierNode& Node, SAState& State, SA
 
         if (!Data.flags.debugMode)
             OrbitLog::SyntaxLog::ThrowLog(Data);
-
         return;
     }
 
@@ -1733,7 +1743,10 @@ void SemanticAnalizer::LookUpIdentifier(IdentifierNode& Node, SAState& State, SA
         Sym = Owner->LinkedScope->FindSym(Node.Name);
 
     if (Sym)
+    {
+        Node.SymbolId = Sym->Id;
         Sym->read_count++;
+    }
 }
 
 // LookUp Binary Node | Olha um BinaryNode.
@@ -2016,7 +2029,6 @@ void SemanticAnalizer::LookUpAssignment(AssignmentNode& Node, SAState& State, SA
 
     // Data
     LookUpNode(*Node.Left, State, Res, Data, Memory);
-
     if (Node.Left->Type == NodeType::INDEX_ACCESS)
     {
         IndexAccessNode& Index = static_cast<IndexAccessNode&>(*Node.Left);
@@ -2097,7 +2109,7 @@ void SemanticAnalizer::LookUpAssignment(AssignmentNode& Node, SAState& State, SA
 
     if (!Sym)
         return;
-
+    else if (Node.Left) Node.Left->SymbolId = Sym->Id;
     if (Sym->Mut == MutableTypes::CONST)
     {
         OrbitLog::SyntaxLog::SyntaxError(
@@ -2175,6 +2187,8 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
     if (Sym)
     {
         Sym->read_count++;
+        if (Node.Object)
+            Node.Object->SymbolId = Sym->Id;
         switch (Sym->Type) 
         {
         
@@ -2477,19 +2491,20 @@ void GenerateSALog(SAState& State, SAResult& Res, RunTimeData& Data)
 
     int i=0;
 
-    if (Res.SymbolTable.size() > 0)
-        for (auto Sym : Res.SymbolTable)
+    if (Res.Symbols.size() > 0)
+        for (auto& [id, Sym] : Res.Symbols)
         {
             string text = "SYM["+std::to_string(i)+"]: \n";
             
-            text += "NAME: "+string(Sym.second->Name);
+            text += "NAME: "+string(Sym->Name);
+            text += "\n\tID: "+std::to_string(id);
             text += "\n\tKIND: ";
-            text += "\n\t\t|  Kind: "+std::to_string(static_cast<int>(Sym.second->TInfo->Kind));
-            text += "\n\t\t|_ Kind: "+std::to_string(static_cast<int>(Sym.second->TInfo->SubKind));
-            text += "\tSCOPE: " + std::format("{:p}", static_cast<void*>(Sym.second->DeclaredScope));
-            text += "\n\tDATA: \n\t\t|  RA: "+std::to_string(Sym.second->read_count);
-            text += "\n\t\t|  WA: "+std::to_string(Sym.second->write_count);
-            text += "\n\t\t|_ INIT: "+std::to_string(Sym.second->inited)+"\n\n";
+            text += "\n\t\t|  Kind: "+std::to_string(static_cast<int>(Sym->TInfo->Kind));
+            text += "\n\t\t|_ Kind: "+std::to_string(static_cast<int>(Sym->TInfo->SubKind));
+            text += "\tSCOPE: " + std::format("{:p}", static_cast<void*>(Sym->DeclaredScope));
+            text += "\n\tDATA: \n\t\t|  RA: "+std::to_string(Sym->read_count);
+            text += "\n\t\t|  WA: "+std::to_string(Sym->write_count);
+            text += "\n\t\t|_ INIT: "+std::to_string(Sym->inited)+"\n\n";
             
             file << text;
             i++;
@@ -2534,34 +2549,34 @@ SAResult SemanticAnalizer::InitSA(ParseResult& PRes, RunTimeData& Data, Arena& M
     LookUpNode(*PRes.AST, State, Res, Data, Memory);
 
     // Symbol Final Tratament | Tratamento Final dos Simbolos.
-    for (pair<str_view, Symbol*> P : Res.SymbolTable)
+    for (auto& [id, Sym] : Res.Symbols)
     {
-        if (P.second->write_count == 0 and P.second->read_count == 0)
+        if (Sym->write_count == 0 and Sym->read_count == 0)
         {
             OrbitLog::SyntaxLog::SyntaxWarn(
                 "Semantic", 
                 "Unused Symbol", 
-                "Symbol: "+P.second->Name+" Dont Has Been Used", 
+                "Symbol: "+Sym->Name+" Dont Has Been Used", 
                 "Remove Unused  Symbol",
-                P.second->Pos.line, P.second->Pos.collumn
+                Sym->Pos.line, Sym->Pos.collumn
             );
-        } else if (P.second->write_count == 0)
+        } else if (Sym->write_count == 0)
         {
             OrbitLog::SyntaxLog::SyntaxWarn(
                 "Semantic",
                 "Non-Const Symbol Has Not ReWrited", 
-                "Symbol: "+P.second->Name+" Dont Has Been ReWrited, But Not Has Been Declared As <CONST>", 
+                "Symbol: "+Sym->Name+" Dont Has Been ReWrited, But Not Has Been Declared As <CONST>", 
                 "Add 'const' Flag",
-                P.second->Pos.line, P.second->Pos.collumn
+                Sym->Pos.line, Sym->Pos.collumn
             );            
-        } else if (!P.second->inited) 
+        } else if (!Sym->inited) 
         {
             OrbitLog::SyntaxLog::SyntaxWarn(
                 "Semantic",
                 "Non-Const Symbol Never Be Initialized", 
-                "Symbol: "+P.second->Name+" Dont Has Been Initialized", 
+                "Symbol: "+Sym->Name+" Dont Has Been Initialized", 
                 "Remove 'Symbol'",
-                P.second->Pos.line, P.second->Pos.collumn
+                Sym->Pos.line, Sym->Pos.collumn
             );             
         }
     }

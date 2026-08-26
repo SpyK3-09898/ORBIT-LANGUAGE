@@ -109,14 +109,15 @@ struct Symbol
     vec<pair<string, TypeInfo*>> Objs;
 
     string Name;
-    NodePos Pos;
+    CodePosition Pos;
 
     SymbolTypes Type = SymbolTypes::UNK;
     MutableTypes Mut = MutableTypes::MUT;
 
     ui32 read_count  = 0;
     ui32 write_count = 0;
-    bool inited = false;
+    ui16 Id          = 0;
+    bool inited      = false;
 };
 
 // Scope Repr | Representação de Escopos.
@@ -170,14 +171,16 @@ struct SAState
     Scope* CurrScope = nullptr;
     vec<Scope*> ScopeStack = {};
     vec<pair<int, ASTNode*>> NodesChecked{};
-    int logInd=0;
+    int logInd  = 0;
+    ui16 nextId = 1;
 };
 
 struct SAResult 
 {
     Scope* GlobalScope = nullptr;
     unord_map<ASTNode*, TypeInfo> ExpressionTypes;
-    unord_map<ui16, Symbol*> SymbolTable;
+    unord_map<str_view, Symbol*> SymbolTable;
+    unord_map<ui16, Symbol*> Symbols;
 };
 
 // MAIN CLASS | CLASSE PRINCIPAL.

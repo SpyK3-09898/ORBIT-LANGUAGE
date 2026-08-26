@@ -140,15 +140,7 @@ enum class TokenType: uint8_t
 };
 
 // POSITION OF TOKENS | POSIÇÃO DOS TOKENS.
-struct TokenPos
-{
-    int indent = 0;
-    ui32 start = 0;
-    ui32 len = 0;
-
-    ui32 line = 0;
-    ui32 collumn = 0;
-};
+using TokenPos = CodePosition;
 
 // BASE TOKEN | TOKEN BASE.
 struct Token 
