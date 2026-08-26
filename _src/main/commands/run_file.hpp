@@ -109,8 +109,33 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
     if (Data.flags.debugMode)
         PrintIn("[DRIVER] ENDOF TASK: Build ORBIT. .. ..."); 
 
-    // Finalize | Fializa: 
+    // Finalize | Finaliza: 
     OrbitLog::SyntaxLog::ThrowLog(Data); // Throw | Chamada.
+
+    // ONLY-BUILD(DONT RUN) | APENAS BUILDA(NÃO RODA).
+    if (Data.flags.buildMode)
+    {
+        // GENERATE MEMORY LOG | GERA LOG DE MEMORIA
+        if (Data.flags.generateLog)
+        {
+            fstream log_file(
+            Data.LogDir,
+            std::ios::out | std::ios::app
+            );
+            string text =
+                "\n// ============ MEMORY & DATA =========== //"
+                "\n\nLIMIT: "+std::to_string(Memory.ReservedMemory())
+                +"\nUSED: "+std::to_string(Memory.UsedMemory())
+                +"\nAVALIABLE: "+std::to_string(Memory.ReservedMemory() - Memory.UsedMemory())
+                +"\nSPACES/BLOCKS USED ACCOUNT: "+std::to_string(Memory.BlockCount())
+                +"\n\nFinishing Arena. .. ..."
+                "\n\n"
+                "\\ ============ ENDOF: 'ARENA' ==========\n\n";
+            log_file << text;
+        }
+
+        Memory.Finalize();        
+    }
 
     // --- BACK-END --- //
 

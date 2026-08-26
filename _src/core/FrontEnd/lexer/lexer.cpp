@@ -506,9 +506,10 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
         std::istreambuf_iterator<char>(file),
         std::istreambuf_iterator<char>()
     );
+
     if (std::all_of(Data.source.begin(), Data.source.end(), [](unsigned char C) {
         return std::isspace(C);
-    })) throw runt_err("[ERROR] Empty File Recived. .. ...");
+    })) throw runt_err("Empty File Recived. .. ...");
 
     // ENTRY-POINT TOKEN | TOKEN DE 'ENTRY_POINT'
     MakeToken(Res, State, Data, TokenType::ENTRY_POINT, Memory);

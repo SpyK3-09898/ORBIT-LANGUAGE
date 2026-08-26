@@ -1,0 +1,7 @@
+
+namespace Math:
+
+    var x = 10;
+end
+
+echo cout Math.x;

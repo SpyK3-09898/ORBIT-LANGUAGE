@@ -485,13 +485,15 @@ namespace DeclUtils {
         Decl->Body = Body;
 
         // UPDATE STACK | ATUALIZA A PILHA
+
+        for (int i=0; i<State.Bodys.size(); i++)
+            if (State.Bodys[i]->Type == BodyTypes::NAMESPACE)
+                Decl->isNested=true;
+
         State.consumedInst = true;
         ParserUtils::AddInst<NameSpaceDecl>(Decl, State, Res, Memory);
         ParserUtils::UpdateBodyStack(Body, State, Data);
         State.lastIndent = Body->pos.indent;        
-
-        if (State.Bodys.size() != 0 and State.Bodys.back()->Type == BodyTypes::NAMESPACE)
-            Decl->isNested=true;
 
         // FINALIZE | FINALIZA:
         return Decl;
@@ -544,7 +546,17 @@ DeclarationNode* DeclarationParser::ParseDeclaration(
                     Data, 
                     ExprParser,
                     Memory
-                );    
+                );
+            else if (Lexeme == "namespace")
+                return DeclUtils::ParseNamespace(
+                    Entry, 
+                    Inst, 
+                    State, 
+                    Res, 
+                    Data, 
+                    ExprParser,
+                    Memory
+                );
         default:
             return nullptr;
     }

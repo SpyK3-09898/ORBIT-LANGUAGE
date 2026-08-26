@@ -27,7 +27,7 @@ namespace SAUtils {
     // Find Scope Whit Type | Encontra O Escopo Com o Tupo.
     Scope* FindScopeType(BodyTypes Type, SAState& State)
     {
-        Scope* S;
+        Scope* S = State.CurrScope;
         while (S)
         {
             if (S->Type == Type)
@@ -53,6 +53,9 @@ namespace SAUtils {
         Symbol* Sym = Memory.New<Symbol>();
         TypeInfo* TInfo = Memory.New<TypeInfo>();
         TypeInfo* InferType = Memory.New<TypeInfo>();
+
+        TInfo->Father     = Sym;
+        InferType->Father = Sym;
 
         Sym->Name = Name;
         Sym->DeclaredScope = State.CurrScope;
@@ -979,7 +982,7 @@ Scope* LeaveScope(SAState& State, SAResult& Res, RunTimeData& Data)
 }
 
 // LookUp A General Node | Olha Um Node Geral.
-void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     if (Data.flags.generateLog)
         State.NodesChecked.push_back({++State.logInd, &Node});
@@ -1000,93 +1003,93 @@ void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, 
         // CONTROLS
         case NodeType::WHILE:
             LookUpWhile
-            (static_cast<WhileNode&>(Node), State, Res, Data, Memory);
+            (static_cast<WhileNode&>(Node), State, Res, Data, Memory, Owner);
             break;
         case NodeType::FOR:
             LookUpFor
-            (static_cast<ForNode&>(Node), State, Res, Data, Memory);
+            (static_cast<ForNode&>(Node), State, Res, Data, Memory, Owner);
             break;
 
         case NodeType::IF_CONTROL:
             LookUpIf
-            (static_cast<IfNode&>(Node), State, Res, Data, Memory);
+            (static_cast<IfNode&>(Node), State, Res, Data, Memory, Owner);
             break;
 
         case NodeType::ECHO:
             LookUpEcho
-            (static_cast<EchoNode&>(Node), State, Res, Data, Memory);
+            (static_cast<EchoNode&>(Node), State, Res, Data, Memory, Owner);
             break;
 
         // DECLARATIONS
         case NodeType::VAR_DECL:
             LookUpVarDecl
-            (static_cast<VarDeclNode&>(Node), State, Res, Data, Memory);
+            (static_cast<VarDeclNode&>(Node), State, Res, Data, Memory, Owner);
             break;
 
         case NodeType::FN_DECL:
             LookUpFunction
-            (static_cast<FnDecl&>(Node), State, Res, Data, Memory);
+            (static_cast<FnDecl&>(Node), State, Res, Data, Memory, Owner);
             break;
 
         case NodeType::NAMESPACE_DECL:
-            LookUpNamespace
-            (static_cast<NameSpaceDecl&>(Node), State, Res, Data, Memory);
+            LookUpNameSpace
+            (static_cast<NameSpaceDecl&>(Node), State, Res, Data, Memory, Owner);
             break;        
 
         // EXPRESSIONS
         case NodeType::LITERAL:
             LookUpLiteral
-            (static_cast<LiteralNode&>(Node), State, Res, Data, Memory);
+            (static_cast<LiteralNode&>(Node), State, Res, Data, Memory, Owner);
             break;
 
         case NodeType::IDENTIFIER:
             LookUpIdentifier
-            (static_cast<IdentifierNode&>(Node), State, Res, Data, Memory);
+            (static_cast<IdentifierNode&>(Node), State, Res, Data, Memory, Owner);
             break;
 
         case NodeType::UNARY:
             LookUpUnary
-            (static_cast<UnaryNode&>(Node), State, Res, Data, Memory);
+            (static_cast<UnaryNode&>(Node), State, Res, Data, Memory, Owner);
             break;
 
         case NodeType::BINARY:
             LookUpBinary
-            (static_cast<BinaryNode&>(Node), State, Res, Data, Memory);
+            (static_cast<BinaryNode&>(Node), State, Res, Data, Memory, Owner);
             break;
 
         case NodeType::ASSIGNMENT:
             LookUpAssignment
-            (static_cast<AssignmentNode&>(Node), State, Res, Data, Memory);
+            (static_cast<AssignmentNode&>(Node), State, Res, Data, Memory, Owner);
             break;
 
         case NodeType::MEMBER_ACCESS:
             LookUpMemberAccess
-            (static_cast<MemberAccessNode&>(Node), State, Res, Data, Memory);
+            (static_cast<MemberAccessNode&>(Node), State, Res, Data, Memory, Owner);
             break;
 
         case NodeType::INDEX_ACCESS:
             LookUpIndexAccess
-            (static_cast<IndexAccessNode&>(Node), State, Res, Data, Memory);
+            (static_cast<IndexAccessNode&>(Node), State, Res, Data, Memory, Owner);
             break;
 
         case NodeType::RANGE:
             LookUpRange
-            (static_cast<RangeNode&>(Node), State, Res, Data, Memory);
+            (static_cast<RangeNode&>(Node), State, Res, Data, Memory, Owner);
             break;
 
         case NodeType::FN_CALL:
             LookUpFunctionCall
-            (static_cast<FunctionCall&>(Node), State, Res, Data, Memory);
+            (static_cast<FunctionCall&>(Node), State, Res, Data, Memory, Owner);
             break;
 
         case NodeType::ARRAY_VALUE:
             LookUpArray
-            (static_cast<ArrayValue&>(Node), State, Res, Data, Memory);
+            (static_cast<ArrayValue&>(Node), State, Res, Data, Memory, Owner);
             break;
 
         case NodeType::TABLE_VALUE:
             LookUpTable
-            (static_cast<TableValue&>(Node), State, Res, Data, Memory);
+            (static_cast<TableValue&>(Node), State, Res, Data, Memory, Owner);
             break;
 
         default: {};
@@ -1131,7 +1134,7 @@ void SemanticAnalizer::LookUpBody(BodyNode& Node, SAState& State, SAResult& Res,
 // ===== CONTROLS ===== //
 
 // LookUp For Nodes | Olha um ForNode.
-void SemanticAnalizer::LookUpFor(ForNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpFor(ForNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // Init | Inicio
     LookUpRange(*Node.End, State, Res, Data, Memory);
@@ -1154,7 +1157,7 @@ void SemanticAnalizer::LookUpFor(ForNode& Node, SAState& State, SAResult& Res, R
 }
 
 // LookUp While Nodes | Olha um WhileNode.
-void SemanticAnalizer::LookUpWhile(WhileNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpWhile(WhileNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // Error & Warn Prev | Prevenção de Erros de Avisos.
     TypeInfo* TInfo = 
@@ -1185,11 +1188,11 @@ void SemanticAnalizer::LookUpWhile(WhileNode& Node, SAState& State, SAResult& Re
 }
 
 // LookUp Else Nodes | Olha um IfNode.
-void SemanticAnalizer::LookUpElse(ElseNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpElse(ElseNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 { LookUpBody(*Node.Body, State, Res, Data, Memory); }
 
 // LookUp Elif Nodes | Olha um IfNode.
-void SemanticAnalizer::LookUpElif(ElifNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpElif(ElifNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // Error & Warn Prev | Prevenção de Erros de Avisos.
     TypeInfo* TInfo = 
@@ -1218,7 +1221,7 @@ void SemanticAnalizer::LookUpElif(ElifNode& Node, SAState& State, SAResult& Res,
 }
 
 // LookUp If Nodes | Olha um IfNode.
-void SemanticAnalizer::LookUpIf(IfNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpIf(IfNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // Error & Warn Prev | Prevenção de Erros de Avisos.
     TypeInfo* TInfo = 
@@ -1254,7 +1257,7 @@ void SemanticAnalizer::LookUpIf(IfNode& Node, SAState& State, SAResult& Res, Run
 }
 
 // LookUp Return Nodes | Olha um Return Node.
-void SemanticAnalizer::LookUpReturn(ReturnNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpReturn(ReturnNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     LookUpNode(*Node.Value, State, Res, Data, Memory);
     if (Node.isIf)
@@ -1274,13 +1277,13 @@ void SemanticAnalizer::LookUpReturn(ReturnNode& Node, SAState& State, SAResult& 
 }
 
 // LookUp Echo Nodes | Olha Nós de Echo.
-void SemanticAnalizer::LookUpEcho(EchoNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpEcho(EchoNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 { LookUpNode(*Node.Value, State, Res, Data, Memory); }
 
 // ===== DECLARATIONS ===== //
 
 // LookUp Var Decl Node | Olha um VarDeclNode.
-void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // Shadowing Error Prev | Prevenção de Erros de Sombreamento.
     if (!State.CurrScope)
@@ -1554,7 +1557,7 @@ void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult
 }
 
 // LookUp Fn Decl Node | Olha um FunctionDeclNode.
-void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     if (!State.CurrScope)
         return;
@@ -1637,7 +1640,7 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
 }
 
 // LookUp NameSpace Decl Node | Olha um NameSpaceDeclNode.
-void SemanticAnalizer::LookUpNamespace(NameSpaceDecl& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpNameSpace(NameSpaceDecl& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // Check Redeclaration | Verifica Redeclaração.
     Symbol* Existing = State.CurrScope->FindSymLocal(Node.Name);
@@ -1657,7 +1660,7 @@ void SemanticAnalizer::LookUpNamespace(NameSpaceDecl& Node, SAState& State, SARe
 
     // Create Symbol | Cria o Simbolo.
     Symbol* NsSym = SAUtils::CreateSymbol(Node.Name, Node, State, Res, Memory);
-    NsSym->Type               = SymbolTypes::MODULE;
+    NsSym->Type               = SymbolTypes::NAMESPACE;
     NsSym->TInfo->Kind        = TypeKind::NAMESPACE;
     NsSym->TInfo->SubKind     = SubTypeKind::NONE;
     NsSym->InferType->Kind    = TypeKind::NAMESPACE;
@@ -1665,46 +1668,54 @@ void SemanticAnalizer::LookUpNamespace(NameSpaceDecl& Node, SAState& State, SARe
     NsSym->inited             = true;
 
     // Create Scope for Namespace | Cria Escopo do Namespace.
-    Scope* NsScope  = Memory.New<Scope>();
-    NsScope->Parent = State.CurrScope;
-    NsScope->Owner  = &Node;
-    NsScope->Type   = BodyTypes::OTHER;
-
-    NsSym->LinkedScope = NsScope;
-    if (SAUtils::InObjScope(State))
-        NsSym->LinkedScope = SAUtils::InObjScope(State);
+    Scope* NsScope     = Memory.New<Scope>();
+    NsScope->Parent    = State.CurrScope;
+    NsScope->Owner     = &Node;
+    NsScope->Type      = BodyTypes::NAMESPACE;
 
     // Enter Scope | Entra no Escopo.
     Scope* PreviousScope = State.CurrScope;
     State.ScopeStack.push_back(NsScope);
     State.CurrScope = NsScope;
-
+    NsSym->LinkedScope = SAUtils::InObjScope(State);
+    
     // Analyze Body | Analisa o Corpo.
     if (Node.Body)
+    {
         LookUpBody(*Node.Body, State, Res, Data, Memory, NsScope);
-
-    // Exit Scope | Sai do Escopo.
-    State.CurrScope = PreviousScope;
-    State.ScopeStack.pop_back();
+        // LookUpBody já fez LeaveScope. Só garantimos o CurrScope (mesmo padrão do LookUpFunction).
+        State.CurrScope = PreviousScope;
+    }
+    else
+    {
+        // Exit Scope | Sai do Escopo. (só quando não tem body)
+        State.CurrScope = PreviousScope;
+        State.ScopeStack.pop_back();
+    }
 }
 
 // ===== EXPRESSIONS ===== //
 
 // LookUp LiteralNode | Olha um LiteralNode.
-void SemanticAnalizer::LookUpLiteral(LiteralNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpLiteral(LiteralNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     GetExpressionType(&Node, State, Res, Data, Memory);
 }
 
 // LookUp IdentifierNode | Olha um IdentifierNode.
-void SemanticAnalizer::LookUpIdentifier(IdentifierNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpIdentifier(IdentifierNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // Error Prev | Prevenção de Erros.
-    if (!State.CurrScope || !State.CurrScope->FindSym(Node.Name))
+    bool found = false;
+    if (Owner && Owner->LinkedScope)
+        found = Owner->LinkedScope->FindSymLocal(Node.Name) != nullptr;
+    else if (State.CurrScope)
+        found = State.CurrScope->FindSym(Node.Name) != nullptr;
+    if (!found)
     {
         OrbitLog::SyntaxLog::SyntaxError(
             "Semantic",
-            "Used a Undeclared ",
+            "Used a Undeclared <IDENTIFIER>",
             "Ident: "+Node.Name+" Dont Exists",
             "Declare Ident or Use a Valid Identifier",
             Node.pos.line, Node.pos.collumn
@@ -1718,13 +1729,15 @@ void SemanticAnalizer::LookUpIdentifier(IdentifierNode& Node, SAState& State, SA
 
     // Data
     Symbol* Sym = State.CurrScope->FindSym(Node.Name);
+    if (!Sym and Owner)
+        Sym = Owner->LinkedScope->FindSym(Node.Name);
 
     if (Sym)
         Sym->read_count++;
 }
 
 // LookUp Binary Node | Olha um BinaryNode.
-void SemanticAnalizer::LookUpBinary(BinaryNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpBinary(BinaryNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     LookUpNode(*Node.L, State, Res, Data, Memory);
     LookUpNode(*Node.R, State, Res, Data, Memory);
@@ -1933,7 +1946,7 @@ void SemanticAnalizer::LookUpBinary(BinaryNode& Node, SAState& State, SAResult& 
 }
 
 // LookUp Unary Nodes | Olha um UnaryNode.
-void SemanticAnalizer::LookUpUnary(UnaryNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpUnary(UnaryNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     if (Node.Operand)
         LookUpNode(*Node.Operand, State, Res, Data, Memory);
@@ -1983,7 +1996,7 @@ void SemanticAnalizer::LookUpUnary(UnaryNode& Node, SAState& State, SAResult& Re
 }
 
 // LookUp Assign Node | Olha um Assign Node.
-void SemanticAnalizer::LookUpAssignment(AssignmentNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpAssignment(AssignmentNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // Error Prev | Prevenção de Erros.
     if (!SAUtils::IsIValue(Node.Left))
@@ -2143,7 +2156,7 @@ void SemanticAnalizer::LookUpAssignment(AssignmentNode& Node, SAState& State, SA
 }
 
 // LookUp Member Acess Node | Olha um Member Acess Node.
-void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     if (!Node.Object)
         return;
@@ -2162,26 +2175,30 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
     if (Sym)
     {
         Sym->read_count++;
-        switch (Sym->Type) {
+        switch (Sym->Type) 
+        {
         
             case SymbolTypes::NAMESPACE:
             {
-                
+                LookUpNode(*Node.Object, State, Res, Data, Memory);
+                LookUpNode(*Node.Member, State, Res, Data, Memory, Sym);
+
+                break;
             }
             case SymbolTypes::STRUCT:
             {
-
+                break;
             }
             case SymbolTypes::CLASS:
             {
-
+                break;
             }
             default:
             {
                 OrbitLog::SyntaxLog::SyntaxError(
-                    "Parsing", 
+                    "Semantic", 
                     "Trying to Acess A Non-Object", 
-                    "<OBJECT> Cannot Be Acessed, Because  Dont Have Members",
+                    "<OBJECT>: "+Node.Object->GetNodeType()+" Cannot Be Acessed, Because  Dont Have Members",
                     "Use A Valid <OBJECT>",
                     Node.pos.line, Node.pos.collumn
                 );
@@ -2189,8 +2206,7 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
                 return;
             }
         }
-    }
-    else {
+    } else {
 
         OrbitLog::SyntaxLog::SyntaxError(
             "Parsing", 
@@ -2205,7 +2221,7 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
 }
 
 // LookUp IndexAcessNode | Olha um IndexAcessNode.
-void SemanticAnalizer::LookUpIndexAccess(IndexAccessNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpIndexAccess(IndexAccessNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // Error Prev | Prevenção de Erros.
     if (!Node.Object || !Node.Index)
@@ -2312,7 +2328,7 @@ void SemanticAnalizer::LookUpIndexAccess(IndexAccessNode& Node, SAState& State, 
 }
 
 // LookUp Range Nodes | Olha os RangeNodes.
-void SemanticAnalizer::LookUpRange(RangeNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpRange(RangeNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     TypeInfo* BeginInfo = GetExpressionType
     (Node.Begin, State, Res, Data, Memory);
@@ -2364,7 +2380,7 @@ void SemanticAnalizer::LookUpRange(RangeNode& Node, SAState& State, SAResult& Re
 }
 
 // LookUp Fn Call Node | Olha um FnCallNode.
-void SemanticAnalizer::LookUpFunctionCall(FunctionCall& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpFunctionCall(FunctionCall& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     LookUpNode(*Node.Callee, State, Res, Data, Memory);
 
@@ -2376,7 +2392,7 @@ void SemanticAnalizer::LookUpFunctionCall(FunctionCall& Node, SAState& State, SA
 }
 
 // LookUp Array Values | Olha um ArrayValue.
-void SemanticAnalizer::LookUpArray(ArrayValue& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpArray(ArrayValue& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     for (ExpressionNode* Val : Node.Args)
     {
@@ -2386,7 +2402,7 @@ void SemanticAnalizer::LookUpArray(ArrayValue& Node, SAState& State, SAResult& R
 }
 
 // LookUp Table Values | Olha um TableValue.
-void SemanticAnalizer::LookUpTable(TableValue& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpTable(TableValue& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     for (ArrayEntry& E : Node.Args)
     {

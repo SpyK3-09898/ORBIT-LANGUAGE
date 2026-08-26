@@ -32,6 +32,7 @@ struct RunTimeData
     std::filesystem::path LogDir;
     struct {
         bool debugMode=false;
+        bool buildMode=false;
         bool generateLog=false;
         bool vmConsoleDebug=false;
         bool UnicodeSupport=true;

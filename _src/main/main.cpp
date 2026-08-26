@@ -196,9 +196,31 @@ int main(int argc, char* argv[])
                 Data.LogDir = GetOrbitOrigin(argv) / "_tests/logs";
                 RunOrbit(argv[2], Data);
             }
+        }else if (Entry == "--build") {
+            
+            if (argc < 3)
+                throw runt_err("File Expected after commandd '--run'");
+            else {
+                ParseRunTimeArgs(vec<string>(argv +  2, argv + argc), Data);
+                for (RunTimeArg Arg : Data.Args)
+                {
+                    if (
+                        Arg.name == "DebugMode" 
+                        && holds_alt_value<bool>(Arg.value, true)
+                    ) Data.flags.debugMode = true;
+                    if (
+                        Arg.name == "GenerateLog" 
+                        && holds_alt_value<bool>(Arg.value, true)
+                    ) Data.flags.generateLog=true;
+                }
+                Data.LogDir = GetOrbitOrigin(argv) / "_tests/logs";
+                Data.flags.buildMode=true;
+                RunOrbit(argv[2], Data);
+            }
         } else if (Entry == "--benchmark") {
 
             int times = 100;
+            int warm_up = 10;
             if (argc < 3)
                 throw runt_err("File Expected after commandd '--benchmark'");
             else {
@@ -209,22 +231,27 @@ int main(int argc, char* argv[])
                     if (
                         Arg.name == "DebugMode"
                         && holds_alt_value<bool>(Arg.value, true)
-                    ) Data.flags.debugMode = true;
-
-                    if (
-                        Arg.name == "GenerateLog"
-                        && holds_alt_value<bool>(Arg.value, true)
-                    ) Data.flags.generateLog = true;
+                    ) Data.flags.debugMode = true;  
 
                     if (
                         Arg.name == "Times"
                         && holds_alt<int>(Arg.value)
                     ) times = std::get<int>(Arg.value);
+
+                    if (
+                        Arg.name == "WarmUp"
+                        && holds_alt<int>(Arg.value)
+                    ) warm_up = std::get<int>(Arg.value);
+
+                    if (
+                        Arg.name == "GenerateLog"
+                        && holds_alt_value<bool>(Arg.value, true)
+                    ) throw runt_err("Can ONLY Generate Log Of 1 Exec, But Got: "+std::to_string(times));
                 }
 
                 Data.LogDir = GetOrbitOrigin(argv) / "_tests/logs";
 
-                for (int i = 0; i < 10; i++)
+                for (int i = 0; i < warm_up; i++)
                     RunOrbit(argv[2], Data);
 
                 std::vector<double> Times;

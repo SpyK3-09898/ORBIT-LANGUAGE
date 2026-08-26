@@ -904,6 +904,8 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
         Chunk* CurrChunk = BC.Chunks[BC.currChunk];
         auto& CurrInst = BC.Chunks[BC.currChunk]->Instructions[IP.Index];
         auto& Insts = CurrChunk->Instructions;
+        
+        // Flags | Marcações.
         if (Data.flags.generateLog)
         {
             file <<
@@ -1537,12 +1539,11 @@ void VirtualMachine::InitVM(ByteCode& BC, SAResult& Res, RunTimeData& Data, Aren
         TimeData["GC_Update"] = 0.0;
 
         auto Start = std::chrono::high_resolution_clock::now();
-
         int Return = Run(BC, Res, Data, Memory);
 
         auto End = std::chrono::high_resolution_clock::now();
-
         auto Duration = End - Start;
+        
         double Seconds = std::chrono::duration<double>(Duration).count();
         double Milliseconds = std::chrono::duration<double, std::milli>(Duration).count();
 
@@ -1562,6 +1563,7 @@ void VirtualMachine::InitVM(ByteCode& BC, SAResult& Res, RunTimeData& Data, Aren
     else
     {
         auto Return = Run(BC, Res, Data, Memory);
+        PrintLn("dsa");
     }
 
 };

@@ -137,7 +137,7 @@ namespace CodeGenUtils {
 // PROGRAM
 
 // Compile a Random Node | Compila um Nó Aleatorio
-void CodeGenerator::CompileNode(ASTNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
+void CodeGenerator::CompileNode(ASTNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     if (!Node) return;
 
@@ -158,7 +158,7 @@ void CodeGenerator::CompileNode(ASTNode* Node, CodeGenState& State, ByteCode& BC
             break;
 
         case NodeType::IDENTIFIER:
-            CompileIdentifier(static_cast<IdentifierNode*>(Node), State, BC, SARes, Data, Memory);
+            CompileIdentifier(static_cast<IdentifierNode*>(Node), State, BC, SARes, Data, Memory, Owner);
             break;
 
         case NodeType::UNARY:
@@ -174,11 +174,11 @@ void CodeGenerator::CompileNode(ASTNode* Node, CodeGenState& State, ByteCode& BC
             break;
 
         case NodeType::MEMBER_ACCESS:
-            CompileMemberAccess(static_cast<MemberAccessNode*>(Node), State, BC, SARes, Data, Memory);
+            CompileMemberAccess(static_cast<MemberAccessNode*>(Node), State, BC, SARes, Data, Memory, Owner);
             break;
 
         case NodeType::INDEX_ACCESS:
-            CompileIndexAccess(static_cast<IndexAccessNode*>(Node), State, BC, SARes, Data, Memory);
+            CompileIndexAccess(static_cast<IndexAccessNode*>(Node), State, BC, SARes, Data, Memory, Owner);
             break;
 
         case NodeType::FN_CALL:
@@ -247,6 +247,7 @@ void CodeGenerator::CompileNode(ASTNode* Node, CodeGenState& State, ByteCode& BC
             CompileEcho(static_cast<EchoNode*>(Node), State, BC, SARes, Data, Memory);
             break;
 
+        default: break;
     }
 }
 
@@ -281,17 +282,61 @@ void CodeGenerator::CompileLiteral(LiteralNode* Node, CodeGenState& State, ByteC
 }
 
 // Compile Identifier Access | Compila Acesso a Identificadores
-void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
+void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // Error Prevention | Prevenção de Erros:
+    if (Owner and Owner->LinkedScope)
+    {
+        Scope* ScopeIt = Owner->LinkedScope;
+
+        while (ScopeIt)
+        {
+            auto It = ScopeIt->Symbols.find(Node->Name);
+
+            if (It != ScopeIt->Symbols.end())
+            {
+                // Resolve Type | Resolve o tipo:
+                auto& S = It->second->Type;
+                
+                ByteInstruction* Inst;
+                if (S == SymbolTypes::IDENTIFIER or S == SymbolTypes::VAR or S == SymbolTypes::PARAM)
+                    Inst = CodeGenUtils::CreateInst
+                        (Node, OpCode::LOAD_LOCAL, State.GetLocal(Node->Name), 0, Data, Memory);
+                else if (S == SymbolTypes::FN)
+                {
+                    i64 id = BC.Functions.at(Node->Name);
+                    Inst = CodeGenUtils::CreateInst
+                        (Node, OpCode::LOAD_FN, id, BC.Chunks[id]->ParamCount, Data, Memory);
+                } else if (S == SymbolTypes::NAMESPACE) {} else
+                {
+                    OrbitLog::Error
+                    ("codegen.cpp", "Invalid Symbol Type for: '"+Node->Name+"', Type: "+std::to_string(static_cast<int>(S)), true, 400);
+                    return;
+                }
+
+                // Set | Define:
+                BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+                return;
+            }
+
+            ScopeIt = ScopeIt->Parent;
+        }
+
+        OrbitLog::Error("codegen.cpp", "Cannot Find: "+Node->Name+" in SymbolTable", true, 404);
+        return;
+    }
+
     auto It = SARes.SymbolTable.find(Node->Name);
     if (It == SARes.SymbolTable.end())
+    {
         OrbitLog::Error("codegen.cpp", "Cannot Find: "+Node->Name+" in SymbolTable", true, 404);
+        return;
+    }
 
     // Resolve Type | Resolve o tipo:
     auto& S = It->second->Type;
-    
     ByteInstruction* Inst;
+
     if (S == SymbolTypes::IDENTIFIER or S == SymbolTypes::VAR or S == SymbolTypes::PARAM)
         Inst = CodeGenUtils::CreateInst
             (Node, OpCode::LOAD_LOCAL, State.GetLocal(Node->Name), 0, Data, Memory);
@@ -300,12 +345,13 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
         i64 id = BC.Functions.at(Node->Name);
         Inst = CodeGenUtils::CreateInst
             (Node, OpCode::LOAD_FN, id, BC.Chunks[id]->ParamCount, Data, Memory);
-    } else
+    } else if (S == SymbolTypes::NAMESPACE) {} else
     {
         OrbitLog::Error
         ("codegen.cpp", "Invalid Symbol Type for: '"+Node->Name+"', Type: "+std::to_string(static_cast<int>(S)), true, 400);
         return;
     }
+
     // Set | Define:
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 }
@@ -432,10 +478,12 @@ void CodeGenerator::CompileAssignment(AssignmentNode* Node, CodeGenState& State,
 }
 
 // Compile Object Member Access | Compila Acesso a Membro de Objeto
-void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
+void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // Compile Object | Compila o Objeto.
-    CompileNode(Node->Object, State, BC, SARes, Data, Memory);
+    TypeInfo &T = SARes.ExpressionTypes[Node->Object];
+    Symbol* O = T.Father;
+    CompileNode(Node->Object, State, BC, SARes, Data, Memory, O);
 
     // Generate Inst | Gera a Instrução.
     ByteInstruction* Inst = 
@@ -444,7 +492,7 @@ void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& St
 }
 
 // Compile Array/Table Index Access | Compila Acesso a Índice de Array/Tabela
-void CodeGenerator::CompileIndexAccess(IndexAccessNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
+void CodeGenerator::CompileIndexAccess(IndexAccessNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // Compile | Compila:
     CompileNode(Node->Object, State, BC, SARes, Data, Memory);

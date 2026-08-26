@@ -778,12 +778,6 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
         // INDENT SYSTEM | SISTEMA DE INDENTAÇÃO
         if (I > 0)
         {
-            size_t PrevIndent = !Instructions[I - 1].Tokens.empty()
-                ? Instructions[I - 1].Tokens[0]->pos.indent
-                : (!Instructions[I - 1].Modifiers.empty()
-                    ? Instructions[I - 1].Modifiers[0]->pos.indent
-                    : 0);
-
             size_t InstIndent = !Inst.Tokens.empty()
                 ? Inst.Tokens[0]->pos.indent
                 : (!Inst.Modifiers.empty()
@@ -809,23 +803,22 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
                     string Lex = NextInst.Tokens[0]->Lexeme(Data);
 
                     if (
-                        (Lex == "end" or Lex == "elif" or Lex == "else")
-                    ) IsNextControlBlock = true;
+                        Lex == "end" or
+                        Lex == "elif" or
+                        Lex == "else"
+                    )
+                    {
+                        IsNextControlBlock = true;
+                    }
                 }
 
                 if (
-                    InstIndent > PrevIndent and
-                    InstIndent > NextIndent and
+                    NextIndent < InstIndent and
                     !IsNextControlBlock
                 )
                 {
                     ShouldPop = true;
                 }
-            }
-            else
-            {
-                if (InstIndent > PrevIndent)
-                    ShouldPop = true;
             }
 
             if (
