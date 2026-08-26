@@ -2505,12 +2505,15 @@ void GenerateSALog(SAState& State, SAResult& Res, RunTimeData& Data)
 // Entry-Point of SA Program | Ponto-de-Entrada do programa do SA.
 SAResult SemanticAnalizer::InitSA(ParseResult& PRes, RunTimeData& Data, Arena& Memory)
 {
+    // Debug:
     if (Data.flags.debugMode)
         PrintIn("STARTING TASK: SemanticAnalysis");
 
+    // Data | Dados
     SAResult Res;
     SAState State;
 
+    // Dont Have AST to Check | Sem AST Para Checar.
     if (!PRes.AST)
     {
         OrbitLog::SyntaxLog::SyntaxError(
@@ -2527,11 +2530,45 @@ SAResult SemanticAnalizer::InitSA(ParseResult& PRes, RunTimeData& Data, Arena& M
         return Res;
     }
 
+    // LookUp | Olha
     LookUpNode(*PRes.AST, State, Res, Data, Memory);
 
+    // Symbol Final Tratament | Tratamento Final dos Simbolos.
+    for (pair<str_view, Symbol*> P : Res.SymbolTable)
+    {
+        if (P.second->write_count == 0 and P.second->read_count == 0)
+        {
+            OrbitLog::SyntaxLog::SyntaxWarn(
+                "Semantic", 
+                "Unused Symbol", 
+                "Symbol: "+P.second->Name+" Dont Has Been Used", 
+                "Remove Unused  Symbol",
+                P.second->Pos.line, P.second->Pos.collumn
+            );
+        } else if (P.second->write_count == 0)
+        {
+            OrbitLog::SyntaxLog::SyntaxWarn(
+                "Semantic",
+                "Non-Const Symbol Has Not ReWrited", 
+                "Symbol: "+P.second->Name+" Dont Has Been ReWrited, But Not Has Been Declared As <CONST>", 
+                "Add 'const' Flag",
+                P.second->Pos.line, P.second->Pos.collumn
+            );            
+        } else if (!P.second->inited) 
+        {
+            OrbitLog::SyntaxLog::SyntaxWarn(
+                "Semantic",
+                "Non-Const Symbol Never Be Initialized", 
+                "Symbol: "+P.second->Name+" Dont Has Been Initialized", 
+                "Remove 'Symbol'",
+                P.second->Pos.line, P.second->Pos.collumn
+            );             
+        }
+    }
+
+    // Flags | Marcações:
     if (Data.flags.debugMode)
         PrintIn("ENDOF TASK: SemanticAnalysis. .. ...");
-
     if (Data.flags.generateLog)
         GenerateSALog(State, Res, Data);
 

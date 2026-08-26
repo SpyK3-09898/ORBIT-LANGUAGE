@@ -177,7 +177,7 @@ struct SAResult
 {
     Scope* GlobalScope = nullptr;
     unord_map<ASTNode*, TypeInfo> ExpressionTypes;
-    unord_map<str_view, Symbol*> SymbolTable;
+    unord_map<ui16, Symbol*> SymbolTable;
 };
 
 // MAIN CLASS | CLASSE PRINCIPAL.

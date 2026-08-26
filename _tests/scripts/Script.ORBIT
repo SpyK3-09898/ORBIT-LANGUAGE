@@ -1,7 +1,13 @@
 
-namespace Math:
+namespace Oi:
 
-    var x = 10;
+    const var x = 7;
 end
 
-echo cout Math.x;
+namespace Tudo:
+
+    const var x = 10;
+end
+
+echo cout Oi.x;
+echo cout Tudo.x;

@@ -258,6 +258,7 @@ struct ASTNode
     // DATA
     NodePos pos;
     NodeType Type;
+    ui16 SymbolId=0;
 
     // UTILS | UTILIDADES
     inline string GetNodeType()
@@ -556,8 +557,7 @@ struct FnDecl : DeclarationNode
         : DeclarationNode(NodeType::FN_DECL, P) {};
 };
 
-// Namespace Decl | Declaraç~eos de NameSpace.
-
+// Namespace Decl | Declarações de NameSpace.
 struct NameSpaceDecl : DeclarationNode
 {
     // DATA

@@ -1,4 +1,5 @@
 
+
 // ========== CODE-GENNERATOR =========== //
 // Parse '_AST' And Generate ByteCodes.
 // Developed By: SpyK3(2026) | License: GitHub(MIT).
@@ -210,6 +211,10 @@ void CodeGenerator::CompileNode(ASTNode* Node, CodeGenState& State, ByteCode& BC
             CompileFnDecl(static_cast<FnDecl*>(Node), State, BC, SARes, Data, Memory);
             break;
 
+        case NodeType::NAMESPACE_DECL:
+            CompileNameSpaceDecl(static_cast<NameSpaceDecl*>(Node), State, BC, SARes, Data, Memory);
+            break;
+
         // CONTROL FLOW
         case NodeType::IF_CONTROL:
             CompileIf(static_cast<IfNode*>(Node), State, BC, SARes, Data, Memory);
@@ -307,7 +312,11 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
                     i64 id = BC.Functions.at(Node->Name);
                     Inst = CodeGenUtils::CreateInst
                         (Node, OpCode::LOAD_FN, id, BC.Chunks[id]->ParamCount, Data, Memory);
-                } else if (S == SymbolTypes::NAMESPACE) {} else
+                } else if (S == SymbolTypes::NAMESPACE)
+                {
+                    // NameSpaces are only a shortcut | NameSpaces são apenas um atalho.
+                    return;
+                } else
                 {
                     OrbitLog::Error
                     ("codegen.cpp", "Invalid Symbol Type for: '"+Node->Name+"', Type: "+std::to_string(static_cast<int>(S)), true, 400);
@@ -345,7 +354,11 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
         i64 id = BC.Functions.at(Node->Name);
         Inst = CodeGenUtils::CreateInst
             (Node, OpCode::LOAD_FN, id, BC.Chunks[id]->ParamCount, Data, Memory);
-    } else if (S == SymbolTypes::NAMESPACE) {} else
+    } else if (S == SymbolTypes::NAMESPACE)
+    {
+        // NameSpaces are only a shortcut | NameSpaces são apenas um atalho.
+        return;
+    } else
     {
         OrbitLog::Error
         ("codegen.cpp", "Invalid Symbol Type for: '"+Node->Name+"', Type: "+std::to_string(static_cast<int>(S)), true, 400);
@@ -480,6 +493,74 @@ void CodeGenerator::CompileAssignment(AssignmentNode* Node, CodeGenState& State,
 // Compile Object Member Access | Compila Acesso a Membro de Objeto
 void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
+    // NameSpace Shortcut | Atalho de NameSpace.
+    if (Node->Object && Node->Object->Type == NodeType::IDENTIFIER)
+    {
+        string ObjName = static_cast<IdentifierNode*>(Node->Object)->Name;
+        auto SymIt = SARes.SymbolTable.find(ObjName);
+
+        if (SymIt != SARes.SymbolTable.end() &&
+            SymIt->second &&
+            SymIt->second->Type == SymbolTypes::NAMESPACE)
+        {
+            Symbol* NsSym = SymIt->second;
+
+            // Nested Access | Acesso Aninhado.
+            if (Node->Member && Node->Member->Type == NodeType::MEMBER_ACCESS)
+            {
+                CompileMemberAccess
+                (static_cast<MemberAccessNode*>(Node->Member), State, BC, SARes, Data, Memory, NsSym);
+                return;
+            }
+
+            // Take Member Name | Pega O Nome Do Membro.
+            if (!Node->Member || Node->Member->Type != NodeType::IDENTIFIER)
+            {
+                OrbitLog::Error("codegen.cpp", "Invalid Member Access on Namespace", true, 400);
+                return;
+            }
+
+            string M_Name = static_cast<IdentifierNode*>(Node->Member)->Name;
+
+            // Resolve Member | Resolve o Membro.
+            Symbol* MemberSym = nullptr;
+            if (NsSym->LinkedScope)
+                MemberSym = NsSym->LinkedScope->FindSymLocal(M_Name);
+
+            if (!MemberSym)
+            {
+                OrbitLog::Error("codegen.cpp", "Cannot Find Member: "+M_Name+" in Namespace", true, 404);
+                return;
+            }
+
+            auto& S = MemberSym->Type;
+            ByteInstruction* Inst;
+
+            if (S == SymbolTypes::IDENTIFIER or S == SymbolTypes::VAR or S == SymbolTypes::PARAM)
+                Inst = CodeGenUtils::CreateInst
+                    (Node, OpCode::LOAD_LOCAL, State.GetLocal(M_Name), 0, Data, Memory);
+            else if (S == SymbolTypes::FN)
+            {
+                i64 id = BC.Functions.at(M_Name);
+                Inst = CodeGenUtils::CreateInst
+                    (Node, OpCode::LOAD_FN, id, BC.Chunks[id]->ParamCount, Data, Memory);
+            } else if (S == SymbolTypes::NAMESPACE)
+            {
+                // NameSpaces are only a shortcut | NameSpaces são apenas um atalho.
+                return;
+            } else
+            {
+                OrbitLog::Error
+                ("codegen.cpp", "Invalid Symbol Type for: '"+M_Name+"', Type: "+std::to_string(static_cast<int>(S)), true, 400);
+                return;
+            }
+
+            // Set | Define:
+            BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+            return;
+        }
+    }
+
     // Compile Object | Compila o Objeto.
     TypeInfo &T = SARes.ExpressionTypes[Node->Object];
     Symbol* O = T.Father;
@@ -577,7 +658,8 @@ void CodeGenerator::CompileErrorExpr(ErrorExprNode* Node, CodeGenState& State, B
 // Compile L-Values | Compila Valores Esquedos
 void CodeGenerator::CompileLValue(ExpressionNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory, bool base)
 {
-    switch (Node->Type) {
+    switch (Node->Type) 
+    {
     
         case NodeType::IDENTIFIER:
         {
@@ -588,9 +670,35 @@ void CodeGenerator::CompileLValue(ExpressionNode* Node, CodeGenState& State, Byt
             BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
             break;
         }
+        
         case NodeType::MEMBER_ACCESS:
         {
             MemberAccessNode* N = static_cast<MemberAccessNode*>(Node);
+
+            // NameSpace Shortcut | Atalho de NameSpace.
+            if (N->Object && N->Object->Type == NodeType::IDENTIFIER)
+            {
+                string ObjName = static_cast<IdentifierNode*>(N->Object)->Name;
+                auto SymIt = SARes.SymbolTable.find(ObjName);
+
+                if (SymIt != SARes.SymbolTable.end() &&
+                    SymIt->second &&
+                    SymIt->second->Type == SymbolTypes::NAMESPACE)
+                {
+                    if (!N->Member || N->Member->Type != NodeType::IDENTIFIER)
+                    {
+                        OrbitLog::Error("codegen.cpp", "Invalid Member Access on Namespace", true, 400);
+                        break;
+                    }
+
+                    string M_Name = static_cast<IdentifierNode*>(N->Member)->Name;
+                    OpCode op = base ? OpCode::STORE_LOCAL : OpCode::LOAD_LOCAL;
+                    ByteInstruction* Inst = CodeGenUtils::
+                        CreateInst(Node, op, State.GetLocal(M_Name), 0, Data, Memory);
+                    BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+                    break;
+                }
+            }
 
             CompileLValue(N->Object, State, BC, SARes, Data, Memory, false);
             CompileNode(N->Member, State, BC, SARes, Data, Memory);
@@ -601,6 +709,7 @@ void CodeGenerator::CompileLValue(ExpressionNode* Node, CodeGenState& State, Byt
             BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
             break;            
         }
+
         case NodeType::INDEX_ACCESS:
         {
             IndexAccessNode* N = static_cast<IndexAccessNode*>(Node);
@@ -669,6 +778,14 @@ void CodeGenerator::CompileFnDecl(FnDecl* Node, CodeGenState& State, ByteCode& B
     BC.Chunks[State.currChunk]->Instructions.push_back(ReturnInst);
     
     State.currChunk = PrevC;
+}
+
+// Compile NameSpace Declaration | Compila Declaração de NameSpace
+void CodeGenerator::CompileNameSpaceDecl(NameSpaceDecl* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
+{
+    // Compile Body | Compila o Corpo.
+    if (Node->Body)
+        CompileNode(Node->Body, State, BC, SARes, Data, Memory);
 }
 
 // Handle/Compile Declaration Errors | Manipula/Compila Erros em Declarações

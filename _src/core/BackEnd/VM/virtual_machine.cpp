@@ -1561,10 +1561,7 @@ void VirtualMachine::InitVM(ByteCode& BC, SAResult& Res, RunTimeData& Data, Aren
         );
     }
     else
-    {
-        auto Return = Run(BC, Res, Data, Memory);
-        PrintLn("dsa");
-    }
+        auto Return = Run(BC, Res, Data, Memory); 
 
 };
 

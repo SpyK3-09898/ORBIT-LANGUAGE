@@ -30,6 +30,9 @@ struct IfCompileState
 struct CodeGenState 
 {
     unord_map<string, ui32> Locals;
+    unord_map<Symbol*, ui32> LocalsSym;
+    unord_map<Symbol*, i64> Functions;
+    Symbol* CurrNamespace = nullptr;
     int currChunk = 0;
     int localCount=0;
 
@@ -42,6 +45,7 @@ struct CodeGenState
     {
         return Locals.find(Name) != Locals.end();
     }
+
     // Get Slot of Local | Pega o Slot do Local.
     ui32 GetLocal(const string& Name)
     {
@@ -72,6 +76,27 @@ struct CodeGenState
         Locals[Name] = Index;
 
         return Index;
+    }
+
+    // Create A New Local Whit Symbols | Cria Um Novo Local Com Simbolos.
+    ui32 CreateLocalForSym(Symbol* Sym, const string& Name)
+    {
+        ui32 Index = CreateLocal(Name);
+        if (Sym)
+            LocalsSym[Sym] = Index;
+        return Index;
+    }
+
+    // Get Local Whit Symbol | Pega O Local Pelo Simbolo.
+    ui32 GetLocalForSym(Symbol* Sym, const string& Name)
+    {
+        if (Sym)
+        {
+            auto It = LocalsSym.find(Sym);
+            if (It != LocalsSym.end())
+                return It->second;
+        }
+        return GetLocal(Name);
     }
 
 };
@@ -113,6 +138,7 @@ class CodeGenerator
     // DECLARATIONS:
     void CompileVarDecl(VarDeclNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory);
     void CompileFnDecl(FnDecl* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory);
+    void CompileNameSpaceDecl(NameSpaceDecl* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory);
     void CompileErrorDecl(ErrorDeclNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory);
 
     // CONTROL-FLOW:
