@@ -1,13 +1,9 @@
 
 namespace Oi:
 
-    const var x = 7;
+	func Oi2():
+		return 5;
+	end
 end
 
-namespace Tudo:
-
-    const var x = 10;
-end
-
-echo cout Oi.x;
-echo cout Tudo.x;
+echo cout Oi.Oi2();

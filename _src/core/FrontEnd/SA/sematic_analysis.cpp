@@ -550,7 +550,7 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
                 OrbitLog::SyntaxLog::SyntaxError(
                     "Semantic",
                     "Used a Undeclared <IDENTIFIER>",
-                    "Ident: "+Id.Name+" Dont Exists",
+                    "Ident: '"+Id.Name+"' Dont Exists",
                     "Declare Ident or Use a Valid Identifier",
                     Node->pos.line, Node->pos.collumn
                 );
@@ -1727,7 +1727,7 @@ void SemanticAnalizer::LookUpIdentifier(IdentifierNode& Node, SAState& State, SA
         OrbitLog::SyntaxLog::SyntaxError(
             "Semantic",
             "Used a Undeclared <IDENTIFIER>",
-            "Ident: "+Node.Name+" Dont Exists",
+            "Ident: '"+Node.Name+"' Dont Exists",
             "Declare Ident or Use a Valid Identifier",
             Node.pos.line, Node.pos.collumn
         );
