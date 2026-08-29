@@ -9,6 +9,7 @@
 
 #include "../lexer/lexer.hpp"
 
+#include "ParserModules/Specials/specials.hpp"
 #include "ParserModules/Control/control.hpp"
 #include "ParserModules/Declaration/declaration.hpp"
 #include "ParserModules/Expressions/expression.hpp"
@@ -16,6 +17,7 @@
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../../RunTimeData.hpp"
+#include "../../Library/lib_manager.hpp"
 
 #include <cerrno>
 #include <cstddef>
@@ -733,6 +735,7 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
     State.Bodys.push_back(Program->Node);
 
     // Prev Init Parser Modules | Inicia os Modulos do Parser Previamente.
+    SpecialParser SpParser;
     ExpressionParser ExprParser;
     DeclarationParser DeclParser;
     ControlParser CtrlParser;
@@ -747,16 +750,18 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
         // PARSE TOKENS
         ASTNode* Node = nullptr; // CREATE BASE NODE
 
-        Node = CtrlParser.ParseControl(
-            Inst,
-            State,
-            Res,
-            Data,
-            DeclParser,
-            ExprParser,
-            Memory
-        );
-
+        Node = SpParser.ParseSpecial
+            (Inst, State, Res, Data, ExprParser, DeclParser, CtrlParser, Memory);
+        if (Node == nullptr and !State.consumedInst)
+            Node = CtrlParser.ParseControl(
+                Inst,
+                State,
+                Res,
+                Data,
+                DeclParser,
+                ExprParser,
+                Memory
+            );
         if (Node == nullptr and !State.consumedInst)
             Node = DeclParser.ParseDeclaration(
                 Inst,
@@ -766,7 +771,6 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
                 ExprParser,
                 Memory
             );
-
         if (Node == nullptr and !State.consumedInst)
             Node =
                 ExprParser.
@@ -832,6 +836,19 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
         }
 
         I++;
+    }
+
+    // Load Librarys | Carrega As Bibliotecas.
+    LibManager LibMan;
+    for (ImportNode* I : Res.ImportRefs)
+    {
+        OrbitLibrary Lib;
+        if (I->Base->Type == NodeType::IDENTIFIER)
+            Lib = LibMan.LoadLib(static_cast<IdentifierNode*>(I->Base)->Name, I->Origin, Data);
+        else Lib = LibMan.LoadLib(static_cast<IdentifierNode*>(static_cast<MemberAccessNode*>(I->Base)->Object)->Name, I->Origin, Data);
+        
+        Lib.DeclName = I->Alias;
+        Data.Librarys.push_back(&Lib);
     }
     if (State.Bodys.size() > 1)
     {

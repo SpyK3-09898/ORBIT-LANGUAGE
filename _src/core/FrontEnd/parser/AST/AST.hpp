@@ -12,6 +12,7 @@
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
 #include "../../../RunTimeData.hpp"
+#include "../../../Library/lib_manager.hpp"
 #include <cstdint>
 #include <utility>
 
@@ -580,7 +581,6 @@ struct ControlNode : ASTNode
         : ASTNode(T, P) {}
 };
 
-
 // Else Control Statement | Controle de Instrução 'Else'.
 struct ElseNode : ControlNode
 {
@@ -701,23 +701,56 @@ struct EchoNode : ControlNode
         : ControlNode(NodeType::ECHO, P) {};
 };
 
-// Library Defiens | Definições de Bibliotecas.
-struct LibraryNode : ControlNode
-{
-    // DATA
-    string Name;
-
-    // CONSTRUCTOR
-    LibraryNode(NodePos& Pos)
-        : ControlNode(NodeType::LIBRARY, Pos) {};
-};
-
 // Error Statements Nodes | Errors de Nos de Statement.
 struct ErrorStmtNode : ControlNode
 {
     // CONSTRUCTOR | CONSTRUTOR
     ErrorStmtNode(NodePos P)
         : ControlNode(NodeType::ERROR, P) {};
+};
+
+// ======= SPECIALS ======= //
+
+// Control Statement Base Node | No de Instrução de Controle Base.
+struct SpecialNode : ASTNode
+{
+    // CONSTRUCTOR | CONSTRUTOR
+    SpecialNode(NodeType T, NodePos P)
+        : ASTNode(T, P) {}
+};
+
+// Library Defines | Definições de Bibliotecas.
+struct LibraryNode : SpecialNode
+{
+    // DATA
+    string Name;
+
+    // CONSTRUCTOR
+    LibraryNode(NodePos& Pos)
+        : SpecialNode(NodeType::LIBRARY, Pos) {};
+};
+
+// Import Defines MetaData | MetaDados de Definições de Importações.
+struct ImportNode : SpecialNode
+{
+    // DATA
+    ExpressionNode* Path;
+    ExpressionNode* Base;
+    string Alias;
+    string Origin = "ORBIT";
+    vec<string> Modules{}; 
+
+    // CONSTRUCTOR
+    ImportNode(NodePos& Pos)
+        : SpecialNode(NodeType::LIBRARY, Pos) {};
+};
+
+// Error Special Nodes | Nós de Erros de Instruções Especiais.
+struct ErrorSpecialNode : SpecialNode
+{
+    // CONSTRUCTOR | CONSTRUTOR
+    ErrorSpecialNode(NodePos P)
+        : SpecialNode(NodeType::ERROR, P) {};    
 };
 
 // ======== AST ======== //
@@ -759,6 +792,8 @@ struct ParseState
 struct ParseResult
 {
     ASTNode* AST;
+    vec<ASTNode*> Contexts;
+    vec<ImportNode*> ImportRefs{};
 };
 
 // ========== NAMESPACES ========= //

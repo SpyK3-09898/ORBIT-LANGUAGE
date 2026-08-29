@@ -1,9 +1,4 @@
 
-namespace Oi:
+_library __MAIN__;
 
-	func Oi2():
-		return 5;
-	end
-end
-
-echo cout Oi.Oi2();
+_import stdlib as std;

@@ -740,7 +740,7 @@ ExpressionNode* ExpressionParser::Nud(
         OrbitLog::SyntaxLog::SyntaxError(
             "Parsing",
             "Invalid <EXPRESSION>",
-            "Expected Expression",
+            "Expected Expression, But Got: <NULL>",
             "Add a Valid Expression",
             State.Pos.line,
             State.Pos.collumn

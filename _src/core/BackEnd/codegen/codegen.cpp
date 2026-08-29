@@ -481,66 +481,71 @@ void CodeGenerator::CompileAssignment(AssignmentNode* Node, CodeGenState& State,
 void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // NameSpace Shortcut | Atalho de NameSpace.
-    if (Node->Object && Node->Object->Type == NodeType::IDENTIFIER)
+    Symbol* NsSym = nullptr;
+
+    if (Node->Object)
     {
-        Symbol* NsSym = CodeGenUtils::GetSym(Node->Object, SARes);
+        if (Node->Object->Type == NodeType::IDENTIFIER)
+            NsSym = CodeGenUtils::GetSym(Node->Object, SARes);
+        else if (Node->Object->Type == NodeType::MEMBER_ACCESS)
+            NsSym = CodeGenUtils::GetSym(Node->Object, SARes);
+    }
 
-        if (NsSym && NsSym->Type == SymbolTypes::NAMESPACE)
+    if (NsSym && NsSym->Type == SymbolTypes::NAMESPACE)
+    {
+        // Nested Access | Acesso Aninhado.
+        if (Node->Member && Node->Member->Type == NodeType::MEMBER_ACCESS)
         {
-            // Nested Access | Acesso Aninhado.
-            if (Node->Member && Node->Member->Type == NodeType::MEMBER_ACCESS)
-            {
-                CompileMemberAccess
-                (static_cast<MemberAccessNode*>(Node->Member), State, BC, SARes, Data, Memory, NsSym);
-                return;
-            }
-
-            // Take Member Name | Pega O Nome Do Membro.
-            if (!Node->Member || Node->Member->Type != NodeType::IDENTIFIER)
-            {
-                OrbitLog::Error("codegen.cpp", "Invalid Member Access on Namespace", true, 400);
-                return;
-            }
-
-            IdentifierNode* MemberId = static_cast<IdentifierNode*>(Node->Member);
-
-            // Resolve Member | Resolve o Membro (prefer SymbolId).
-            Symbol* MemberSym = CodeGenUtils::GetSym(MemberId, SARes);
-            if (!MemberSym && NsSym->LinkedScope)
-                MemberSym = NsSym->LinkedScope->FindSymLocal(MemberId->Name);
-
-            if (!MemberSym)
-            {
-                OrbitLog::Error("codegen.cpp", "Cannot Find Member: "+MemberId->Name+" in Namespace", true, 404);
-                return;
-            }
-
-            auto& S = MemberSym->Type;
-            ByteInstruction* Inst;
-
-            if (S == SymbolTypes::IDENTIFIER or S == SymbolTypes::VAR or S == SymbolTypes::PARAM)
-                Inst = CodeGenUtils::CreateInst
-                    (Node, OpCode::LOAD_LOCAL, State.GetLocal(MemberSym->Id), 0, Data, Memory);
-            else if (S == SymbolTypes::FN)
-            {
-                i64 id = BC.Functions.at(MemberSym->Name);
-                Inst = CodeGenUtils::CreateInst
-                    (Node, OpCode::LOAD_FN, id, BC.Chunks[id]->ParamCount, Data, Memory);
-            } else if (S == SymbolTypes::NAMESPACE)
-            {
-                // NameSpaces are only a shortcut | NameSpaces são apenas um atalho.
-                return;
-            } else
-            {
-                OrbitLog::Error
-                ("codegen.cpp", "Invalid Symbol Type for: '"+MemberSym->Name+"', Type: "+std::to_string(static_cast<int>(S)), true, 400);
-                return;
-            }
-
-            // Set | Define:
-            BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+            CompileMemberAccess
+            (static_cast<MemberAccessNode*>(Node->Member), State, BC, SARes, Data, Memory, NsSym);
             return;
         }
+
+        // Take Member Name | Pega O Nome Do Membro.
+        if (!Node->Member || Node->Member->Type != NodeType::IDENTIFIER)
+        {
+            OrbitLog::Error("codegen.cpp", "Invalid Member Access on Namespace", true, 400);
+            return;
+        }
+
+        IdentifierNode* MemberId = static_cast<IdentifierNode*>(Node->Member);
+
+        // Resolve Member | Resolve o Membro (prefer SymbolId).
+        Symbol* MemberSym = CodeGenUtils::GetSym(MemberId, SARes);
+        if (!MemberSym && NsSym->LinkedScope)
+            MemberSym = NsSym->LinkedScope->FindSymLocal(MemberId->Name);
+
+        if (!MemberSym)
+        {
+            OrbitLog::Error("codegen.cpp", "Cannot Find Member: "+MemberId->Name+" in Namespace", true, 404);
+            return;
+        }
+
+        auto& S = MemberSym->Type;
+        ByteInstruction* Inst;
+
+        if (S == SymbolTypes::IDENTIFIER or S == SymbolTypes::VAR or S == SymbolTypes::PARAM)
+            Inst = CodeGenUtils::CreateInst
+                (Node, OpCode::LOAD_LOCAL, State.GetLocal(MemberSym->Id), 0, Data, Memory);
+        else if (S == SymbolTypes::FN)
+        {
+            i64 id = BC.Functions.at(MemberSym->Name);
+            Inst = CodeGenUtils::CreateInst
+                (Node, OpCode::LOAD_FN, id, BC.Chunks[id]->ParamCount, Data, Memory);
+        } else if (S == SymbolTypes::NAMESPACE)
+        {
+            // NameSpaces are only a shortcut | NameSpaces são apenas um atalho.
+            return;
+        } else
+        {
+            OrbitLog::Error
+            ("codegen.cpp", "Invalid Symbol Type for: '"+MemberSym->Name+"', Type: "+std::to_string(static_cast<int>(S)), true, 400);
+            return;
+        }
+
+        // Set | Define:
+        BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+        return;
     }
 
     // Compile Object | Compila o Objeto.
@@ -1013,6 +1018,10 @@ void CodeGenerator::CompileEcho(EchoNode* Node, CodeGenState& State, ByteCode& B
         CreateInst(Node, OpCode::ECHO, 0, 0, Data, Memory);
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 }
+
+// Compile Library Definitions | Compila Definições de Bibliotecas.
+void CodeGenerator::CompileLibraryDef(LibraryNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
+{}
 
 // Handle/Compile Statement Errors | Manipula/Compila Erros em Instruções (Statements)
 void CodeGenerator::CompileErrorStmt(ErrorStmtNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)

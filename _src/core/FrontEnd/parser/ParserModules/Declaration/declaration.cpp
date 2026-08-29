@@ -501,6 +501,8 @@ namespace DeclUtils {
 }
 
 // ======= ENTRY-POINT | PONTO-DE-ENTRADA ====== //
+// EntryPoint of Declaration Parsing Program
+// Ponto-De-Entrada do Programa de Parsing de Declarações.
 DeclarationNode* DeclarationParser::ParseDeclaration(
     Instruction& Inst,
     ParseState& State,

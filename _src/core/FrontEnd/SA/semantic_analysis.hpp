@@ -123,6 +123,7 @@ struct Symbol
 // Scope Repr | Representação de Escopos.
 struct Scope
 {
+    // DATA | DADOS
     Scope* Parent  =  nullptr;
     Scope* Next    =  nullptr;
     ASTNode* Owner;
@@ -133,7 +134,7 @@ struct Scope
 
     // Find Symbol ONLY in THIS Scope
     // Encontra o Simbolo APENAS NESTE Escopo.
-    Symbol* FindSymLocal(string& sym)
+    Symbol* FindSymLocal(const string& sym)
     {
         for (auto& P : Symbols)
             if (P.first == sym)
@@ -142,7 +143,7 @@ struct Scope
     }    
 
     // Find Symbol in Scopes | Encontra Simbolo no Escopo.
-    Symbol* FindSym(string& sym)
+    Symbol* FindSym(const string& sym)
     {
         for (auto& P : Symbols)
             if (P.first == sym)
@@ -154,7 +155,7 @@ struct Scope
 
     // Find Symbol Whit Types in Scope 
     // Encontra o Simbolo de tal Tipo no Escopo.
-    Symbol* FindSymbol(string& sym, SymbolTypes Type)
+    Symbol* FindSymbol(const string& sym, SymbolTypes Type)
     {
         for (auto& P : Symbols)
             if (P.first == sym && P.second->Type == Type)
@@ -173,6 +174,12 @@ struct SAState
     vec<pair<int, ASTNode*>> NodesChecked{};
     int logInd  = 0;
     ui16 nextId = 1;
+
+    struct {
+        bool extensionDefined = false;
+        bool libraryDefined   = false;
+        bool methodDefined    = false;
+    } Flags;
 };
 
 struct SAResult 
@@ -220,6 +227,7 @@ class SemanticAnalizer
         //void LookUpForDef(ForDefNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         void LookUpReturn(ReturnNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpEcho(EchoNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
+        void LookUpLibraryDef(LibraryNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
 };
 
 // EOF

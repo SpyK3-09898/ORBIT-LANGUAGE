@@ -243,7 +243,6 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
     }
 
     auto Cached = Res.ExpressionTypes.find(Node);
-
     if (Cached != Res.ExpressionTypes.end())
         return &Cached->second;
 
@@ -1197,11 +1196,11 @@ void SemanticAnalizer::LookUpWhile(WhileNode& Node, SAState& State, SAResult& Re
     LookUpBody(*Node.Body, State, Res, Data, Memory);
 }
 
-// LookUp Else Nodes | Olha um IfNode.
+// LookUp Else Nodes | Olha um ElseNode.
 void SemanticAnalizer::LookUpElse(ElseNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 { LookUpBody(*Node.Body, State, Res, Data, Memory); }
 
-// LookUp Elif Nodes | Olha um IfNode.
+// LookUp Elif Nodes | Olha um ElifNode.
 void SemanticAnalizer::LookUpElif(ElifNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // Error & Warn Prev | Prevenção de Erros de Avisos.
@@ -1289,6 +1288,17 @@ void SemanticAnalizer::LookUpReturn(ReturnNode& Node, SAState& State, SAResult& 
 // LookUp Echo Nodes | Olha Nós de Echo.
 void SemanticAnalizer::LookUpEcho(EchoNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 { LookUpNode(*Node.Value, State, Res, Data, Memory); }
+
+// LookUp Library Definitions Nodes | Olha Nós de Definição da Biblioteca.
+void SemanticAnalizer::LookUpLibraryDef(LibraryNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
+{
+    Symbol* Sym = 
+            SAUtils::CreateSymbol(Node.Name, Node, State, Res, Memory);
+    Sym->Type   = 
+            SymbolTypes::LIBRARIE;
+    State.Flags.libraryDefined 
+                = true;
+}
 
 // ===== DECLARATIONS ===== //
 
@@ -1677,7 +1687,6 @@ void SemanticAnalizer::LookUpNameSpace(NameSpaceDecl& Node, SAState& State, SARe
     NsSym->InferType->Kind    = TypeKind::NAMESPACE;
     NsSym->InferType->SubKind = SubTypeKind::NONE;
     NsSym->inited             = true;
-
     // Create Scope for Namespace | Cria Escopo do Namespace.
     Scope* NsScope     = Memory.New<Scope>();
     NsScope->Parent    = State.CurrScope;
@@ -2170,58 +2179,35 @@ void SemanticAnalizer::LookUpAssignment(AssignmentNode& Node, SAState& State, SA
 // LookUp Member Acess Node | Olha um Member Acess Node.
 void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
+    // Error Prevention | Prevenção De Erros.
     if (!Node.Object)
         return;
 
-    LookUpNode(*Node.Object, State, Res, Data, Memory);
+    LookUpNode(*Node.Object, State, Res, Data, Memory, Owner);
+    Symbol* Sym = nullptr;
 
-    string N = SAUtils::GetIValueName(Node.Object);
-
-    if (N == "UNKNOW")
-        return;
-
-    Symbol* Sym = State.CurrScope
-        ? State.CurrScope->FindSym(N)
-        : nullptr;
-
-    if (Sym)
+    // ERR PREV | PREVENÇÃO DE ERROS:
+    if (Node.Object->SymbolId != 0)
     {
-        Sym->read_count++;
-        if (Node.Object)
-            Node.Object->SymbolId = Sym->Id;
-        switch (Sym->Type) 
-        {
-        
-            case SymbolTypes::NAMESPACE:
-            {
-                LookUpNode(*Node.Object, State, Res, Data, Memory);
-                LookUpNode(*Node.Member, State, Res, Data, Memory, Sym);
+        auto It = Res.Symbols.find(Node.Object->SymbolId);
+        if (It != Res.Symbols.end())
+            Sym = It->second;
+    }
 
-                break;
-            }
-            case SymbolTypes::STRUCT:
-            {
-                break;
-            }
-            case SymbolTypes::CLASS:
-            {
-                break;
-            }
-            default:
-            {
-                OrbitLog::SyntaxLog::SyntaxError(
-                    "Semantic", 
-                    "Trying to Acess A Non-Object", 
-                    "<OBJECT>: "+Node.Object->GetNodeType()+" Cannot Be Acessed, Because  Dont Have Members",
-                    "Use A Valid <OBJECT>",
-                    Node.pos.line, Node.pos.collumn
-                );
-                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-                return;
-            }
-        }
-    } else {
+    if (!Sym)
+    {
+        string N = SAUtils::GetIValueName(Node.Object);
 
+        if (N == "UNKNOW")
+            return;
+        if (Owner && Owner->LinkedScope)
+            Sym = Owner->LinkedScope->FindSymLocal(N);
+        else if (State.CurrScope)
+            Sym = State.CurrScope->FindSym(N);
+    }
+
+    if (!Sym)
+    {
         OrbitLog::SyntaxLog::SyntaxError(
             "Parsing", 
             "Trying to Acess a Undeclared Object", 
@@ -2231,6 +2217,58 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
         );
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
         return;
+    }
+
+    // Set Data
+    Sym->read_count++;
+    Node.Object->SymbolId = Sym->Id;
+
+    // Main Switch | Switch Principal.
+    switch (Sym->Type) 
+    {
+    
+        case SymbolTypes::NAMESPACE:
+        {
+            if (Node.Member)
+                LookUpNode(*Node.Member, State, Res, Data, Memory, Sym);
+
+            if (Node.Member && Node.Member->SymbolId != 0)
+                Node.SymbolId = Node.Member->SymbolId;
+
+            break;
+        }
+        case SymbolTypes::STRUCT:
+        {
+            if (Node.Member)
+                LookUpNode(*Node.Member, State, Res, Data, Memory, Sym);
+
+            if (Node.Member && Node.Member->SymbolId != 0)
+                Node.SymbolId = Node.Member->SymbolId;
+
+            break;
+        }
+        case SymbolTypes::CLASS:
+        {
+            if (Node.Member)
+                LookUpNode(*Node.Member, State, Res, Data, Memory, Sym);
+
+            if (Node.Member && Node.Member->SymbolId != 0)
+                Node.SymbolId = Node.Member->SymbolId;
+
+            break;
+        }
+        default:
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic", 
+                "Trying to Acess A Non-Object", 
+                "<OBJECT>: "+Node.Object->GetNodeType()+" Cannot Be Acessed, Because  Dont Have Members",
+                "Use A Valid <OBJECT>",
+                Node.pos.line, Node.pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return;
+        }
     }
 }
 

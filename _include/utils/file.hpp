@@ -3,6 +3,7 @@
 // Project File Manager | Gerenciador de Arquivos do Projeto
 // Developed By: SpyK3(2026) | License: GitHub(MIT).
 
+#pragma once
 #include "utils/aliases.hpp"
 
 #include <filesystem>

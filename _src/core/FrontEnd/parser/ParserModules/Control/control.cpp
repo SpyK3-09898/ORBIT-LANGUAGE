@@ -1,6 +1,6 @@
 
 // ========== CONTROL PARSER =========== //
-// Parse Control Statement Tinstructions And Generate '_ASTNodes'(Abstract Syntax Tree Members).
+// Parse Control Statement Instructions And Generate '_ASTNodes'(Abstract Syntax Tree Members).
 // Developed By: SpyK3(2026) | License: GitHub(MIT).
 
 // INCLUDE HEADERS 'N DEPENDENCES
@@ -570,8 +570,19 @@ namespace ControlUtils {
         ExpressionNode* CondNode = ExprParser.
             ParseExpression(ICond, State,Res, Data, Memory);
         
-        FnDecl* F = static_cast<FnDecl*>(State.Bodys[State.HaveTypeInBodyStack(BodyTypes::FUNCTION)]->Father);
-        F->haveReturn=true;
+        FnDecl* F = nullptr;
+        for (int i = (int)State.Bodys.size() - 1; i >= 0; --i)
+        {
+            BodyNode* B = State.Bodys[i];
+            if (B && B->Type == BodyTypes::FUNCTION &&
+                B->Father && B->Father->Type == NodeType::FN_DECL)
+            {
+                F = static_cast<FnDecl*>(B->Father);
+                break;
+            }
+        }
+        if (F)
+            F->haveReturn = true;
 
         // SET NODE | DEFINE O NODE
         ReturnNode* Cntrl = ParserUtils::
@@ -661,83 +672,7 @@ namespace ControlUtils {
 
         return Cntrl;
     }
-
-    // Parse Library Defines | Parseia Definições de Bibliotecas.
-    ControlNode* ParseLibrary(
-        Instruction& Inst, 
-        ParseState& State, 
-        ParseResult& Res,
-        RunTimeData& Data, 
-        DeclarationParser& DeclParser,
-        ExpressionParser& ExprParser,
-        Arena& Memory
-    )
-    {
-        Token* E = Inst.Advance();
-        ParserUtils::UpdateStatePos(E, State);
-
-        Token* LibName = Inst.Advance();
-        if (!LibName)
-        {
-            OrbitLog::SyntaxLog::SyntaxError(
-                "Parsing", 
-                "Expected <IDENTIFIER>", 
-                "Expected <IDENTIFIER> After <LIBRARY>", 
-                "Add A Valid Identifier After <LIBRARY>",
-                E->pos.line, E->pos.collumn
-            );
-            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-            return ParserUtils::
-                MakeNode<ErrorStmtNode>(State, Res, Memory);            
-        }
-        ParserUtils::UpdateStatePos(LibName, State);
-        if (LibName->Type != TokenType::IDENTIFIER)
-        {
-            OrbitLog::SyntaxLog::SyntaxError(
-                "Parsing", 
-                "Expected <IDENTIFIER>", 
-                "Expected <IDENTIFIER> After <LIBRARY>", 
-                "Add A Valid Identifier After <LIBRARY>",
-                LibName->pos.line, LibName->pos.collumn
-            );
-            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-            return ParserUtils::
-                MakeNode<ErrorStmtNode>(State, Res, Memory);
-        }
-
-        string Name = LibName->Lexeme(Data);
-        if (Name.size() < 5 ||
-            Name.substr(0, 2) != "__" ||
-            Name.substr(Name.size() - 2) != "__" ||
-            Name.substr(2, Name.size() - 4).find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") != string::npos)
-        {
-            OrbitLog::SyntaxLog::SyntaxWarn(
-                "Parsing",
-                "Wreid Library Name",
-                Name+" Dont Follow Name Convention: __NAME_OF_LIB__",
-                "Add A Conventional Name",
-                LibName->pos.line, LibName->pos.collumn
-            );
-        }
-
-        if (Inst.Tokens.size() > 2)
-        {
-            OrbitLog::SyntaxLog::SyntaxWarn(
-                "Parsing",
-                "Extra Tokens After <LIB_NAME> Statement", 
-                "Unexpected "+Inst.Tokens[3]->Lexeme(Data)+", Ignoring. .. ...",
-                "Add ';' or <NEW-LINE> To Spearate",
-                Inst.Tokens[3]->pos.line, Inst.Tokens[3]->pos.collumn
-            );
-        }
-
-        LibraryNode* Node = ParserUtils::
-            MakeNode<LibraryNode>(State, Res, Memory);
-        Node->Name = Name;
-        return Node;
-    }
     
-    // Parse Import Statements | Parseia Instruções de Importações.
 }
 
 // ======== ENTRY-POINT | PONTO DE ENTRADA ======= //
@@ -771,7 +706,7 @@ ControlNode* ControlParser::ParseControl(
             else if (Lexeme == "return_if")
                 return ControlUtils::ParseReturn(Inst, State, Res, Data, DeclParser, ExprParser, Memory, true);
             else if (Lexeme == "echo")
-                return ControlUtils::ParseEcho(Inst, State, Res, Data, DeclParser, ExprParser, Memory);    
+                return ControlUtils::ParseEcho(Inst, State, Res, Data, DeclParser, ExprParser, Memory);
             else if (Lexeme == "end")
                 {
                     if (
@@ -794,7 +729,7 @@ ControlNode* ControlParser::ParseControl(
                     ParserUtils::PopBodyStack(State, Data); 
                     State.consumedInst=true;  
                     return nullptr;
-                }            
+                }
             else
                 return nullptr;
         default:

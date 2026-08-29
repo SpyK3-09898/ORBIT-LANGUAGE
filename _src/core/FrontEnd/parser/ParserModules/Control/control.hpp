@@ -23,13 +23,13 @@ class ControlParser
 
     public:
 
-    static ControlNode* ParseControl(
-        Instruction &Inst, 
-        ParseState &State, 
-        ParseResult &Res, 
-        RunTimeData &Data, 
-        DeclarationParser& DeclParser,
-        ExpressionParser& ExprParser,
-        Arena& Memory
-    );
+        static ControlNode* ParseControl(
+            Instruction &Inst, 
+            ParseState &State, 
+            ParseResult &Res, 
+            RunTimeData &Data, 
+            DeclarationParser& DeclParser,
+            ExpressionParser& ExprParser,
+            Arena& Memory
+        );
 };
