@@ -736,7 +736,7 @@ struct ImportNode : SpecialNode
     // DATA
     ExpressionNode* Path;
     ExpressionNode* Base;
-    string Alias;
+    string Alias  = "";
     string Origin = "ORBIT";
     vec<string> Modules{}; 
 
@@ -792,7 +792,8 @@ struct ParseState
 struct ParseResult
 {
     ASTNode* AST;
-    vec<ASTNode*> Contexts;
+    LibraryNode* LibDef;
+    vec<ParseResult> Contexts;
     vec<ImportNode*> ImportRefs{};
 };
 

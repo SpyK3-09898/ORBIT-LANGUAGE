@@ -842,7 +842,7 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
     LibManager LibMan;
     for (ImportNode* I : Res.ImportRefs)
     {
-        OrbitLibrary Lib;
+        OrbitLibrary Lib("", true);
         if (I->Base->Type == NodeType::IDENTIFIER)
             Lib = LibMan.LoadLib(static_cast<IdentifierNode*>(I->Base)->Name, I->Origin, Data);
         else Lib = LibMan.LoadLib(static_cast<IdentifierNode*>(static_cast<MemberAccessNode*>(I->Base)->Object)->Name, I->Origin, Data);

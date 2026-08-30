@@ -7,12 +7,13 @@
 #pragma once
 
 // INCLUDE HEADERS 'N DEPENDENCES | INCLUDE HEADERS E DEPENDENCIAS
- #include "utils/aliases.hpp"
+#include "utils/aliases.hpp"
 #include "Arena/Arena.hpp"
 
 #include <cstddef>
 #include <fstream>
 #include <filesystem>
+#include <streambuf>
 using fstream=std::fstream;
 namespace fs=std::filesystem;
 
@@ -52,6 +53,7 @@ struct OrbitPackage
     >>> Globals;
     PACKAGE_TYPES Type;
     fs::path ConfigPath;
+    fs::path MainFile;
 
     // Constructor | Construtor
     OrbitPackage(PACKAGE_TYPES T)
@@ -254,7 +256,7 @@ struct OrbitPackage
                 ConfigSection*
             >>;
         for (ConfigValue Val : Globals)
-        {   
+        {
 
             if (Val.first == "Type" ) {
                 
@@ -276,6 +278,11 @@ struct OrbitPackage
                 Version = std::get<string>(Val.second);
             }
         }
+        for (ConfigSection& Sect : Sections)
+        {
+            if (Sect.Name != "ORBIT_PACKAGE")
+                throw runt_err("Invalid Config Section In: "+ConfigPath.string());
+        }
     }
 };
 using ConfigValue = 
@@ -286,7 +293,7 @@ using ConfigValue =
         ConfigSection*
     >>;
 
-// Library Repr Pack | Pacote De Representação de Bibliotecas.
+// Library Repr Pack | Representação de Bibliotecas.
 struct OrbitLibrary : OrbitPackage
 {
     // LIB META-DATA | META-DADOS DA BIBLIOTECA.
@@ -294,28 +301,31 @@ struct OrbitLibrary : OrbitPackage
     string Creator;
 
     // CONSTRUCTOR | CONSTRUTOR
-    OrbitLibrary()
-        : OrbitPackage(PACKAGE_TYPES::LIBRARY) 
+    OrbitLibrary(fs::path ConfigPath, bool prev=false)
+        : OrbitPackage(PACKAGE_TYPES::LIBRARY)
         {
+            if (prev) return;
+            ParseConfig(ConfigPath);
+
             for (ConfigSection& Sect : Sections)
             {
                 if (Sect.Name != "ORBIT_PACKAGE")
                     throw runt_err("Unknow <SECTION>: "+Sect.Name);        
                 for (ConfigValue& Val : Sect.Values)
                 {
-                    if (Val.first == "MainFile")
-                    {
-                        if (!holds_alt<string>(Val.second))
-                            throw runt_err("Expected <PATH> In <MAIN-FILE> On: "+ConfigPath.string());
-                        else {
-                            if (!fs::exists(std::get<string>(Val.second)))
-                                throw runt_err("Expected Valud <PATH> In <MAIN-FILE> On: "+ConfigPath.string()+", File Dont Exists: "+std::get<string>(Val.second));
-                        }
-                    } else if (Val.first == "Creator") {
+                    if (Val.first == "Creator") {
 
                         if (!holds_alt<string>(Val.second))
                             throw runt_err("Expected <STRING> In <CREATOR> On: "+ConfigPath.string());
                         Creator = std::get<string>(Val.second);
+                    }                
+                    else if (Val.first == "MainFile")
+                    {
+                        if (!holds_alt<string>(Val.second))
+                            throw runt_err("<STRING> Expected In <MAIN-FILE>");
+                        else if (!fs::exists(ConfigPath.parent_path() / std::get<string>(Val.second)))
+                            throw runt_err("LIB MAIN FILE DONT EXISTS IN: "+fs::path(ConfigPath.parent_path() / std::get<string>(Val.second)).string());
+                        MainFile = ConfigPath.parent_path() / std::get<string>(Val.second);
                     }
                 }
             }
@@ -349,8 +359,9 @@ struct RunTimeArg
 // Shared Exec Data | Data de Execução compartilhada.
 struct RunTimeData
 {
-    vec<RunTimeArg> Args;
-    vec<OrbitLibrary*> Librarys;
+    vec<RunTimeArg> Args{};
+    vec<OrbitLibrary*> Librarys{};
+    vec<string> ImportStack{};
     std::filesystem::path LogDir;
     string source;
     struct {

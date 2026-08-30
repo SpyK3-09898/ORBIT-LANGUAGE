@@ -50,8 +50,7 @@ class LibManager
                 OrbitLog::Error("lib_manager.hpp", "Cannot Find Confg File In: "+Name, true, 404);
 
             // Data | Dados.
-            OrbitLibrary Pack;
-            Pack.ParseConfig(GetOrbitOrigin(Data.argv) / "_lib/libs" / Origin / Name / "ORBIT.cfg");
+            OrbitLibrary Pack(GetOrbitOrigin(Data.argv) / "_lib/libs" / Origin / Name / "ORBIT.cfg");
             Pack.Name = Name;
             
             return Pack;

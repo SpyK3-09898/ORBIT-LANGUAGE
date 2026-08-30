@@ -179,6 +179,7 @@ struct SAState
         bool extensionDefined = false;
         bool libraryDefined   = false;
         bool methodDefined    = false;
+        bool importsDefined   = false;
     } Flags;
 };
 
@@ -197,7 +198,7 @@ class SemanticAnalizer
         SAResult InitSA(ParseResult& PRes, RunTimeData& Data, Arena& Memory);
     private:
 
-        void LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
+        void LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr, ParseResult* PRes=nullptr);
 
         void LookUpProgram(ProgramNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         void LookUpBody(BodyNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Scope* S = nullptr);
@@ -227,7 +228,9 @@ class SemanticAnalizer
         //void LookUpForDef(ForDefNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
         void LookUpReturn(ReturnNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpEcho(EchoNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
-        void LookUpLibraryDef(LibraryNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
+        
+        void LookUpLibraryDef(LibraryNode& Node, SAState& State, ParseResult& Res, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
+        void LookUpImport(ImportNode& Node, SAState& State, ParseResult& Res, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
 };
 
 // EOF

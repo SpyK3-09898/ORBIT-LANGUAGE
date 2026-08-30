@@ -1,4 +1,4 @@
 
 _library __MAIN__;
 
-_import stdlib as std;
+_import stdlib as standart;
