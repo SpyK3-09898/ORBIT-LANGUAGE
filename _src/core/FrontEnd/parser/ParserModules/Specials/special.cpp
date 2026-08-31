@@ -110,7 +110,10 @@ namespace SpecialUtils
                     if (from && !Node->Base)
                         Node->Base = Curr;
                     else
+                    {
+                        Node->Bottom = Curr;
                         Node->Modules.push_back(O->Name);
+                    }
                 }
             }
             else

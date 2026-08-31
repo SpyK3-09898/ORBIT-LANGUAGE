@@ -1213,9 +1213,7 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
         return;
 
     if (Node.Base->Type == NodeType::IDENTIFIER)
-    {
         ImportName = static_cast<IdentifierNode*>(Node.Base)->Name;
-    }
     else if (Node.Base->Type == NodeType::MEMBER_ACCESS)
     {
         MemberAccessNode* Member = static_cast<MemberAccessNode*>(Node.Base);
@@ -1367,7 +1365,6 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
 
     // Open File | Abre o Arquivo.
     fstream file(FoundLib->MainFile);
-
     if (!file.is_open())
     {
         OrbitLog::Error(
@@ -1385,7 +1382,7 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
     LexResult   LR = L.InitL(file, Data, Memory);
     LR = T.InitT(LR, Data, Memory);
     ParseResult PR = P.InitP(LR, Data, Memory);
-    SA.InitSA(PR, Data, Memory);
+    SAResult SAR = SA.InitSA(PR, Data, Memory);
 
     // Search Library Name | Procura o Nome da Biblioteca.
     string LibraryName;
@@ -1433,7 +1430,7 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
     if (!LibraryFound)
     {
         OrbitLog::SyntaxLog::SyntaxError(
-            "Semantic", 
+            "Semantic",
             "Cannot Find Library Define In", 
             "Cannot Reference a Library WhitOut Name. Possible CASCADING-CHAIN of ERRORS!!!", 
             "Define a '_library' in Module",
@@ -1450,11 +1447,12 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
     }
 
     // Set Data | Define os Dados.
-    Res.Contexts.push_back({LibraryName, std::move(PR)});
-
+    Res.Contexts.push_back({LibraryName, {SAR, std::move(PR)}});
     Data.ImportStack.pop_back();
-
     State.Flags.importsDefined = true;
+
+    Symbol* Sym = SAUtils::CreateSymbol(Node.Alias, Node, State, SARes, Memory);
+    Sym->Type = Node.Base == Node.Bottom ? SymbolTypes::LIBRARIE : SymbolTypes::MODULE;
 }
 
 // ===== CONTROLS ===== //

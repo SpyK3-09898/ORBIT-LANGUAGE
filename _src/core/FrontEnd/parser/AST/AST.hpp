@@ -240,7 +240,7 @@ enum class EchoTypes
 
 
 // STRUCTS.
-
+struct SAResult;
 
 // Pos of Nodes | Posição dos Nodes
 using NodePos = CodePosition;
@@ -736,6 +736,7 @@ struct ImportNode : SpecialNode
     // DATA
     ExpressionNode* Path;
     ExpressionNode* Base;
+    ExpressionNode* Bottom;
     string Alias  = "";
     string Origin = "ORBIT";
     vec<string> Modules{}; 
@@ -793,7 +794,7 @@ struct ParseResult
 {
     ASTNode* AST;
     LibraryNode* LibDef;
-    vec<pair<string, ParseResult>> Contexts;
+    vec<pair<string, pair<SAResult, ParseResult>>> Contexts;
     vec<ImportNode*> ImportRefs{};
 };
 
