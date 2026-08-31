@@ -742,7 +742,7 @@ struct ImportNode : SpecialNode
 
     // CONSTRUCTOR
     ImportNode(NodePos& Pos)
-        : SpecialNode(NodeType::LIBRARY, Pos) {};
+        : SpecialNode(NodeType::IMPORT, Pos) {};
 };
 
 // Error Special Nodes | Nós de Erros de Instruções Especiais.
@@ -793,7 +793,7 @@ struct ParseResult
 {
     ASTNode* AST;
     LibraryNode* LibDef;
-    vec<ParseResult> Contexts;
+    vec<pair<string, ParseResult>> Contexts;
     vec<ImportNode*> ImportRefs{};
 };
 

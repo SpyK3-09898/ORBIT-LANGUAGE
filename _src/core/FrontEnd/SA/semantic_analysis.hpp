@@ -200,8 +200,8 @@ class SemanticAnalizer
 
         void LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr, ParseResult* PRes=nullptr);
 
-        void LookUpProgram(ProgramNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory);
-        void LookUpBody(BodyNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Scope* S = nullptr);
+        void LookUpProgram(ProgramNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, ParseResult* PRes=nullptr);
+        void LookUpBody(BodyNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Scope* S = nullptr, ParseResult* PRes=nullptr);
 
         void LookUpLiteral(LiteralNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpIdentifier(IdentifierNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);

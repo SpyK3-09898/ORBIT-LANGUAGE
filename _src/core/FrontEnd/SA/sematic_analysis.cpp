@@ -999,11 +999,10 @@ void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, 
 
     switch (Node.Type)
     {
-
         // PROGRAM
         case NodeType::PROGRAM:
             LookUpProgram
-            (static_cast<ProgramNode&>(Node), State, Res, Data, Memory);
+            (static_cast<ProgramNode&>(Node), State, Res, Data, Memory, PRes);
             break;
 
         case NodeType::BODY:
@@ -1118,7 +1117,7 @@ void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, 
 }
 
 // LookUp a ProgramNode | Olha um ProgramNode.
-void SemanticAnalizer::LookUpProgram(ProgramNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void SemanticAnalizer::LookUpProgram(ProgramNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, ParseResult* PRes)
 {
     Scope* GlobalScope = Memory.New<Scope>();
 
@@ -1133,12 +1132,12 @@ void SemanticAnalizer::LookUpProgram(ProgramNode& Node, SAState& State, SAResult
     for (ASTNode* N : Node.Node->Data)
     {
         if (N)
-            LookUpNode(*N, State, Res, Data, Memory);
+            LookUpNode(*N, State, Res, Data, Memory, nullptr, PRes);
     }
 }
 
 // LookUp BodyNode | Olha um BodyBode.
-void SemanticAnalizer::LookUpBody(BodyNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Scope* S)
+void SemanticAnalizer::LookUpBody(BodyNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Scope* S, ParseResult* PRes)
 {
     if (!S)
         EntryScope(Node, State, Res, Data, Memory);
@@ -1146,7 +1145,7 @@ void SemanticAnalizer::LookUpBody(BodyNode& Node, SAState& State, SAResult& Res,
     for (ASTNode* N : Node.Data)
     {
         if (N)
-            LookUpNode(*N, State, Res, Data, Memory);
+            LookUpNode(*N, State, Res, Data, Memory, nullptr, PRes);
     }
 
     LeaveScope(State, Res, Data);
@@ -1169,6 +1168,7 @@ void SemanticAnalizer::LookUpLibraryDef(LibraryNode& Node, SAState& State, Parse
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
         return;        
     }
+
     if (State.Flags.importsDefined or State.Flags.methodDefined)
     {
         OrbitLog::SyntaxLog::SyntaxError(
@@ -1181,19 +1181,19 @@ void SemanticAnalizer::LookUpLibraryDef(LibraryNode& Node, SAState& State, Parse
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
         return;
     }
+
     Symbol* Sym = 
             SAUtils::CreateSymbol(Node.Name, Node, State, SARes, Memory);
-    Sym->Type   = 
+    Sym->Type = 
             SymbolTypes::LIBRARIE;
-    State.Flags.libraryDefined 
-                = true;
+    State.Flags.libraryDefined = true;
 }
 
 // LookUp Importation Nodes | Olha Um Nó de Importações.
 void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResult& Res, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // Error Prev | Prevenção de Erros.
-    if (State.CurrScope->Type != BodyTypes::PROGRAM)
+    if (!State.CurrScope || State.CurrScope->Type != BodyTypes::PROGRAM)
     {
         OrbitLog::SyntaxLog::SyntaxError(
             "Semantic", 
@@ -1207,101 +1207,254 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
     }
 
     // Take Data | Pega os Dados.
-    bool finded=false;
-    string Name;
+    string ImportName;
+
+    if (!Node.Base)
+        return;
+
     if (Node.Base->Type == NodeType::IDENTIFIER)
     {
-        Name = static_cast<IdentifierNode*>(Node.Base)->Name;
-    } else 
-        Name = static_cast<IdentifierNode*>(static_cast<MemberAccessNode*>(Node.Base)->Object)->Name;
+        ImportName = static_cast<IdentifierNode*>(Node.Base)->Name;
+    }
+    else if (Node.Base->Type == NodeType::MEMBER_ACCESS)
+    {
+        MemberAccessNode* Member = static_cast<MemberAccessNode*>(Node.Base);
+
+        if (
+            !Member->Object ||
+            Member->Object->Type != NodeType::IDENTIFIER
+        )
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                "Invalid <IMPORT> Target",
+                "Cannot Resolve Library Name From Import",
+                "Use a Valid Library Name",
+                Node.pos.line, Node.pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+
+            return;
+        }
+
+        ImportName = static_cast<IdentifierNode*>(Member->Object)->Name;
+    }
+    else
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            "Invalid <IMPORT> Target",
+            "Expected <IDENTIFIER> Or <MEMBER_ACCESS>",
+            "Use a Valid Library Name",
+            Node.pos.line, Node.pos.collumn
+        );
+
+        if (!Data.flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(Data);
+
+        return;
+    }
 
     // Already Import Warns | Avisos de 'Ja Importado'.
     for (ImportNode* N : Res.ImportRefs)
     {
-        if (N == &Node)
+        if (!N || N == &Node)
+            continue;
+
+        string PreviousName;
+
+        if (!N->Base)
+            continue;
+
+        if (N->Base->Type == NodeType::IDENTIFIER)
         {
-            if (finded)
+            PreviousName = static_cast<IdentifierNode*>(N->Base)->Name;
+        }
+        else if (N->Base->Type == NodeType::MEMBER_ACCESS)
+        {
+            MemberAccessNode* Member = static_cast<MemberAccessNode*>(N->Base);
+
+            if (
+                Member->Object &&
+                Member->Object->Type == NodeType::IDENTIFIER
+            )
             {
-                OrbitLog::SyntaxLog::SyntaxWarn(
-                    "Semantic", 
-                    "Lib Already Imported", 
-                    "Lib: '"+Name+"' Already Have A Valid Reference In Import Data",
-                    "Remove Import Statement", 
-                    Node.pos.line, Node.pos.collumn
-                );
-            } else finded = !finded;
+                PreviousName = static_cast<IdentifierNode*>(Member->Object)->Name;
+            }
+        }
+
+        if (PreviousName == ImportName)
+        {
+            OrbitLog::SyntaxLog::SyntaxWarn(
+                "Semantic", 
+                "Lib Already Imported", 
+                "Lib: '"+ImportName+"' Already Have A Valid Reference In Import Data",
+                "Remove Import Statement", 
+                Node.pos.line, Node.pos.collumn
+            );
+
+            return;
         }
     }
 
+    Res.ImportRefs.push_back(&Node);
+
     // Try Find Library | Tenta Encontrar A biblioteca.
     OrbitLibrary* FoundLib = nullptr;
+
     for (OrbitLibrary* Lib : Data.Librarys)
     {
-        if (Lib->Name == Name)
+        if (!Lib)
+            continue;
+        if (Lib->Name == ImportName)
         {
             FoundLib = Lib;
             break;
         }
     }
 
-    if (FoundLib)
+    if (!FoundLib)
     {
-        // Dependence Detector | Detector de Dependencias
-        if (
-            std::find
-            (
-                Data.ImportStack.begin(), 
-                Data.ImportStack.end(),
-                Name
-            ) != Data.ImportStack.end()
-        )
-        {
-            OrbitLog::SyntaxLog::SyntaxError(
-                "Semantic", 
-                "Import Dependence Detected", 
-                "Import: "+Name+" Has Been Imported",
-                "Remove Import Or change The Project Architeture",
-                Node.pos.line, Node.pos.collumn
-            );
-            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-            return;
-        }
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            "Cannot Find: "+ImportName,
+            "Lib: "+ImportName+" Dont Exists Or Interpreter/Compiler Error",
+            "~",
+            Node.pos.line,
+            Node.pos.collumn
+        );
 
-        // Set Data | Define os Dados.
-        Data.ImportStack.push_back(Name);
-        vec<OrbitLibrary*> Libs = std::move(Data.Librarys);
-        Data.Librarys.clear();
+        if (!Data.flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(Data);
 
-        // Instantiate Steps | Instancia os Passos.
-        Lexer            L;
-        Tokenizer        T;
-        Parser           P;
-        SemanticAnalizer SA;
-
-        // Open File | Abre o Arquivo.
-        fstream file(FoundLib->MainFile);
-        if (!file.is_open())
-        {
-            OrbitLog::Error("semantic_analisys.hpp", "Cannot Open Library, Returning", false, 1);
-            Data.Librarys = std::move(Libs);
-            Data.ImportStack.pop_back();
-            
-            return;
-        }
-
-        // Parse Lib | Parseia a Biblioteca.
-        LexResult   LR = L.InitL(file, Data, Memory);
-        LR = T.InitT(LR, Data, Memory);
-        ParseResult PR = P.InitP(LR, Data, Memory);
-        SA.InitSA(PR, Data, Memory);
-
-        // Set Data | Define os Dados.
-        Res.Contexts.push_back(std::move(PR));
-        Data.Librarys = std::move(Libs);
-        Data.ImportStack.pop_back();
+        return;
     }
 
-    State.Flags.importsDefined=true;
+    // Dependence Detector | Detector de Dependencias
+    if (
+        std::find
+        (
+            Data.ImportStack.begin(), 
+            Data.ImportStack.end(),
+            ImportName
+        ) != Data.ImportStack.end()
+    )
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic", 
+            "Import Dependence Detected", 
+            "Import: "+ImportName+" Has Been Imported",
+            "Remove Import Or change The Project Architeture",
+            Node.pos.line, Node.pos.collumn
+        );
+
+        if (!Data.flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(Data);
+
+        return;
+    }
+
+    // Set Data | Define os Dados.
+    Data.ImportStack.push_back(ImportName);
+
+    // Instantiate Steps | Instancia os Passos.
+    Lexer            L;
+    Tokenizer        T;
+    Parser           P;
+    SemanticAnalizer SA;
+
+    // Open File | Abre o Arquivo.
+    fstream file(FoundLib->MainFile);
+
+    if (!file.is_open())
+    {
+        OrbitLog::Error(
+            "semantic_analisys.hpp",
+            "Cannot Open Library, Returning",
+            false,
+            1
+        );
+
+        Data.ImportStack.pop_back();
+        return;
+    }
+
+    // Parse Lib | Parseia a Biblioteca.
+    LexResult   LR = L.InitL(file, Data, Memory);
+    LR = T.InitT(LR, Data, Memory);
+    ParseResult PR = P.InitP(LR, Data, Memory);
+    SA.InitSA(PR, Data, Memory);
+
+    // Search Library Name | Procura o Nome da Biblioteca.
+    string LibraryName;
+    bool LibraryFound = false;
+
+    if (PR.AST)
+    {
+        ProgramNode* Program = static_cast<ProgramNode*>(PR.AST);
+
+        if (Program->Node)
+        {
+            for (ASTNode* N : Program->Node->Data)
+            {
+                if (!N)
+                    continue;
+
+                if (N->Type == NodeType::LIBRARY)
+                {
+                    if (LibraryFound)
+                    {
+                        OrbitLog::SyntaxLog::SyntaxError(
+                            "Semantic",
+                            "<LIBRARY>'s Already Defined",
+                            "More Than One <LIBRARY> Statement Was Found In Module",
+                            "Keep Only One <LIBRARY> Definition",
+                            N->pos.line,
+                            N->pos.collumn
+                        );
+
+                        Data.ImportStack.pop_back();
+
+                        if (!Data.flags.debugMode)
+                            OrbitLog::SyntaxLog::ThrowLog(Data);
+
+                        return;
+                    }
+
+                    LibraryName = static_cast<LibraryNode*>(N)->Name;
+                    LibraryFound = true;
+                }
+            }
+        }
+    }
+
+    if (!LibraryFound)
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic", 
+            "Cannot Find Library Define In", 
+            "Cannot Reference a Library WhitOut Name. Possible CASCADING-CHAIN of ERRORS!!!", 
+            "Define a '_library' in Module",
+            Node.pos.line,
+            Node.pos.collumn
+        );
+
+        Data.ImportStack.pop_back();
+
+        if (!Data.flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(Data);
+
+        return;
+    }
+
+    // Set Data | Define os Dados.
+    Res.Contexts.push_back({LibraryName, std::move(PR)});
+
+    Data.ImportStack.pop_back();
+
+    State.Flags.importsDefined = true;
 }
 
 // ===== CONTROLS ===== //
@@ -2738,7 +2891,7 @@ SAResult SemanticAnalizer::InitSA(ParseResult& PRes, RunTimeData& Data, Arena& M
     }
 
     // LookUp | Olha
-    LookUpNode(*PRes.AST, State, Res, Data, Memory);
+    LookUpNode(*PRes.AST, State, Res, Data, Memory, nullptr, &PRes);
 
     // Symbol Final Tratament | Tratamento Final dos Simbolos.
     for (auto& [id, Sym] : Res.Symbols)

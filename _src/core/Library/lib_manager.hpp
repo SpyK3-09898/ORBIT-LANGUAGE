@@ -23,7 +23,7 @@ class LibManager
     public:
 
         // Load a Library | Carrega Uma Biblioteca.
-        OrbitLibrary LoadLib(string Name, string Origin, RunTimeData& Data)
+        OrbitLibrary* LoadLib(string Name, string Origin, RunTimeData& Data, Arena& Memory)
         {
             // Error Prev | Prevenção de Erros:
             if (!fs::exists(GetOrbitOrigin(Data.argv) / "_lib/libs" / Origin / Name))
@@ -50,9 +50,11 @@ class LibManager
                 OrbitLog::Error("lib_manager.hpp", "Cannot Find Confg File In: "+Name, true, 404);
 
             // Data | Dados.
-            OrbitLibrary Pack(GetOrbitOrigin(Data.argv) / "_lib/libs" / Origin / Name / "ORBIT.cfg");
-            Pack.Name = Name;
-            
+            OrbitLibrary* Pack = Memory.New<OrbitLibrary>(
+                GetOrbitOrigin(Data.argv) / "_lib/libs" / Origin / Name / "ORBIT.cfg"
+            );
+
+            Pack->Name = Name;
             return Pack;
         }
 };

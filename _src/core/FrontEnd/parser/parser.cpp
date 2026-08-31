@@ -839,16 +839,16 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
     }
 
     // Load Librarys | Carrega As Bibliotecas.
-    LibManager LibMan;
+    LibManager* LibMan;
     for (ImportNode* I : Res.ImportRefs)
     {
-        OrbitLibrary Lib("", true);
+        OrbitLibrary* Lib = nullptr;
         if (I->Base->Type == NodeType::IDENTIFIER)
-            Lib = LibMan.LoadLib(static_cast<IdentifierNode*>(I->Base)->Name, I->Origin, Data);
-        else Lib = LibMan.LoadLib(static_cast<IdentifierNode*>(static_cast<MemberAccessNode*>(I->Base)->Object)->Name, I->Origin, Data);
+            Lib = LibMan->LoadLib(static_cast<IdentifierNode*>(I->Base)->Name, I->Origin, Data, Memory);
+        else Lib = LibMan->LoadLib(static_cast<IdentifierNode*>(static_cast<MemberAccessNode*>(I->Base)->Object)->Name, I->Origin, Data, Memory);
         
-        Lib.DeclName = I->Alias;
-        Data.Librarys.push_back(&Lib);
+        Lib->DeclName = I->Alias;
+        Data.Librarys.push_back(Lib);
     }
     if (State.Bodys.size() > 1)
     {
