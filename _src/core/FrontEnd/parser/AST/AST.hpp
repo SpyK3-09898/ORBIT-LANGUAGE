@@ -252,6 +252,7 @@ struct ASTNode
     NodePos pos;
     NodeType Type;
     ui16 SymbolId=0;
+    bool export_decl=false;
 
     // UTILS | UTILIDADES
     inline string GetNodeType()
@@ -301,7 +302,7 @@ struct ASTNode
         return "<UNKNOWN>";
     }
 
-    // CONSTRUCTOR | COSNTRUTOR
+    // CONSTRUCTOR | CONSTRUTOR
     ASTNode(NodeType T, NodePos P)
         : pos(P), Type(T) {};
 };
@@ -518,7 +519,6 @@ struct ErrorExprNode : ExpressionNode
 // Base Decl Node | No de Decl Base
 struct DeclarationNode : ASTNode
 {
-    bool export_decl=false;
     // CONSTRUCTOR | CONSTRUTOR 
     DeclarationNode(NodeType T, NodePos P)
         : ASTNode(T, P) {};

@@ -1,4 +1,6 @@
 
-_library __MAIN__;
+_library __ORBIT_STANDART_LIB__;
 
-
+export namespace Oi:
+	export const var y = 15;
+end

@@ -213,6 +213,23 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
             break;
         }
 
+        case NodeType::NAMESPACE_DECL:
+        {
+            auto& N = static_cast<NameSpaceDecl&>(Node);
+
+            file << Indent << "Namespace\n";
+            file << Indent << "Name: " << N.Name << '\n';
+            file << Indent << "Nested: " << (N.isNested ? "true" : "false") << '\n';
+
+            if (N.Body)
+            {
+                file << Indent << "Body:\n";
+                DumbNode(*N.Body, file, Data, Depth + 1);
+            }
+
+            break;
+        }
+
         case NodeType::RETURN:
         {
             auto& N = static_cast<ReturnNode&>(Node);
@@ -234,6 +251,7 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
             auto& N = static_cast<IfNode&>(Node);
 
             file << Indent << "If\n";
+            file << Indent << "Always True: " << (N.alwaysTrue ? "true" : "false") << '\n';
 
             if (N.Cond)
             {
@@ -304,12 +322,14 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
             break;
         }
 
-            case NodeType::WHILE:
+        case NodeType::WHILE:
         {
             auto& N = static_cast<WhileNode&>(Node);
 
             file << Indent << "While\n";
             file << Indent << "LoopType: " << (int)N.Type << '\n';
+            file << Indent << "Always Execute First: "
+                 << (N.alwaysExecuteFirst ? "true" : "false") << '\n';
 
             if (N.Cond)
             {
@@ -421,7 +441,23 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
 
             break;
         }
-        
+
+        case NodeType::ECHO:
+        {
+            auto& N = static_cast<EchoNode&>(Node);
+
+            file << Indent << "Echo\n";
+            file << Indent << "Type: " << (int)N.Type << '\n';
+
+            if (N.Value)
+            {
+                file << Indent << "Value:\n";
+                DumbNode(*N.Value, file, Data, Depth + 1);
+            }
+
+            break;
+        }
+
         // EXPRESSIONS | EXPRESSOES.
         case NodeType::LITERAL:
         {
@@ -543,6 +579,8 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
             auto& N = static_cast<IndexAccessNode&>(Node);
 
             file << Indent << "IndexAccess\n";
+            file << Indent << "Fallback: "
+                 << (N.fallback ? "true" : "false") << '\n';
 
             if (N.Object)
             {
@@ -558,6 +596,7 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
 
             break;
         }
+
         case NodeType::FN_CALL:
         {
             auto& N = static_cast<FunctionCall&>(Node);
@@ -664,6 +703,64 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
         case NodeType::ERROR:
         {
             file << Indent << "ErrorNode\n";
+            break;
+        }
+
+        case NodeType::LIBRARY:
+        {
+            auto& N = static_cast<LibraryNode&>(Node);
+
+            file << Indent << "Library\n";
+            file << Indent << "Name: " << N.Name << '\n';
+
+            break;
+        }
+
+        case NodeType::IMPORT:
+        {
+            auto& N = static_cast<ImportNode&>(Node);
+
+            file << Indent << "Import\n";
+            file << Indent << "Alias: " << N.Alias << '\n';
+            file << Indent << "Origin: " << N.Origin << '\n';
+
+            if (!N.Modules.empty())
+            {
+                file << Indent << "Modules: " << N.Modules.size() << '\n';
+
+                for (size_t i = 0; i < N.Modules.size(); i++)
+                {
+                    file << Indent
+                         << "["
+                         << i
+                         << "]: "
+                         << N.Modules[i]
+                         << '\n';
+                }
+            }
+
+            if (N.Path)
+            {
+                file << Indent << "Path:\n";
+                DumbNode(*N.Path, file, Data, Depth + 1);
+            }
+
+            if (N.Base)
+            {
+                file << Indent << "Base:\n";
+                DumbNode(*N.Base, file, Data, Depth + 1);
+            }
+
+            if (N.Bottom)
+            {
+                file << Indent << "Bottom:\n";
+                DumbNode(*N.Bottom, file, Data, Depth + 1);
+            }
+            else
+            {
+                file << Indent << "Bottom: nullptr\n";
+            }
+
             break;
         }
 

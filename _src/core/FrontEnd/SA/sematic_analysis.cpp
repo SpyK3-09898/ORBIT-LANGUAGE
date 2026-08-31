@@ -17,6 +17,7 @@
 #include "tools/console.hpp"
 #include "../../RunTimeData.hpp"
 #include <algorithm>
+#include <cstddef>
 #include <fstream>
 #include <format>
 #include <string>
@@ -80,6 +81,8 @@ namespace SAUtils {
         Node.SymbolId              = State.nextId;
         Sym->Id                    = Node.SymbolId;
         State.nextId++;
+        if (Node.export_decl)
+            Sym->isExported = true;
 
         return Sym;
     }
@@ -327,17 +330,17 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
                 ObjInfo->Kind == TypeKind::MONO_STATE ||
                 ObjInfo->Kind == TypeKind::UNK
             )
-            {
-                TInfo->Kind = TypeKind::MONO_STATE;
-            }
+                TInfo->Kind = TypeKind::MONO_STATE;     
             else
-            {
                 TInfo->Kind = TypeKind::MONO_STATE;
-            }
+            
 
             // Take Object Data | Pega Os Dados Do Objeto.
             string ObjName = SAUtils::GetIValueName(Ma.Object);
-            Symbol* ObjSym = State.CurrScope->FindSym(ObjName);
+            Symbol* ObjSym = ObjInfo ? ObjInfo->Father : nullptr;
+
+            if (!ObjSym)
+                ObjSym = State.CurrScope ? State.CurrScope->FindSym(ObjName) : nullptr;
 
             // Undeclared Object | Objeto Não Declarado.
             if (!ObjSym)
@@ -354,7 +357,13 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
             }
 
             // NAMESPACES
-            if (ObjSym->Type == SymbolTypes::NAMESPACE && ObjSym->LinkedScope)
+            if (
+                ObjSym &&
+                (ObjSym->Type == SymbolTypes::NAMESPACE or
+                ObjSym->Type == SymbolTypes::MODULE     or
+                ObjSym->Type == SymbolTypes::LIBRARY)   and
+                ObjSym->LinkedScope
+            )
             {
                 // Take Member Name | Pega O Nome Do Membro.
                 string M_Name;
@@ -382,7 +391,7 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
                     OrbitLog::SyntaxLog::SyntaxError(
                         "Semantic",
                         "Trying To Acess A Undeclared Member ",
-                        "Member '" +M_Name+ "' Not Found in Namespace '" + ObjName + "'",
+                        "Member '" +M_Name+ "' Not Found in Namespace '" + ObjSym->Name + "'",
                         "Check the Name or Declare-It",
                         Ma.pos.line, Ma.pos.collumn
                     );
@@ -396,6 +405,7 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
                     *TInfo = *MemberSym->TInfo;
                     if (Ma.Member)
                         Ma.Member->SymbolId = MemberSym->Id;
+                    Node->SymbolId = MemberSym->Id;
                 }
             } else // OTHERS:
                 TInfo->Kind = TypeKind::MONO_STATE;
@@ -2045,10 +2055,19 @@ void SemanticAnalizer::LookUpIdentifier(IdentifierNode& Node, SAState& State, SA
 {
     // Error Prev | Prevenção de Erros.
     bool found = false;
+    Symbol* Sym = nullptr;
+
     if (Owner && Owner->LinkedScope)
-        found = Owner->LinkedScope->FindSymLocal(Node.Name) != nullptr;
+    {
+        Sym = Owner->LinkedScope->FindSym(Node.Name);
+        found = Sym != nullptr;
+    }
     else if (State.CurrScope)
-        found = State.CurrScope->FindSym(Node.Name) != nullptr;
+    {
+        Sym = State.CurrScope->FindSym(Node.Name);
+        found = Sym != nullptr;
+    }
+
     if (!found)
     {
         OrbitLog::SyntaxLog::SyntaxError(
@@ -2064,10 +2083,23 @@ void SemanticAnalizer::LookUpIdentifier(IdentifierNode& Node, SAState& State, SA
         return;
     }
 
-    // Data
-    Symbol* Sym = State.CurrScope->FindSym(Node.Name);
-    if (!Sym and Owner)
-        Sym = Owner->LinkedScope->FindSym(Node.Name);
+    if (
+        Sym and Owner and
+        (Owner->Type == SymbolTypes::MODULE or Owner->Type == SymbolTypes::LIBRARY) and
+        !Sym->isExported
+    )
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            "Trying To Acess a Non-Exported Member",
+            "Member '" + Node.Name + "' Is Not Exported",
+            "Add 'export' On The Declaration Or Use Another Name",
+            Node.pos.line, Node.pos.collumn
+        );
+        if (!Data.flags.debugMode)
+            OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;
+    }
 
     if (Sym)
     {
@@ -2546,13 +2578,13 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
     {
     
         case SymbolTypes::NAMESPACE:
+        case SymbolTypes::MODULE:
+        case SymbolTypes::LIBRARY:
         {
             if (Node.Member)
                 LookUpNode(*Node.Member, State, Res, Data, Memory, Sym);
-
             if (Node.Member && Node.Member->SymbolId != 0)
                 Node.SymbolId = Node.Member->SymbolId;
-
             break;
         }
         case SymbolTypes::STRUCT:

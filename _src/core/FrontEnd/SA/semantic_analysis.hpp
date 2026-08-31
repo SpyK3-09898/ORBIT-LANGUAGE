@@ -118,6 +118,7 @@ struct Symbol
     ui32 write_count = 0;
     ui16 Id          = 0;
     bool inited      = false;
+    bool isExported  = false;
 };
 
 // Scope Repr | Representação de Escopos.
