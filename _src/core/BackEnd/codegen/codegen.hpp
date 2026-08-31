@@ -111,6 +111,7 @@ class CodeGenerator
     public:
     
         ByteCode InitCG(ParseResult& PRes, SAResult& SARes, RunTimeData& Data, Arena& Memory);
+    
     private:
     
     // OTHERS

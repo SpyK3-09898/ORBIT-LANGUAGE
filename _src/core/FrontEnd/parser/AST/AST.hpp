@@ -518,7 +518,8 @@ struct ErrorExprNode : ExpressionNode
 // Base Decl Node | No de Decl Base
 struct DeclarationNode : ASTNode
 {
-    // CONSTRUCTOR | COSBNTRUTOR 
+    bool export_decl=false;
+    // CONSTRUCTOR | CONSTRUTOR 
     DeclarationNode(NodeType T, NodePos P)
         : ASTNode(T, P) {};
 };
@@ -794,7 +795,7 @@ struct ParseResult
 {
     ASTNode* AST;
     LibraryNode* LibDef;
-    vec<pair<string, pair<SAResult, ParseResult>>> Contexts;
+    unord_map<string, pair<ParseResult, SAResult*>> Contexts;
     vec<ImportNode*> ImportRefs{};
 };
 

@@ -26,19 +26,19 @@ struct Symbol;
 // Typeof Symbols | Tipo dos Simbolos(Obvio).
 enum class SymbolTypes: ui8
 {
-    UNK,
-    VAR,
-    FN,
-    IDENTIFIER,
-    NAMESPACE,
-    PARAM,
-    ARRAY,
-    TABLE,
-    STRUCT,
-    CLASS,
-    ENUM,
-    MODULE,
-    LIBRARIE 
+    UNK,        // 0
+    VAR,        // 1
+    FN,         // 2
+    IDENTIFIER, // 3
+    NAMESPACE,  // 4
+    PARAM,      // 5
+    ARRAY,      // 6
+    TABLE,      // 7
+    STRUCT,     // 8
+    CLASS,      // 9
+    ENUM,       // 10
+    MODULE,     // 11
+    LIBRARY     // 12
 };
 
 // Kindof Types | kind dos Tipos.
@@ -167,6 +167,8 @@ struct Scope
 };
 
 // STATE & RESULT | ESTADO E RESULTADO.
+
+// Current State of Semantic | Estado Atual do Analisador.
 struct SAState 
 {
     Scope* CurrScope = nullptr;
@@ -183,6 +185,7 @@ struct SAState
     } Flags;
 };
 
+// Result of Semantic Program | Resultado do Programa de Analise.
 struct SAResult 
 {
     Scope* GlobalScope = nullptr;

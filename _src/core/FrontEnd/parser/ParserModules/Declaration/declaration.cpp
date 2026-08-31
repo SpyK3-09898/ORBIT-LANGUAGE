@@ -64,6 +64,8 @@ namespace DeclUtils {
 
             if (argLexeme == "const")
                 Decl->MutType = MutableTypes::CONST;
+            else if (argLexeme == "export")
+                Decl->export_decl=true;
         }
 
         string name = NameToken->Lexeme(Data);
@@ -255,7 +257,6 @@ namespace DeclUtils {
                 ::MakeNode<ErrorDeclNode>(State, Res, Memory);
         }
 
-        // nome da função
         E = Inst.Advance();
         ParserUtils::UpdateStatePos(E, State);
         string Name = E->Lexeme(Data);
@@ -413,6 +414,11 @@ namespace DeclUtils {
         // SET BODY | DEFINE O BODY;
         Decl->Body = Body;
         Decl->Name = Name;
+        for (Token* Mod : Inst.Modifiers)
+        {
+            if (Mod->Lexeme(Data) == "export")
+                Decl->export_decl=true;
+        }
 
         // UPDATE STACK | ATUALIZA A PILHA
         State.consumedInst = true;
@@ -485,10 +491,12 @@ namespace DeclUtils {
         Decl->Body = Body;
 
         // UPDATE STACK | ATUALIZA A PILHA
-
         for (int i=0; i<State.Bodys.size(); i++)
             if (State.Bodys[i]->Type == BodyTypes::NAMESPACE)
                 Decl->isNested=true;
+        for (Token* Mod : Inst.Modifiers)
+            if (Mod->Lexeme(Data) == "export")
+                Decl->export_decl=true;
 
         State.consumedInst = true;
         ParserUtils::AddInst<NameSpaceDecl>(Decl, State, Res, Memory);

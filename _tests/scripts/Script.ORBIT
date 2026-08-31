@@ -2,3 +2,5 @@
 _library __MAIN__;
 
 _import stdlib as standart;
+
+standart;

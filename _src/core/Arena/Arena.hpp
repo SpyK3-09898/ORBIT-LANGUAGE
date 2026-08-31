@@ -9,6 +9,7 @@
 
 #include "utils/aliases.hpp" // HEADERS
 
+#include <complex>
 #include <cstddef> // LIBRARIES | BIBLIOTECAS
 #include <cstdint>
 #include <utility>
@@ -162,6 +163,10 @@ class Arena
         );
     }
 
+    // STORE A OBJECT ALREADY EXISTS | GUARDA UM OBJETO QUE JA EXISTE.
+    template<typename T>
+    T* Store(T&& Obj)
+        { return New<std::remove_reference_t<T>>(std::forward<T>(Obj)); }
 
     // DELETE A OBJECT | DELETA UM OBJETO.
     template<typename T>

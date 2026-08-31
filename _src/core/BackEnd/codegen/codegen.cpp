@@ -343,8 +343,16 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
             (Node, OpCode::LOAD_FN, id, BC.Chunks[id]->ParamCount, Data, Memory);
     } else if (S == SymbolTypes::NAMESPACE)
     {
+        if (Sym->Type == SymbolTypes::MODULE or Sym->Type == SymbolTypes::LIBRARY)
+            Inst = CodeGenUtils::CreateInst
+                (Node, OpCode::LOAD_PACK, State.GetLocal(Sym->Id), 0, Data, Memory);
+
         // NameSpaces are only a shortcut | NameSpaces são apenas um atalho.
         return;
+    } else if (S == SymbolTypes::MODULE) 
+    {
+        Inst = CodeGenUtils::CreateInst
+            (Node, OpCode::BUILD_PACKAGE, State.GetLocal(Sym->Id), 0, Data, Memory);
     } else
     {
         OrbitLog::Error
@@ -781,8 +789,20 @@ void CodeGenerator::CompileFnDecl(FnDecl* Node, CodeGenState& State, ByteCode& B
 void CodeGenerator::CompileNameSpaceDecl(NameSpaceDecl* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
     // Compile Body | Compila o Corpo.
+    if (Node->export_decl)
+    {
+        ByteInstruction* Inst =
+            CodeGenUtils::CreateInst(Node, OpCode::OPEN_PACK, 0, 0, Data, Memory);
+        BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+    }
     if (Node->Body)
         CompileNode(Node->Body, State, BC, SARes, Data, Memory);
+    if (Node->export_decl)
+    {
+        ByteInstruction* Inst =
+            CodeGenUtils::CreateInst(Node, OpCode::BUILD_PACKAGE, 0, 0, Data, Memory);
+        BC.Chunks[State.currChunk]->Instructions.push_back(Inst);   
+    }
 }
 
 // Handle/Compile Declaration Errors | Manipula/Compila Erros em Declarações

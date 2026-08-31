@@ -146,66 +146,6 @@ struct ByteTable : vec<pair<string, ByteValue>>
 
 // ENUMS | ENUMERAÇÕES
 
-/* OPCODE-TABLE:
-
-    NOP            / -> '0' 
-
-    POP            / -> '1' - X
-    PUSH           / -> '2' - X
-
-    ADD            / -> '3' - X
-    SUB            / -> '4' - X
-    MUL            / -> '5' - X
-    DIV            / -> '6' - X
-    MOD            / -> '7' - X
-    POWER          / -> '8' - X
-
-    NEG            / -> '9' - X
-    NOT            / -> '10' - X
-
-    CMP_EQ         / -> '11' - X
-    CMP_NE         / -> '12' - X
-    CMP_LT         / -> '13' - X
-    CMP_LE         / -> '14' - X
-    CMP_GT         / -> '15' - X
-    CMP_GE         / -> '16' - X
-
-    LOAD_LOCAL     / -> '17' - X
-    STORE_LOCAL    / -> '18' - X
-    LOAD_CONST     / -> '19' - X
-    STORE_CONST    / -> '20' - X
-
-    GET_MEMBER     / -> '21'
-    LOAD_MEMBER    / -> '22'
-    STORE_MEMBER   / -> '23'
-
-    GET_INDEX      / -> '24' - X
-    LOAD_INDEX     / -> '25' - X
-    STORE_INDEX    / -> '26' - X
-
-    LOAD_FN        / -> '27' - X
-
-    BUILD_ARRAY    / -> '28' - X
-    BUILD_TABLE    / -> '29' - X
-    BUILD_RANGE    / -> '30' - X
-
-    SET_TKEY       / -> '31' - X
-
-    ITER_NEXT      / -> '32' - X
-    ITER_HAS_NEXT  / -> '33' - X
-
-    JUMP           / -> '34' - X
-    JUMP_IF_FALSE  / -> '35' - X
-    JUMP_IF_TRUE   / -> '36'
-
-    ECHO           / -> '37' - X
-    CALL           / -> '38' - X
-    RETURN         / -> '39' - X
-
-    OR             / -> '40' - X
-    AND            / -> '41' - X
-*/
-
 // OpCodes | OpCodes.
 enum class OpCode: uint8_t
 {
@@ -250,11 +190,16 @@ enum class OpCode: uint8_t
     STORE_INDEX,
 
     LOAD_FN,
+    LOAD_PACK,
+
+    // OPENS
+    OPEN_PACK,
 
     // BUILDS | CONSTRUÇÕES.
     BUILD_ARRAY,
     BUILD_TABLE,
     BUILD_RANGE,
+    BUILD_PACKAGE,
 
     // SETS
     SET_TKEY,

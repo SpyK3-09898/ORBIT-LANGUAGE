@@ -1185,7 +1185,7 @@ void SemanticAnalizer::LookUpLibraryDef(LibraryNode& Node, SAState& State, Parse
     Symbol* Sym = 
             SAUtils::CreateSymbol(Node.Name, Node, State, SARes, Memory);
     Sym->Type = 
-            SymbolTypes::LIBRARIE;
+            SymbolTypes::LIBRARY;
     State.Flags.libraryDefined = true;
 }
 
@@ -1382,7 +1382,7 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
     LexResult   LR = L.InitL(file, Data, Memory);
     LR = T.InitT(LR, Data, Memory);
     ParseResult PR = P.InitP(LR, Data, Memory);
-    SAResult SAR = SA.InitSA(PR, Data, Memory);
+    SAResult* SAR = Memory.Store(SA.InitSA(PR, Data, Memory));
 
     // Search Library Name | Procura o Nome da Biblioteca.
     string LibraryName;
@@ -1425,6 +1425,17 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
                 }
             }
         }
+    } else {
+
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic", 
+            "Cannot Find AST Of: "+LibraryName, 
+            "Probably A Error Occoured In Generation", 
+            "Check If Lib Main-File Have Errors",
+            Node.pos.line, Node.pos.collumn
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;
     }
 
     if (!LibraryFound)
@@ -1447,12 +1458,14 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
     }
 
     // Set Data | Define os Dados.
-    Res.Contexts.push_back({LibraryName, {SAR, std::move(PR)}});
+    Res.Contexts[LibraryName] = {std::move(PR), SAR};
     Data.ImportStack.pop_back();
     State.Flags.importsDefined = true;
 
+    // Define Symbols | Define os Simbolos.
     Symbol* Sym = SAUtils::CreateSymbol(Node.Alias, Node, State, SARes, Memory);
-    Sym->Type = Node.Base == Node.Bottom ? SymbolTypes::LIBRARIE : SymbolTypes::MODULE;
+    Sym->Type = Node.Base == Node.Bottom ? SymbolTypes::MODULE : SymbolTypes::LIBRARY;
+    Sym->LinkedScope = Res.Contexts[LibraryName].second->GlobalScope;
 }
 
 // ===== CONTROLS ===== //
