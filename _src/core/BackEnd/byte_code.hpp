@@ -17,6 +17,8 @@
 #include <cstddef>
 #include <cstdint>
 
+struct Chunk;
+
 // Description of Object.
 struct ObjectDescr
 {
@@ -82,7 +84,6 @@ struct ByteIterator
         : Curr(start - step), End(end), Step(step) {}
 
     ~ByteIterator() = default;
-
     static void Destroy(void* Ptr, Arena& Memory)
     {
         ByteIterator* It = static_cast<ByteIterator*>(Ptr);
@@ -104,6 +105,23 @@ struct ByteIterator
     }
 };
 
+// RunTime Orbit Package Repr | Representação de Pacotes Orbti em RunTime.
+struct BytePackage
+{
+    Chunk* Chunk;
+    ui8 chunkId=0;
+    ui32 SymbolCount=0;
+
+    ObjectDescr* Descr = nullptr;
+    
+    ~BytePackage() = default;
+    static void Destroy(void* Ptr, Arena& Memory)
+    {
+        BytePackage* Pack = static_cast<BytePackage*>(Ptr);
+        Pack->~BytePackage();
+    }
+};
+
 // Function Repr | Representação de Função.
 struct ByteFn
 {
@@ -118,9 +136,10 @@ struct ByteFn
     }
 };
 
-struct ByteArray; // Array Repr
-struct ByteTable; // Table Repr
-struct ByteFn; // Functions Repr
+struct ByteArray; // Array Repr     | Representação de Matrizes.
+struct ByteTable; // Table Repr     | Representação de Tabelas.
+struct ByteFn;    // Functions Repr | Representação de Funções
+struct BytePack;  // Package Repr   | Representação de Pacotes.
 using  ByteValue = variant<
 
     bool,
@@ -133,6 +152,7 @@ using  ByteValue = variant<
     shared_ptr<ByteTable>,
     ByteFn*,
     ByteIterator*,
+    BytePackage*,
     nullptr_t
 >;
 struct ByteArray : vec<ByteValue>
@@ -250,5 +270,6 @@ struct ByteCode
 {
     int currChunk=0;
     vec<Chunk*> Chunks;
+    unord_map<string, ui8> Contexts;
     unord_map<string, ui32> Functions;
 };

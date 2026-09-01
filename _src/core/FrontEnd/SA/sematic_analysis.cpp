@@ -1,5 +1,6 @@
 
 
+
 // ============= SEMANTIC ANALIZER =========== //
 // Analyzes the Code for Semantic Errors | Analiza o Codigo em Busca de Erros Semanticos.
 // Developed By: SpyK3(2026) | License: GitHub(MIT).
@@ -2103,7 +2104,22 @@ void SemanticAnalizer::LookUpIdentifier(IdentifierNode& Node, SAState& State, SA
 
     if (Sym)
     {
-        Node.SymbolId = Sym->Id;
+        auto It = Res.Symbols.find(Sym->Id);
+        if (It == Res.Symbols.end())
+        {
+            Res.Symbols[Sym->Id] = Sym;
+            Node.SymbolId = Sym->Id;
+        }
+        else if (It->second != Sym)
+        {
+            Node.SymbolId = State.nextId++;
+            Res.Symbols[Node.SymbolId] = Sym;
+        }
+        else
+        {
+            Node.SymbolId = Sym->Id;
+        }
+
         Sym->read_count++;
     }
 }
@@ -2571,7 +2587,10 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
 
     // Set Data
     Sym->read_count++;
-    Node.Object->SymbolId = Sym->Id;
+    if (Node.Object->SymbolId == 0)
+        Node.Object->SymbolId = Sym->Id;
+    if (Res.Symbols.find(Sym->Id) == Res.Symbols.end())
+        Res.Symbols[Sym->Id] = Sym;
 
     // Main Switch | Switch Principal.
     switch (Sym->Type) 

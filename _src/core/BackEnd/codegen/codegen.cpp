@@ -335,7 +335,7 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
 
     if (S == SymbolTypes::IDENTIFIER or S == SymbolTypes::VAR or S == SymbolTypes::PARAM)
         Inst = CodeGenUtils::CreateInst
-            (Node, OpCode::LOAD_LOCAL, State.GetLocal(Sym->Id), 0, Data, Memory);
+            (Node, OpCode::LOAD_LOCAL, State.GetLocal(Sym->Id), Sym->packId, Data, Memory);
     else if (S == SymbolTypes::FN)
     {
         i64 id = BC.Functions.at(Sym->Name);
@@ -1089,10 +1089,42 @@ ByteCode CodeGenerator::InitCG(ParseResult& PRes, SAResult& SARes, RunTimeData& 
     if (Data.flags.debugMode)
         PrintIn("STARTING TASK: Compile ORBIT");
 
+    // Data | Dados.
     ByteCode BC;
     BC.Chunks.push_back(Memory.New<Chunk>());
     CodeGenState State; 
     
+    // Run Contexts And Generate Chunk
+    // Percorre os Contextos e Gera as Chunks.
+    for (auto& Cont : PRes.Contexts)
+    {
+        // Create A New Chunk | Cria Uma Nova Chunk.
+        ui8 packId = BC.Chunks.size();
+        BC.Chunks.push_back(Memory.New<Chunk>());
+        BC.Contexts[Cont.first] = packId;
+
+        // Compile Library AST Into Pack Chunk
+        // Compila a AST da Lib Na Chunk do Pack.
+        ParseResult& LibPR = Cont.second.first;
+        SAResult* LibSA = Cont.second.second;
+        if (!LibPR.AST or !LibSA)
+            continue;
+
+        // Set Library Symbols | Define os Simbolos da Lib.
+        for (auto& [Id, Sym] : LibSA->Symbols)
+            if (Sym)
+                Sym->packId = Id;
+
+        // Update Prev State | Atualzia o Estado Previamente.
+        int PreviousChunk = State.currChunk;
+        State.currChunk = static_cast<int>(packId);
+
+        // Reset Data | Reinicia os Dados.
+        CompileNode(LibPR.AST, State, BC, *LibSA, Data, Memory);
+        State.currChunk = PreviousChunk;
+    }
+
+    // Compile AST | Compila a AST.
     CompileNode(PRes.AST, State, BC, SARes, Data, Memory);
 
     if (Data.flags.generateLog)

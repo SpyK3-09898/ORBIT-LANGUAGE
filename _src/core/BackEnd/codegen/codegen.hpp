@@ -50,7 +50,6 @@ struct CodeGenState
     ui32 GetLocal(ui16 Id)
     {
         auto It = Locals.find(Id);
-
         if (It != Locals.end())
             return It->second;
 
