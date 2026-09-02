@@ -118,6 +118,7 @@ struct Symbol
     ui32 read_count  = 0;
     ui32 write_count = 0;
     ui16 Id          = 0;
+    ui8 contextId    = 0;
     ui8 packId       = -1;
     bool inited      = false;
     bool isExported  = false;

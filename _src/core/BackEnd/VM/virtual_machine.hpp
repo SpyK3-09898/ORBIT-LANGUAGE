@@ -23,9 +23,7 @@ class VirtualMachine;
 
 // Pointer of Instruction | Ponteiro de Instruções.
 struct InstructionPointer
-{
-    size_t Index;
-};
+{ size_t Index; };
 
 // Execution Frame | Quadro de Execução.
 struct VM_Frame
@@ -34,6 +32,7 @@ struct VM_Frame
     InstructionPointer ReturnIP;
 
     unord_map<ui32, ByteValue> Locals;
+    unord_map<ui32, ByteValue> Objects;
     vec<ByteValue> Stack;
     int retChunk;
 

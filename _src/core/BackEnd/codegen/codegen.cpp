@@ -359,7 +359,7 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
         Inst = CodeGenUtils::CreateInst(
             Node,
             OpCode::LOAD_PACK,
-            SymState->GetLocal(Sym->Id),
+            Sym->contextId,
             0,
             Data,
             Memory
@@ -531,21 +531,21 @@ void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& St
 
         // Resolve Member | Resolve o Membro (prefer SymbolId).
         Symbol* MemberSym = CodeGenUtils::GetSym(MemberId, SARes);
-        if (!MemberSym && NsSym->LinkedScope)
+        if (!MemberSym and NsSym->LinkedScope)
             MemberSym = NsSym->LinkedScope->FindSymLocal(MemberId->Name);
-
-        if (!MemberSym)
+        else if (!MemberSym)
         {
             OrbitLog::Error("codegen.cpp", "Cannot Find Member: "+MemberId->Name+" in Namespace", true, 404);
             return;
         }
 
+        CodeGenState* SymState = GetStateForSym(MemberSym, State);
         auto& S = MemberSym->Type;
         ByteInstruction* Inst;
 
         if (S == SymbolTypes::IDENTIFIER or S == SymbolTypes::VAR or S == SymbolTypes::PARAM)
             Inst = CodeGenUtils::CreateInst
-                (Node, OpCode::LOAD_LOCAL, State.GetLocal(MemberSym->Id), 0, Data, Memory);
+                (Node, OpCode::LOAD_LOCAL, SymState->GetLocal(MemberSym->Id), 0, Data, Memory);
         else if (S == SymbolTypes::FN)
         {
             i64 id = BC.Functions.at(MemberSym->packId).at(MemberSym->Name);
@@ -1101,6 +1101,7 @@ void CodeGenerator::CompileImport(ImportNode* Node, CodeGenState& State, ByteCod
     );
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
     BC.Chunks[State.currChunk]->Instructions.push_back(Store);
+    Sym->contextId = static_cast<i64>(Id);
 }
 
 // ========== ENTRY-POINT =========== //

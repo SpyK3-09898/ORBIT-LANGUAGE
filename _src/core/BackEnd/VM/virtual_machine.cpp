@@ -998,10 +998,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 break;
             }
             
-            // LOADS & GETS:
-            case OpCode::LOAD_LOCAL: // Load A Local | Carrega Um Local:
-                CallStack->GetTop()->PushBack(CallStack->GetTop()->Locals[std::get<i64>(CurrInst->R1)]);
-                break;
+            // STORES:
 
             case OpCode::STORE_LOCAL: // Store A New Local | Guarda Um Novo Local:
             {
@@ -1013,7 +1010,33 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             {
                 
             }
+
+            // LOADS:
+            case OpCode::LOAD_LOCAL: // Load A Local | Carrega Um Local:
+                CallStack->GetTop()->PushBack(CallStack->GetTop()->Locals[std::get<i64>(CurrInst->R1)]);
+                break;
+            case OpCode::LOAD_FN: // Load a Function | Carrega Uma Função.
+            {
+                ByteFn* Fn = Memory.New<ByteFn>();
+
+                Fn->ID         = std::get<i64>(CurrInst->R1);
+                Fn->ParamCount = std::get<i64>(CurrInst->R2);
+
+                Fn->Descr = GC.Register(Fn, ByteFn::Destroy, Memory);
+                CallStack->GetTop()->PushBack(Fn);
+                break;
+            }
+            case OpCode::LOAD_PACK:
+            {
+                BytePackage* Pack = std::get<BytePackage*>(CallStack->GetTop()->Objects[std::get<i64>(CurrInst->R1)]);
+                CallStack->GetTop()->Objects.erase(std::get<i64>(CurrInst->R1));
+                CallStack->GetTop()->PushBack(Pack);
+
+                break;
+            }
+
             // BUILDS:
+            
             // Build a Range Iterator | Constroi um Iterador de Intervalo.
             case OpCode::BUILD_RANGE: 
             {
@@ -1025,6 +1048,15 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 ByteIterator* It = Memory.New<ByteIterator>(start, end, step);
                 It->Descr = GC.Register(It, ByteIterator::Destroy, Memory);
                 CallStack->GetTop()->PushBack(It);
+                break;
+            }
+            // Build a Runtime Package Object | Constroi um Objeto de Pacote de Execução.
+            case OpCode::BUILD_PACKAGE:
+            {
+                BytePackage* Pack = Memory.New<BytePackage>();
+                Pack->Descr = GC.Register(Pack, BytePackage::Destroy, Memory);
+                CallStack->GetTop()->Objects[std::get<i64>(CurrInst->R1)] = std::move(Pack); 
+                
                 break;
             }
             case OpCode::BUILD_ARRAY: // Build a Array Value | Constroi Um Valor de Matriz.
@@ -1045,6 +1077,8 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
 
                 break;
             }
+
+            // INDEX:
 
             case OpCode::GET_INDEX: // Get Index of Arr | Pega o Indice do Arr.
             {
@@ -1403,17 +1437,6 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             }
 
             // OTHERS:
-            case OpCode::LOAD_FN: // Load a Function | Carrega Uma Função.
-            {
-                ByteFn* Fn = Memory.New<ByteFn>();
-
-                Fn->ID =std::get<i64>(CurrInst->R1);
-                Fn->ParamCount = std::get<i64>(CurrInst->R2);
-
-                Fn->Descr = GC.Register(Fn, ByteFn::Destroy, Memory);
-                CallStack->GetTop()->PushBack(Fn);
-                break;
-            }
             case OpCode::CALL: // Call a Function | Chama uma Função.
             {
                 // Take Data | Pega a Data.
