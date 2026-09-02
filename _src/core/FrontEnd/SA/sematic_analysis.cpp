@@ -1433,6 +1433,7 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
 
                     LibraryName = static_cast<LibraryNode*>(N)->Name;
                     LibraryFound = true;
+                    Node.LibName = LibraryName;
                 }
             }
         }

@@ -23,9 +23,9 @@ struct Chunk;
 struct ObjectDescr
 {
     // Data
-    int references=0;
-    bool marked=true;
-    bool changed=true;
+    int references = 0;
+    bool marked    = true;
+    bool changed   = true;
 
     // Reference Data | Data de Referencias.
     vec<ObjectDescr*> References;
@@ -212,9 +212,6 @@ enum class OpCode: uint8_t
     LOAD_FN,
     LOAD_PACK,
 
-    // OPENS
-    OPEN_PACK,
-
     // BUILDS | CONSTRUÇÕES.
     BUILD_ARRAY,
     BUILD_TABLE,
@@ -271,5 +268,5 @@ struct ByteCode
     int currChunk=0;
     vec<Chunk*> Chunks;
     unord_map<string, ui8> Contexts;
-    unord_map<string, ui32> Functions;
+    unord_map<ui8, unord_map<string, i64>> Functions;
 };

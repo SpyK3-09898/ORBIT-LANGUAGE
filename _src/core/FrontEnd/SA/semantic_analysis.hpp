@@ -18,6 +18,7 @@
 #include <cstddef>
 
 // ======= PREV ======= //
+struct CodeGenState;
 struct Scope;
 struct Symbol;
 
@@ -129,6 +130,8 @@ struct Scope
     Scope* Parent  =  nullptr;
     Scope* Next    =  nullptr;
     ASTNode* Owner;
+    CodeGenState*CG_State;
+
     unord_map<string, Symbol*> Symbols;
     BodyTypes Type;
 

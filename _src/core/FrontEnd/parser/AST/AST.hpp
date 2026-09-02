@@ -740,6 +740,7 @@ struct ImportNode : SpecialNode
     ExpressionNode* Bottom;
     string Alias  = "";
     string Origin = "ORBIT";
+    string LibName;
     vec<string> Modules{}; 
 
     // CONSTRUCTOR

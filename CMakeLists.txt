@@ -2,10 +2,11 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(ORBIT
-    VERSION 1.0
+    VERSION 0.0.1
     LANGUAGES CXX
 )
 
+set(ORBIT_VSTAGE "BETA")
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 

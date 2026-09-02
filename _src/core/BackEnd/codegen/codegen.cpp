@@ -14,8 +14,8 @@
 
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
-#include "../../RunTimeData.hpp" // LIBRARIES | BIBLIOTECAS:
-#include <algorithm>
+#include "../../RunTimeData.hpp"
+#include <algorithm> // LIBRARIES | BIBLIOTECAS:
 #include <cstddef>
 #include <string>
 #include <cerrno>
@@ -227,7 +227,7 @@ void CodeGenerator::CompileNode(ASTNode* Node, CodeGenState& State, ByteCode& BC
             CompileNameSpaceDecl(static_cast<NameSpaceDecl*>(Node), State, BC, SARes, Data, Memory);
             break;
 
-        // CONTROL FLOW
+        // CONTROL-FLOW
         case NodeType::IF_CONTROL:
             CompileIf(static_cast<IfNode*>(Node), State, BC, SARes, Data, Memory);
             break;
@@ -264,6 +264,17 @@ void CodeGenerator::CompileNode(ASTNode* Node, CodeGenState& State, ByteCode& BC
             CompileEcho(static_cast<EchoNode*>(Node), State, BC, SARes, Data, Memory);
             break;
 
+        // SPECIALS
+        case NodeType::LIBRARY:
+            CompileLibraryDef
+            (static_cast<LibraryNode*>(Node), State, BC, SARes, Data, Memory);
+            break;
+
+        case NodeType::IMPORT:
+            CompileImport
+            (static_cast<ImportNode*>(Node), State, BC, SARes, Data, Memory);
+            break;
+
         default: break;
     }
 }
@@ -298,13 +309,12 @@ void CodeGenerator::CompileLiteral(LiteralNode* Node, CodeGenState& State, ByteC
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 }
 
-// Compile Identifier Access | Compila Acesso a Identificadores
+// Compile Identifier Values | Compila Valores de Identificadores.
 void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // Prefer SymbolId | Prefere SymbolId.
     Symbol* Sym = CodeGenUtils::GetSym(Node, SARes);
 
-    // Fallback: Owner scope chain by name (namespace member path)
     if (!Sym && Owner && Owner->LinkedScope)
     {
         Scope* ScopeIt = Owner->LinkedScope;
@@ -322,38 +332,39 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
             ScopeIt = ScopeIt->Parent;
         }
     }
-
     if (!Sym)
     {
         OrbitLog::Error("codegen.cpp", "Cannot Find: "+Node->Name+" in Symbols", true, 404);
         return;
     }
 
+    CodeGenState* SymState = GetStateForSym(Sym, State);
+
     // Resolve Type | Resolve o tipo:
     auto& S = Sym->Type;
     ByteInstruction* Inst;
-
     if (S == SymbolTypes::IDENTIFIER or S == SymbolTypes::VAR or S == SymbolTypes::PARAM)
         Inst = CodeGenUtils::CreateInst
-            (Node, OpCode::LOAD_LOCAL, State.GetLocal(Sym->Id), Sym->packId, Data, Memory);
+            (Node, OpCode::LOAD_LOCAL, SymState->GetLocal(Sym->Id), Sym->packId, Data, Memory);
     else if (S == SymbolTypes::FN)
     {
-        i64 id = BC.Functions.at(Sym->Name);
+        i64 id = BC.Functions.at(Sym->packId).at(Sym->Name);
         Inst = CodeGenUtils::CreateInst
             (Node, OpCode::LOAD_FN, id, BC.Chunks[id]->ParamCount, Data, Memory);
     } else if (S == SymbolTypes::NAMESPACE)
     {
-        if (Sym->Type == SymbolTypes::MODULE or Sym->Type == SymbolTypes::LIBRARY)
-            Inst = CodeGenUtils::CreateInst
-                (Node, OpCode::LOAD_PACK, State.GetLocal(Sym->Id), 0, Data, Memory);
-
         // NameSpaces are only a shortcut | NameSpaces são apenas um atalho.
         return;
-    } else if (S == SymbolTypes::MODULE) 
-    {
-        Inst = CodeGenUtils::CreateInst
-            (Node, OpCode::BUILD_PACKAGE, State.GetLocal(Sym->Id), 0, Data, Memory);
-    } else
+    } else if (S == SymbolTypes::LIBRARY or S == SymbolTypes::MODULE) 
+        Inst = CodeGenUtils::CreateInst(
+            Node,
+            OpCode::LOAD_PACK,
+            SymState->GetLocal(Sym->Id),
+            0,
+            Data,
+            Memory
+        );
+    else
     {
         OrbitLog::Error
         ("codegen.cpp", "Invalid Symbol Type for: '"+Sym->Name+"', Type: "+std::to_string(static_cast<int>(S)), true, 400);
@@ -537,7 +548,7 @@ void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& St
                 (Node, OpCode::LOAD_LOCAL, State.GetLocal(MemberSym->Id), 0, Data, Memory);
         else if (S == SymbolTypes::FN)
         {
-            i64 id = BC.Functions.at(MemberSym->Name);
+            i64 id = BC.Functions.at(MemberSym->packId).at(MemberSym->Name);
             Inst = CodeGenUtils::CreateInst
                 (Node, OpCode::LOAD_FN, id, BC.Chunks[id]->ParamCount, Data, Memory);
         } else if (S == SymbolTypes::NAMESPACE)
@@ -660,6 +671,7 @@ void CodeGenerator::CompileLValue(ExpressionNode* Node, CodeGenState& State, Byt
         {
             IdentifierNode* N = static_cast<IdentifierNode*>(Node);
             Symbol* Sym = CodeGenUtils::GetSym(N, SARes);
+            CodeGenState* SymState = GetStateForSym(Sym, State);
             if (!Sym)
             {
                 OrbitLog::Error("codegen.cpp", "Cannot Find LValue Symbol", true, 404);
@@ -668,7 +680,7 @@ void CodeGenerator::CompileLValue(ExpressionNode* Node, CodeGenState& State, Byt
 
             OpCode op = base ? OpCode::STORE_LOCAL : OpCode::LOAD_LOCAL;
             ByteInstruction* Inst = CodeGenUtils::
-                CreateInst(Node, op, State.GetLocal(Sym->Id), 0, Data, Memory);
+                CreateInst(Node, op, SymState->GetLocal(Sym->Id), 0, Data, Memory);
             BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
             break;
         }
@@ -695,9 +707,11 @@ void CodeGenerator::CompileLValue(ExpressionNode* Node, CodeGenState& State, Byt
                     if (!MemberSym && NsSym->LinkedScope)
                         MemberSym = NsSym->LinkedScope->FindSymLocal(MemberId->Name);
 
+                    CodeGenState* SymState = GetStateForSym(MemberSym, State);
+
                     OpCode op = base ? OpCode::STORE_LOCAL : OpCode::LOAD_LOCAL;
                     ByteInstruction* Inst = CodeGenUtils::
-                        CreateInst(Node, op, State.GetLocal(MemberSym->Id), 0, Data, Memory);
+                        CreateInst(Node, op, SymState->GetLocal(MemberSym->Id), 0, Data, Memory);
                     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
                     break;
                 }
@@ -757,10 +771,17 @@ void CodeGenerator::CompileFnDecl(FnDecl* Node, CodeGenState& State, ByteCode& B
     int PrevC = State.currChunk;
     int FnC = BC.Chunks.size();
 
+    Symbol* Sym = CodeGenUtils::GetSym(Node, SARes);
+    if (!Sym)
+    {
+        OrbitLog::Error("codegen.cpp", "Cannot Find Function Symbol: "+Node->Name, true, 404);
+        return;
+    }
+
     // Create Chunk | Cria a Chunk
     BC.Chunks.push_back(Memory.New<Chunk>());
     BC.Chunks.back()->ParamCount = Node->Params.size();
-    BC.Functions[Node->Name] = FnC;
+    BC.Functions[Sym->packId][Node->Name] = FnC;
     State.currChunk = FnC;
 
     for (ExpressionNode* Param : Node->Params)
@@ -788,21 +809,8 @@ void CodeGenerator::CompileFnDecl(FnDecl* Node, CodeGenState& State, ByteCode& B
 // Compile NameSpace Declaration | Compila Declaração de NameSpace
 void CodeGenerator::CompileNameSpaceDecl(NameSpaceDecl* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
-    // Compile Body | Compila o Corpo.
-    if (Node->export_decl)
-    {
-        ByteInstruction* Inst =
-            CodeGenUtils::CreateInst(Node, OpCode::OPEN_PACK, 0, 0, Data, Memory);
-        BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
-    }
     if (Node->Body)
         CompileNode(Node->Body, State, BC, SARes, Data, Memory);
-    if (Node->export_decl)
-    {
-        ByteInstruction* Inst =
-            CodeGenUtils::CreateInst(Node, OpCode::BUILD_PACKAGE, 0, 0, Data, Memory);
-        BC.Chunks[State.currChunk]->Instructions.push_back(Inst);   
-    }
 }
 
 // Handle/Compile Declaration Errors | Manipula/Compila Erros em Declarações
@@ -1000,7 +1008,7 @@ void CodeGenerator::CompileFor(ForNode* Node, CodeGenState& State, ByteCode& BC,
     Insts.push_back(Pop);
 }
 
-// Compile 'foreach' Iteration Loop | Compila Laço de Repetição 'foreach'
+// Compile 'for-each' Iteration Loop | Compila Laço de Repetição 'foreach'
 void CodeGenerator::CompileForEach(ForEachNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {}
 
@@ -1039,14 +1047,60 @@ void CodeGenerator::CompileEcho(EchoNode* Node, CodeGenState& State, ByteCode& B
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 }
 
-// Compile Library Definitions | Compila Definições de Bibliotecas.
-void CodeGenerator::CompileLibraryDef(LibraryNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
-{}
-
 // Handle/Compile Statement Errors | Manipula/Compila Erros em Instruções (Statements)
 void CodeGenerator::CompileErrorStmt(ErrorStmtNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
 
+}
+
+// SPECIALS
+
+// Compile Library Definitions | Compila Definições de Bibliotecas.
+void CodeGenerator::CompileLibraryDef(LibraryNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
+{};
+
+// Compile Library Definitions | Compila Definições de Bibliotecas.
+void CodeGenerator::CompileImport(ImportNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
+{
+    // Resolve Lib Name | Resolve o Nome da Lib
+    Symbol* Sym = CodeGenUtils::GetSym(Node, SARes);
+    if (!Sym) {
+        OrbitLog::Error("codegen.cpp", "Import symbol not found", true, 404);
+        return;
+    }
+
+    // Take Package-Id | Pega o Id Do Pacote.
+    string LibName = Node->LibName;
+    auto It = BC.Contexts.find(LibName);
+    if (It == BC.Contexts.end()) {
+        OrbitLog::Error("codegen.cpp", "Cannot find pack for import: " + Sym->Name, true, 404);
+        return;
+    }
+
+    // Create Id And Slot... | Cria o Id ou o Slot. .. ...
+    ui8 Id = It->second;
+    ui32 slot = State.CreateLocal(Sym->Id);
+
+    // Generate Instruction
+    // Gera a Instrução.
+    ByteInstruction* Inst = CodeGenUtils::CreateInst(
+        Node,
+        OpCode::BUILD_PACKAGE,
+        static_cast<i64>(Id),
+        0,
+        Data,
+        Memory
+    );
+    ByteInstruction* Store = CodeGenUtils::CreateInst(
+        Node,
+        OpCode::STORE_LOCAL,
+        slot,
+        0,
+        Data,
+        Memory
+    );
+    BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+    BC.Chunks[State.currChunk]->Instructions.push_back(Store);
 }
 
 // ========== ENTRY-POINT =========== //
@@ -1107,21 +1161,23 @@ ByteCode CodeGenerator::InitCG(ParseResult& PRes, SAResult& SARes, RunTimeData& 
         // Compila a AST da Lib Na Chunk do Pack.
         ParseResult& LibPR = Cont.second.first;
         SAResult* LibSA = Cont.second.second;
+        CodeGenState* LibState = Memory.New<CodeGenState>();
         if (!LibPR.AST or !LibSA)
             continue;
 
         // Set Library Symbols | Define os Simbolos da Lib.
         for (auto& [Id, Sym] : LibSA->Symbols)
-            if (Sym)
-                Sym->packId = Id;
+            if (Sym) {
+                if (Sym->LinkedScope)
+                    Sym->LinkedScope->CG_State = LibState;
+                Sym->packId = packId;
+            }
+        
+        LibState->currChunk = static_cast<int>(packId);
+        LibraryStates.push_back(LibState);
 
         // Update Prev State | Atualzia o Estado Previamente.
-        int PreviousChunk = State.currChunk;
-        State.currChunk = static_cast<int>(packId);
-
-        // Reset Data | Reinicia os Dados.
-        CompileNode(LibPR.AST, State, BC, *LibSA, Data, Memory);
-        State.currChunk = PreviousChunk;
+        CompileNode(LibPR.AST, *LibState, BC, *LibSA, Data, Memory);
     }
 
     // Compile AST | Compila a AST.
@@ -1131,7 +1187,7 @@ ByteCode CodeGenerator::InitCG(ParseResult& PRes, SAResult& SARes, RunTimeData& 
         GenerateCodeGenLog(BC, Data);
     if (Data.flags.debugMode)
         PrintIn("ENDOF TASK: 'Compile ORBIT'. .. ...");
-    return BC;
+    return std::move(BC);
 }
 
 // EOF.
