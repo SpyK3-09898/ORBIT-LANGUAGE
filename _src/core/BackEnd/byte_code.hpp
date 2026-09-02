@@ -17,9 +17,32 @@
 #include <cstddef>
 #include <cstdint>
 
+// FORWARDS
 struct Chunk;
+struct ByteCode;
+struct ByteInstruction;
 
-// Description of Object.
+struct ByteArray;    // Array Repr     | Representação de Matrizes.
+struct ByteTable;    // Table Repr     | Representação de Tabelas.
+struct ByteFn;       // Functions Repr | Representação de Funções
+struct ByteIterator; // Iterador Repr  | Rerpesentação de Iteradores
+struct BytePackage;  // Package Repr   | Representação de Pacotes.
+using  ByteValue = variant< // RunTime Value | Valor de RunTime.
+    bool,
+    float,
+    i64,
+    string,
+    NoneLitVal,
+    NullLitVal,
+    shared_ptr<ByteArray>,
+    shared_ptr<ByteTable>,
+    ByteFn*,
+    ByteIterator*,
+    BytePackage*,
+    nullptr_t
+>;
+
+// Description of Object | Descrição de Um Objeto.
 struct ObjectDescr
 {
     // Data
@@ -70,14 +93,23 @@ struct ObjectDescr
     }
 };
 
+// Base Object Repr | Representação Basica De Um Objeto.
+struct ByteObject
+{
+
+    // Object Description | Descrição do Objeto.
+    public: ObjectDescr* Descr;
+
+    ByteValue Acess(ByteValue& Val);
+};
+
 // Iterator | Iterador.
-struct ByteIterator
+struct ByteIterator : ByteObject
 {
     // DATA
     i64 Curr;
     i64 End;
     i32 Step;
-    ObjectDescr* Descr = nullptr;
 
     // CONSTRUCTOR
     ByteIterator(i64 start, i64 end, i32 step)
@@ -106,14 +138,20 @@ struct ByteIterator
 };
 
 // RunTime Orbit Package Repr | Representação de Pacotes Orbti em RunTime.
-struct BytePackage
+struct BytePackage : ByteObject
 {
+    // DATA | DADOS
     Chunk* Chunk;
     ui8 chunkId=0;
     ui32 SymbolCount=0;
-
-    ObjectDescr* Descr = nullptr;
+    unord_map<string, ByteValue> Members;
     
+    // FUNCTIONS | FUNÇÕES
+
+    // Member Acess | Acesso de Membros.
+    ByteValue Acess(ByteValue& Val, ByteInstruction& CurrInst, ByteCode* BC, RunTimeData& Data);
+
+    // GC | CB
     ~BytePackage() = default;
     static void Destroy(void* Ptr, Arena& Memory)
     {
@@ -123,11 +161,10 @@ struct BytePackage
 };
 
 // Function Repr | Representação de Função.
-struct ByteFn
+struct ByteFn : ByteObject
 {
     ui16 ID;
     ui8 ParamCount=0;
-    ObjectDescr* Descr;
 
     static void Destroy(void* Ptr, Arena& Memory)
     {
@@ -136,25 +173,6 @@ struct ByteFn
     }
 };
 
-struct ByteArray; // Array Repr     | Representação de Matrizes.
-struct ByteTable; // Table Repr     | Representação de Tabelas.
-struct ByteFn;    // Functions Repr | Representação de Funções
-struct BytePack;  // Package Repr   | Representação de Pacotes.
-using  ByteValue = variant<
-
-    bool,
-    float,
-    i64,
-    string,
-    NoneLitVal,
-    NullLitVal,
-    shared_ptr<ByteArray>,
-    shared_ptr<ByteTable>,
-    ByteFn*,
-    ByteIterator*,
-    BytePackage*,
-    nullptr_t
->;
 struct ByteArray : vec<ByteValue>
 {
     using vec<ByteValue>::vector;

@@ -17,11 +17,21 @@
 #include <new>
 
 size_t constexpr _1KB = 1024;
+size_t constexpr _2KB = _1KB*2;
+size_t constexpr _4KB = _2KB*2;
+size_t constexpr _8KB = _4KB*2;
+size_t constexpr _16KB = _8KB*2;
+size_t constexpr _32KB = _16KB*2;
+size_t constexpr _64KB = _32KB*2;
+size_t constexpr _128KB = _64KB*2;
+size_t constexpr _256KB = _128KB*2;
+
 size_t constexpr _1MB = _1KB * _1KB;
 size_t constexpr _2MB = _1MB*2;
 size_t constexpr _4MB = _2MB*2;
 size_t constexpr _8MB = _4MB*2;
 size_t constexpr _16MB = _8MB*2;
+size_t constexpr _32MB = _16MB*2;
 
 // =========== CORE ========== //
 

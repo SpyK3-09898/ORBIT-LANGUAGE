@@ -35,22 +35,26 @@ enum ORBIT_ERRORS_CODE
 };
 
 // BASICS
+
+// Generics:
 using string=std::string;
 using str_view=std::string_view;
 using mono_state=std::monostate;
 using runt_err=std::runtime_error;
 using byte=std::byte;
-using std::nullptr_t;
+using std::nullptr_t; // Signeds:
 
 using i64=std::int64_t;
 using i32=std::int32_t;
 using i16=std::int16_t;
 using i8=std::int8_t;
+using i_max=std::intmax_t; // UnSigneds:
 
 using ui64=std::uint64_t;
 using ui32=std::uint32_t;
 using ui16=std::uint16_t;
 using ui8=std::uint8_t;
+using ui_max=std::uintmax_t;
 
 // TEMPLATES
 template<typename T>

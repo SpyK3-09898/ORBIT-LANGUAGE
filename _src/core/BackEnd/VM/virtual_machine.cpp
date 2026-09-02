@@ -391,6 +391,9 @@ namespace VM_Utils {
 // Update GC | Atualiza o GC.
 void GarbageCollector::Update(ByteCode& BC, InstructionPointer& IP, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
+    if (Data.fileSize > _32KB and Memory.UsedMemory() > _256KB)
+        return;
+
     // Take Stack Objects | Pega os Objetos da Stack.
     vec<ObjectDescr*> StackObjs{};
     VM_Frame* CurrFrame = VM->CallStack->GetTop();
@@ -445,7 +448,30 @@ ObjectDescr* GarbageCollector::Register(void* Object, void (*Destroy)(void*, Are
     return Descr;
 }
 
-// ========== CORE =========== //
+// =========== OBJECTS ========== //
+
+// PACKAGES:
+
+// Acess a Member of Package | Acessa o Membro do Pacote.
+ByteValue BytePackage::Acess(ByteValue& Val, ByteInstruction& CurrInst, ByteCode* BC, RunTimeData& Data)
+{
+    // Error Prev | Prevenção de Erros
+    if (!holds_alt<string>(Val))
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "RunTime", 
+            "Trying to Acess a Invalid Identifiers", 
+            "Packages ONLY can be Acessed By Identifiers, Ex: Valid = 'Package.Mem;', Invalid = 'Package[3];'",
+            "Add a Valid <IDENTIFIER>",
+            CurrInst.Pos.line, CurrInst.Pos.collumn
+        );
+        OrbitLog::SyntaxLog::ThrowLog(Data);
+    }
+
+    return Members[std::get<string>(Val)];
+}
+
+// =========== CORE =========== //
 
 // Run Binary Arithmetic Operations | Roda Operações Binarias Aritmeticas.
 int VirtualMachine::RunBinary(ByteCode& BC, InstructionPointer& IP, SAResult& Res, RunTimeData& Data, Arena& Memory)
@@ -1054,6 +1080,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             case OpCode::BUILD_PACKAGE:
             {
                 BytePackage* Pack = Memory.New<BytePackage>();
+            
                 Pack->Descr = GC.Register(Pack, BytePackage::Destroy, Memory);
                 CallStack->GetTop()->Objects[std::get<i64>(CurrInst->R1)] = std::move(Pack); 
                 

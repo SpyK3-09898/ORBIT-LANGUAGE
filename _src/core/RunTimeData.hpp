@@ -11,6 +11,7 @@
 #include "Arena/Arena.hpp"
 
 #include <cstddef>
+#include <cstdint>
 #include <fstream>
 #include <filesystem>
 #include <streambuf>
@@ -372,4 +373,5 @@ struct RunTimeData
         bool UnicodeSupport=true;
     } flags;
     char** argv;
+    ui_max fileSize=0;
 };

@@ -88,7 +88,7 @@ inline int RunOrbit(string filePath, RunTimeData& Data)
     fstream file(Path);
     if (fs::file_size(Path) is 0)
         throw runt_err("Empty File Recived");
-
+    Data.fileSize = fs::file_size(filePath);
     Arena Memory(_16MB);
 
     // --- FRONT-END --- //

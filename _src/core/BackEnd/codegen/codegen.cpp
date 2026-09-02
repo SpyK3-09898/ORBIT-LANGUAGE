@@ -1165,7 +1165,7 @@ ByteCode CodeGenerator::InitCG(ParseResult& PRes, SAResult& SARes, RunTimeData& 
         CodeGenState* LibState = Memory.New<CodeGenState>();
         if (!LibPR.AST or !LibSA)
             continue;
-
+        
         // Set Library Symbols | Define os Simbolos da Lib.
         for (auto& [Id, Sym] : LibSA->Symbols)
             if (Sym) {
