@@ -586,7 +586,7 @@ void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& St
 
         // Load Member | Carrega o Membro.
         Inst = CodeGenUtils::CreateInst
-            (Node, OpCode::LOAD_MEMBER, MemberId->Name, 0, Data, Memory);
+            (Node, OpCode::LOAD_MEMBER, MemberSym->Id, 0, Data, Memory);
 
         BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 

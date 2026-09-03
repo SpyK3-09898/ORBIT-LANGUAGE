@@ -524,7 +524,7 @@ ByteValue BytePackage::Acess(ByteValue& Val, ByteInstruction& CurrInst, ByteCode
         OrbitLog::SyntaxLog::SyntaxError(
             "RunTime", 
             "Trying to Acess a Invalid Identifiers", 
-            "Packages ONLY can be Acessed By SymbolId",
+            "Packages ONLY can be Acessed By SymbolId, But Got: "+VM_Utils::ConvertByteToString(Val),
             "Use A Valid Export SymbolId",
             CurrInst.Pos.line, CurrInst.Pos.collumn
         );
