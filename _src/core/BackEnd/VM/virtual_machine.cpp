@@ -391,7 +391,7 @@ namespace VM_Utils {
 // Update GC | Atualiza o GC.
 void GarbageCollector::Update(ByteCode& BC, InstructionPointer& IP, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
-    if (Data.fileSize > _32KB and Memory.UsedMemory() > _256KB)
+    if (Data.fileSize <= _8KB or Memory.UsedMemory() <= _256KB)
         return;
 
     // Take Stack Objects | Pega os Objetos da Stack.
@@ -456,19 +456,32 @@ ObjectDescr* GarbageCollector::Register(void* Object, void (*Destroy)(void*, Are
 ByteValue BytePackage::Acess(ByteValue& Val, ByteInstruction& CurrInst, ByteCode* BC, RunTimeData& Data)
 {
     // Error Prev | Prevenção de Erros
-    if (!holds_alt<string>(Val))
+    if (!holds_alt<i64>(Val))
     {
         OrbitLog::SyntaxLog::SyntaxError(
             "RunTime", 
             "Trying to Acess a Invalid Identifiers", 
-            "Packages ONLY can be Acessed By Identifiers, Ex: Valid = 'Package.Mem;', Invalid = 'Package[3];'",
-            "Add a Valid <IDENTIFIER>",
+            "Packages ONLY can be Acessed By SymbolId",
+            "Use A Valid Export SymbolId",
             CurrInst.Pos.line, CurrInst.Pos.collumn
         );
         OrbitLog::SyntaxLog::ThrowLog(Data);
     }
 
-    return Members[std::get<string>(Val)];
+    ui16 SymId = static_cast<ui16>(std::get<i64>(Val));
+    auto It = Members.find(SymId);
+    if (It == Members.end())
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "RunTime",
+            "Cannot Find Export In Package",
+            "SymbolId: " + std::to_string(SymId) + " Not Found In Package",
+            "Check Export / Import",
+            CurrInst.Pos.line, CurrInst.Pos.collumn
+        );
+        OrbitLog::SyntaxLog::ThrowLog(Data);
+    }
+    return It->second;
 }
 
 // =========== CORE =========== //
@@ -930,7 +943,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
         Chunk* CurrChunk = BC.Chunks[BC.currChunk];
         auto& CurrInst = BC.Chunks[BC.currChunk]->Instructions[IP.Index];
         auto& Insts = CurrChunk->Instructions;
-        
+
         // Flags | Marcações.
         if (Data.flags.generateLog)
         {
@@ -1033,175 +1046,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 break;
             }
             case OpCode::STORE_CONST: // Store 'Pop' In A Constant | Guarda o Valor de 'Pop' Em Uma Constante.
-            {
-                
-            }
-
-            // LOADS:
-            case OpCode::LOAD_LOCAL: // Load A Local | Carrega Um Local:
-                CallStack->GetTop()->PushBack(CallStack->GetTop()->Locals[std::get<i64>(CurrInst->R1)]);
-                break;
-            case OpCode::LOAD_FN: // Load a Function | Carrega Uma Função.
-            {
-                ByteFn* Fn = Memory.New<ByteFn>();
-
-                Fn->ID         = std::get<i64>(CurrInst->R1);
-                Fn->ParamCount = std::get<i64>(CurrInst->R2);
-
-                Fn->Descr = GC.Register(Fn, ByteFn::Destroy, Memory);
-                CallStack->GetTop()->PushBack(Fn);
-                break;
-            }
-            case OpCode::LOAD_PACK:
-            {
-                BytePackage* Pack = std::get<BytePackage*>(CallStack->GetTop()->Objects[std::get<i64>(CurrInst->R1)]);
-                CallStack->GetTop()->Objects.erase(std::get<i64>(CurrInst->R1));
-                CallStack->GetTop()->PushBack(Pack);
-
-                break;
-            }
-
-            // BUILDS:
-            
-            // Build a Range Iterator | Constroi um Iterador de Intervalo.
-            case OpCode::BUILD_RANGE: 
-            {
-                i64 end   = std::get<i64>(CallStack->GetTop()->Pop());
-                i64 start = std::get<i64>(CallStack->GetTop()->Pop());
-
-                i32 step = start <= end ? 1 : -1;
-
-                ByteIterator* It = Memory.New<ByteIterator>(start, end, step);
-                It->Descr = GC.Register(It, ByteIterator::Destroy, Memory);
-                CallStack->GetTop()->PushBack(It);
-                break;
-            }
-            // Build a Runtime Package Object | Constroi um Objeto de Pacote de Execução.
-            case OpCode::BUILD_PACKAGE:
-            {
-                BytePackage* Pack = Memory.New<BytePackage>();
-            
-                Pack->Descr = GC.Register(Pack, BytePackage::Destroy, Memory);
-                CallStack->GetTop()->Objects[std::get<i64>(CurrInst->R1)] = std::move(Pack); 
-                
-                break;
-            }
-            case OpCode::BUILD_ARRAY: // Build a Array Value | Constroi Um Valor de Matriz.
-            {
-                ByteArray A{};
-                shared_ptr<ByteArray> Arr = std::make_shared<ByteArray>();
-
-                for (int i = 0; i < std::get<i64>(CurrInst->R1); i++)
-                    Arr->push_back(CallStack->GetTop()->Pop());
-                CallStack->GetTop()->PushBack(Arr);
-                break;
-            }
-            case OpCode::BUILD_TABLE: // Build a Table Value | Constroi um Valor de Tabelas.
-            {
-                ByteTable T;
-                shared_ptr Tab = std::make_shared<ByteTable>(T);
-                CallStack->GetTop()->PushBack(Tab);
-
-                break;
-            }
-
-            // INDEX:
-
-            case OpCode::GET_INDEX: // Get Index of Arr | Pega o Indice do Arr.
-            {
-                ByteValue Index = CallStack->GetTop()->Pop();
-                ByteValue Object = CallStack->GetTop()->Pop();
-
-                if (holds_alt<shared_ptr<ByteArray>>(Object))
-                {
-                    i64 Val =
-                        std::get<i64>(VM_Utils::ConvertValue(
-                            Index,
-                            TypeKind::NUMBER,
-                            SubTypeKind::INT,
-                            CurrInst->Pos,
-                            Data
-                        ))-1;
-
-                    auto& Arr = *std::get<shared_ptr<ByteArray>>(Object);
-
-                    if (Val < 0 || Val >= (i64)Arr.size())
-                        CallStack->GetTop()->PushBack(NullLitVal{});
-                    else
-                        CallStack->GetTop()->PushBack(Arr[Val]);
-                }
-                else if (holds_alt<shared_ptr<ByteTable>>(Object))
-                {
-                    auto& Table = *std::get<shared_ptr<ByteTable>>(Object);
-
-                    if (holds_alt<i64>(Index))
-                    {
-                        i64 I = std::get<i64>(Index)-1;
-
-                        if (I < 0 || I >= (i64)Table.size())
-                            CallStack->GetTop()->PushBack(NullLitVal{});
-                        else
-                            CallStack->GetTop()->PushBack(Table[I].second);
-                    }
-                    else
-                    {
-                        string Key =
-                            std::get<string>(VM_Utils::ConvertValue(
-                                Index,
-                                TypeKind::STRING,
-                                SubTypeKind::NONE,
-                                CurrInst->Pos,
-                                Data
-                            ));
-
-                        bool finded = false;
-                        for (auto& Entry : Table)
-                        {
-                            if (Entry.first == Key)
-                            {
-                                finded = true;
-                                CallStack->GetTop()->PushBack(Entry.second);
-                                break;
-                            }
-                        }
-                        if (!finded) CallStack->GetTop()->PushBack(NullLitVal{});
-                    }
-                }
-                else if (holds_alt<string>(Object))
-                {
-                    auto Text = std::get<string>(Object);
-                    i64 I = std::get<i64>(Index)-1;
-
-                    if (I < 0 || I >= static_cast<i64>(Text.size()))
-                    {
-                        if (!std::get<bool>(CurrInst->LX1))
-                        {
-                            OrbitLog::SyntaxLog::SyntaxError(
-                                "RunTime", 
-                                "Trying Acess a <OUT-OF-RANGE> Index",
-                                "Trying to Acess A Invalid <INDEX> Of String", 
-                                "Acess a Valid <INDEX>",
-                                CurrInst->Pos.line, CurrInst->Pos.collumn
-                            );
-                            OrbitLog::SyntaxLog::ThrowLog(Data);
-                        } else {
-                            CallStack->GetTop()->PushBack(string(1, '\0'));
-                        }
-                    } else CallStack->GetTop()->PushBack(string(1, Text[I]));
-                }
-                else
-                {
-                    OrbitLog::SyntaxLog::SyntaxError(
-                        "RunTime",
-                        "Trying to Get a Non-<BYTE_ARRAY/BYTE_TABLE>",
-                        "This Object Cannot be Acessed By Index",
-                        "~", CurrInst->Pos.line, CurrInst->Pos.collumn
-                    );
-                    OrbitLog::SyntaxLog::ThrowLog(Data);
-                }
-                break;
-            }
-
+            { break; }
             case OpCode::STORE_INDEX: // Store Index of Arr | Pega o Indice do Arr.
             {
                 ByteValue Index = CallStack->GetTop()->Pop(); // Acess Index | Indice de Acesso
@@ -1306,6 +1151,256 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                     OrbitLog::SyntaxLog::SyntaxError(
                         "RunTime",
                         "Trying to Store a Non-<BYTE_ARRAY/BYTE_TABLE>",
+                        "This Object Cannot be Acessed By Index",
+                        "~", CurrInst->Pos.line, CurrInst->Pos.collumn
+                    );
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                }
+                break;
+            }
+
+            // LOADS:
+            case OpCode::LOAD_LOCAL: // Load A Local | Carrega Um Local:
+                CallStack->GetTop()->PushBack(CallStack->GetTop()->Locals[std::get<i64>(CurrInst->R1)]);
+                break;
+            case OpCode::LOAD_FN: // Load a Function | Carrega Uma Função.
+            {
+                ByteFn* Fn = Memory.New<ByteFn>();
+
+                Fn->ID         = std::get<i64>(CurrInst->R1);
+                Fn->ParamCount = std::get<i64>(CurrInst->R2);
+
+                Fn->Descr = GC.Register(Fn, ByteFn::Destroy, Memory);
+                CallStack->GetTop()->PushBack(Fn);
+                break;
+            }
+            case OpCode::LOAD_PACK: // Load a Package | Carrega um Pacote.
+            {
+                ui32 Id = static_cast<ui32>(std::get<i64>(CurrInst->R1));
+                auto& Objs = CallStack->GetTop()->Objects;
+
+                auto It = Objs.find(Id);
+                if (It == Objs.end())
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "RunTime",
+                        "Cannot Find Package",
+                        "Package Id: " + std::to_string(Id) + " Not Found In Objects",
+                        "Check Import / BUILD_PACKAGE",
+                        CurrInst->Pos.line, CurrInst->Pos.collumn
+                    );
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                }
+
+                CallStack->GetTop()->PushBack(It->second);
+                break;
+            }
+
+            // BUILDS:
+            
+            // Build a Range Iterator | Constroi um Iterador de Intervalo.
+            case OpCode::BUILD_RANGE: 
+            {
+                i64 end   = std::get<i64>(CallStack->GetTop()->Pop());
+                i64 start = std::get<i64>(CallStack->GetTop()->Pop());
+
+                i32 step = start <= end ? 1 : -1;
+
+                ByteIterator* It = Memory.New<ByteIterator>(start, end, step);
+                It->Descr = GC.Register(It, ByteIterator::Destroy, Memory);
+                CallStack->GetTop()->PushBack(It);
+                break;
+            }
+            // Build a Runtime Package Object | Constroi um Objeto de Pacote de Execução.
+            case OpCode::BUILD_PACKAGE:
+            {
+                // Take Id | Pega o Id
+                i64 packId = std::get<i64>(CurrInst->R1);
+
+                // Gen Pack | Gera o Pacote.
+                BytePackage* Pack = Memory.New<BytePackage>();
+                Pack->chunkId = static_cast<ui8>(packId);
+                Pack->Chunk   = BC.Chunks[packId];
+                Pack->Descr   = GC.Register(Pack, BytePackage::Destroy, Memory);
+
+                // Chunk Data | Dados da Chunk
+                int prevChunk = BC.currChunk;
+                size_t prevIndex = IP.Index;
+
+                // Gen Frame | Gera o Frame
+                VM_Frame* LibFrame = Memory.New<VM_Frame>();
+                LibFrame->retChunk = prevChunk;
+                CallStack->Push(LibFrame, &IP);
+
+                // Change Chunk | Muda a Chunk
+                BC.currChunk = static_cast<int>(packId);
+                IP.Index = 0;
+
+                // Lib Chunk Data | Dados da Chunk da Biblioteca.s
+                Chunk* LibChunk = BC.Chunks[BC.currChunk];
+                size_t libSize = LibChunk->Instructions.size();
+
+                // Run | Roda
+                while (IP.Index < libSize)
+                {
+                    ByteInstruction* I = LibChunk->Instructions[IP.Index];
+                    OpCode OP = I->C;
+
+                    if (OP == OpCode::PUSH)
+                        CallStack->GetTop()->PushBack(I->R1);
+                    else if (OP == OpCode::STORE_LOCAL)
+                    {
+                        ByteValue Val = CallStack->GetTop()->Pop();
+                        CallStack->GetTop()->Locals[std::get<i64>(I->R1)] = Val;
+                    }
+                    else if (OP == OpCode::POP)
+                        CallStack->GetTop()->Pop();
+                    else
+                    {
+                        OrbitLog::Error(
+                            "virtual_machine",
+                            "BUILD_PACKAGE init: unsupported opcode: " +
+                                std::to_string(static_cast<int>(OP)),
+                            true,
+                            1
+                        );
+                    }
+                    IP.Index++;
+                }
+
+                // Pack | Pacote
+                Pack->Members.clear();
+                auto ExpIt = BC.ExportSlots.find(static_cast<ui8>(packId));
+                if (ExpIt != BC.ExportSlots.end())
+                {
+                    for (auto& [SymId, Slot] : ExpIt->second)
+                    {
+                        auto Lit = CallStack->GetTop()->Locals.find(Slot);
+                        if (Lit != CallStack->GetTop()->Locals.end())
+                            Pack->Members[SymId] = Lit->second;
+                    }
+                }
+
+                IP = CallStack->Pop();
+                BC.currChunk = prevChunk;
+                IP.Index = prevIndex;
+
+                CallStack->GetTop()->Objects[static_cast<ui32>(packId)] = Pack;
+                CallStack->GetTop()->PushBack(Pack);
+                break;
+            }
+            case OpCode::BUILD_ARRAY: // Build a Array Value | Constroi Um Valor de Matriz.
+            {
+                ByteArray A{};
+                shared_ptr<ByteArray> Arr = std::make_shared<ByteArray>();
+
+                for (int i = 0; i < std::get<i64>(CurrInst->R1); i++)
+                    Arr->push_back(CallStack->GetTop()->Pop());
+                CallStack->GetTop()->PushBack(Arr);
+                break;
+            }
+            case OpCode::BUILD_TABLE: // Build a Table Value | Constroi um Valor de Tabelas.
+            {
+                ByteTable T;
+                shared_ptr Tab = std::make_shared<ByteTable>(T);
+                CallStack->GetTop()->PushBack(Tab);
+
+                break;
+            }
+
+            // GETS:
+
+            case OpCode::GET_MEMBER:
+            {
+                
+            }
+            case OpCode::GET_INDEX: // Get Index of Arr | Pega o Indice do Arr.
+            {
+                ByteValue Index = CallStack->GetTop()->Pop();
+                ByteValue Object = CallStack->GetTop()->Pop();
+
+                if (holds_alt<shared_ptr<ByteArray>>(Object))
+                {
+                    i64 Val =
+                        std::get<i64>(VM_Utils::ConvertValue(
+                            Index,
+                            TypeKind::NUMBER,
+                            SubTypeKind::INT,
+                            CurrInst->Pos,
+                            Data
+                        ))-1;
+
+                    auto& Arr = *std::get<shared_ptr<ByteArray>>(Object);
+
+                    if (Val < 0 || Val >= (i64)Arr.size())
+                        CallStack->GetTop()->PushBack(NullLitVal{});
+                    else
+                        CallStack->GetTop()->PushBack(Arr[Val]);
+                }
+                else if (holds_alt<shared_ptr<ByteTable>>(Object))
+                {
+                    auto& Table = *std::get<shared_ptr<ByteTable>>(Object);
+
+                    if (holds_alt<i64>(Index))
+                    {
+                        i64 I = std::get<i64>(Index)-1;
+
+                        if (I < 0 || I >= (i64)Table.size())
+                            CallStack->GetTop()->PushBack(NullLitVal{});
+                        else
+                            CallStack->GetTop()->PushBack(Table[I].second);
+                    }
+                    else
+                    {
+                        string Key =
+                            std::get<string>(VM_Utils::ConvertValue(
+                                Index,
+                                TypeKind::STRING,
+                                SubTypeKind::NONE,
+                                CurrInst->Pos,
+                                Data
+                            ));
+
+                        bool finded = false;
+                        for (auto& Entry : Table)
+                        {
+                            if (Entry.first == Key)
+                            {
+                                finded = true;
+                                CallStack->GetTop()->PushBack(Entry.second);
+                                break;
+                            }
+                        }
+                        if (!finded) CallStack->GetTop()->PushBack(NullLitVal{});
+                    }
+                }
+                else if (holds_alt<string>(Object))
+                {
+                    auto Text = std::get<string>(Object);
+                    i64 I = std::get<i64>(Index)-1;
+
+                    if (I < 0 || I >= static_cast<i64>(Text.size()))
+                    {
+                        if (!std::get<bool>(CurrInst->LX1))
+                        {
+                            OrbitLog::SyntaxLog::SyntaxError(
+                                "RunTime", 
+                                "Trying Acess a <OUT-OF-RANGE> Index",
+                                "Trying to Acess A Invalid <INDEX> Of String", 
+                                "Acess a Valid <INDEX>",
+                                CurrInst->Pos.line, CurrInst->Pos.collumn
+                            );
+                            OrbitLog::SyntaxLog::ThrowLog(Data);
+                        } else {
+                            CallStack->GetTop()->PushBack(string(1, '\0'));
+                        }
+                    } else CallStack->GetTop()->PushBack(string(1, Text[I]));
+                }
+                else
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "RunTime",
+                        "Trying to Get a Non-<BYTE_ARRAY/BYTE_TABLE>",
                         "This Object Cannot be Acessed By Index",
                         "~", CurrInst->Pos.line, CurrInst->Pos.collumn
                     );

@@ -751,7 +751,7 @@ void CodeGenerator::CompileLValue(ExpressionNode* Node, CodeGenState& State, Byt
 void CodeGenerator::CompileVarDecl(VarDeclNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
     Symbol* Sym = CodeGenUtils::GetSym(Node, SARes);
-    if (Sym && Sym->read_count == 0 and Sym->write_count == 0)
+    if (Sym && Sym->read_count == 0 and Sym->write_count == 0 and !Node->export_decl)
         return;
 
     // Compile | Compila:
@@ -1168,11 +1168,14 @@ ByteCode CodeGenerator::InitCG(ParseResult& PRes, SAResult& SARes, RunTimeData& 
         
         // Set Library Symbols | Define os Simbolos da Lib.
         for (auto& [Id, Sym] : LibSA->Symbols)
-            if (Sym) {
-                if (Sym->LinkedScope)
-                    Sym->LinkedScope->CG_State = LibState;
-                Sym->packId = packId;
-            }
+        {
+            if (!Sym || !Sym->isExported)
+                continue;
+            if (!LibState->HasLocal(Sym->Id))
+                continue;
+
+            BC.ExportSlots[packId][Sym->Id] = LibState->GetLocal(Sym->Id);
+        }
         
         LibState->currChunk = static_cast<int>(packId);
         LibraryStates.push_back(LibState);

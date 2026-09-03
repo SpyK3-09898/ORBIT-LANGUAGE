@@ -144,7 +144,7 @@ struct BytePackage : ByteObject
     Chunk* Chunk;
     ui8 chunkId=0;
     ui32 SymbolCount=0;
-    unord_map<string, ByteValue> Members;
+    unord_map<ui16, ByteValue> Members;
     
     // FUNCTIONS | FUNÇÕES
 
@@ -286,5 +286,6 @@ struct ByteCode
     int currChunk=0;
     vec<Chunk*> Chunks;
     unord_map<string, ui8> Contexts;
+    unord_map<ui8, unord_map<ui16, ui32>> ExportSlots;
     unord_map<ui8, unord_map<string, i64>> Functions;
 };
