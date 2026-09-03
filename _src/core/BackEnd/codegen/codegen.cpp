@@ -531,38 +531,69 @@ void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& St
 
         // Resolve Member | Resolve o Membro (prefer SymbolId).
         Symbol* MemberSym = CodeGenUtils::GetSym(MemberId, SARes);
-        if (!MemberSym and NsSym->LinkedScope)
+        if (!MemberSym && NsSym->LinkedScope)
             MemberSym = NsSym->LinkedScope->FindSymLocal(MemberId->Name);
-        else if (!MemberSym)
+
+        if (!MemberSym)
         {
             OrbitLog::Error("codegen.cpp", "Cannot Find Member: "+MemberId->Name+" in Namespace", true, 404);
             return;
         }
 
-        CodeGenState* SymState = GetStateForSym(MemberSym, State);
-        auto& S = MemberSym->Type;
+        // Resolve Runtime Object | Resolve o Objeto de Runtime.
+        ExpressionNode* RuntimeObject = Node->Object;
+        while (RuntimeObject && RuntimeObject->Type == NodeType::MEMBER_ACCESS)
+        {
+            MemberAccessNode* Access = static_cast<MemberAccessNode*>(RuntimeObject);
+            RuntimeObject = Access->Object;
+        }
+
+        Symbol* RuntimeSym = CodeGenUtils::GetSym(RuntimeObject, SARes);
+        if (!RuntimeSym)
+        {
+            OrbitLog::Error("codegen.cpp", "Cannot Find Runtime Object", true, 404);
+            return;
+        }
+
+        auto& S = RuntimeSym->Type;
         ByteInstruction* Inst;
 
         if (S == SymbolTypes::IDENTIFIER or S == SymbolTypes::VAR or S == SymbolTypes::PARAM)
             Inst = CodeGenUtils::CreateInst
-                (Node, OpCode::LOAD_LOCAL, SymState->GetLocal(MemberSym->Id), 0, Data, Memory);
+                (Node, OpCode::LOAD_LOCAL, State.GetLocal(RuntimeSym->Id), 0, Data, Memory);
         else if (S == SymbolTypes::FN)
         {
-            i64 id = BC.Functions.at(MemberSym->packId).at(MemberSym->Name);
+            i64 id = BC.Functions.at(RuntimeSym->packId).at(RuntimeSym->Name);
             Inst = CodeGenUtils::CreateInst
                 (Node, OpCode::LOAD_FN, id, BC.Chunks[id]->ParamCount, Data, Memory);
         } else if (S == SymbolTypes::NAMESPACE)
         {
             // NameSpaces are only a shortcut | NameSpaces são apenas um atalho.
             return;
+        } else if (S == SymbolTypes::LIBRARY or S == SymbolTypes::MODULE)
+        {
+            Inst = CodeGenUtils::CreateInst
+                (Node, OpCode::LOAD_PACK, RuntimeSym->contextId, 0, Data, Memory);
         } else
         {
             OrbitLog::Error
-            ("codegen.cpp", "Invalid Symbol Type for: '"+MemberSym->Name+"', Type: "+std::to_string(static_cast<int>(S)), true, 400);
+            ("codegen.cpp", "Invalid Symbol Type for: '"+RuntimeSym->Name+"', Type: "+std::to_string(static_cast<int>(S)), true, 400);
             return;
         }
 
         // Set | Define:
+        BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+
+        // Load Member | Carrega o Membro.
+        Inst = CodeGenUtils::CreateInst
+            (Node, OpCode::LOAD_MEMBER, MemberId->Name, 0, Data, Memory);
+
+        BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+
+        // Generate Inst | Gera a Instrução.
+        Inst =
+            CodeGenUtils::CreateInst(Node, OpCode::GET_MEMBER, 0, 0, Data, Memory);
+
         BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
         return;
     }
@@ -573,18 +604,19 @@ void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& St
     CompileNode(Node->Object, State, BC, SARes, Data, Memory, O);
 
     // Compile Member | Compila o Membro.
-    if (!Node->Member)
-    {
-        OrbitLog::Error("codegen.cpp", "Invalid Member Access", true, 400);
+    if (!Node->Member or Node->Member->Type != NodeType::IDENTIFIER)
         return;
-    }
 
-    CompileNode(Node->Member, State, BC, SARes, Data, Memory, Owner);
+    IdentifierNode* MemberId = static_cast<IdentifierNode*>(Node->Member);
 
+    // Load Member | Carrega o Membro.
+    ByteInstruction* Inst = CodeGenUtils::CreateInst
+        (Node, OpCode::LOAD_MEMBER, MemberId->Name, 0, Data, Memory);
+
+    BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
     // Generate Inst | Gera a Instrução.
-    ByteInstruction* Inst = 
+    Inst =
         CodeGenUtils::CreateInst(Node, OpCode::GET_MEMBER, 0, 0, Data, Memory);
-
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 }
 
@@ -1093,7 +1125,7 @@ void CodeGenerator::CompileImport(ImportNode* Node, CodeGenState& State, ByteCod
 
     // Generate Instruction
     // Gera a Instrução.
-    ByteInstruction* Inst = CodeGenUtils::CreateInst(
+    ByteInstruction* Build = CodeGenUtils::CreateInst(
         Node,
         OpCode::BUILD_PACKAGE,
         static_cast<i64>(Id),
@@ -1101,6 +1133,8 @@ void CodeGenerator::CompileImport(ImportNode* Node, CodeGenState& State, ByteCod
         Data,
         Memory
     );
+    BC.Chunks[State.currChunk]->Instructions.push_back(Build);
+
     ByteInstruction* Store = CodeGenUtils::CreateInst(
         Node,
         OpCode::STORE_LOCAL,
@@ -1109,7 +1143,6 @@ void CodeGenerator::CompileImport(ImportNode* Node, CodeGenState& State, ByteCod
         Data,
         Memory
     );
-    BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
     BC.Chunks[State.currChunk]->Instructions.push_back(Store);
     Sym->contextId = static_cast<i64>(Id);
 }

@@ -187,7 +187,7 @@ namespace VM_Utils {
                 else if (holds_alt<NoneLitVal>(Val))
                     return "<NONE>";
                 else if (holds_alt<NullLitVal>(Val)) 
-                    return "<NULL>";
+                    return "␀";
                 else if (holds_alt<shared_ptr<ByteArray>>(Val)) {
                     
                     shared_ptr<ByteArray> Arr = std::get<shared_ptr<ByteArray>>(Val);
@@ -236,10 +236,30 @@ namespace VM_Utils {
                     return ret;
                 }
                 else if (holds_alt<ByteFn*>(Val)) return "Function";
-                else { 
+                else if (holds_alt<ByteIterator*>(Val)) {
                     OrbitLog::SyntaxLog::SyntaxError(
                         "RunTime", 
-                        "Non Viable Conversion In: <STRING>, To: <UNK>", 
+                        "Non Viable Conversion In: <STRING>, To: <IT>", 
+                        "Cannot Cast Left And Right", 
+                        "Add A Valid Type",
+                        Pos.line, Pos.collumn
+                    );
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                } else if (holds_alt<BytePackage*>(Val)) {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "RunTime", 
+                        "Non Viable Conversion In: <STRING>, To: <PACKAGE>", 
+                        "Cannot Cast Left And Right", 
+                        "Add A Valid Type",
+                        Pos.line, Pos.collumn
+                    );
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                } else if (holds_alt<nullptr_t>(Val)) 
+                    return "␀";
+                else {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "RunTime", 
+                        "Non Viable Conversion In: <STRING>, To: <UNK/␀>", 
                         "Cannot Cast Left And Right", 
                         "Add A Valid Type",
                         Pos.line, Pos.collumn
@@ -356,6 +376,8 @@ namespace VM_Utils {
         }
         else if (holds_alt<ByteIterator*>(Val)) return "Iterator";
         else if (holds_alt<ByteFn*>(Val)) return "Function";
+        else if (holds_alt<BytePackage*>(Val)) return "Package";
+        else if (holds_alt<nullptr_t>(Val)) return "<␀>";
         else return "Unk";
     }
 
@@ -1204,6 +1226,9 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             case OpCode::LOAD_LOCAL: // Load A Local | Carrega Um Local:
                 CallStack->GetTop()->PushBack(CallStack->GetTop()->Locals[std::get<i64>(CurrInst->R1)]);
                 break;
+            case OpCode::LOAD_MEMBER: // Load a Member | Carrega um Membro.
+                CallStack->GetTop()->PushBack(CurrInst->R1);
+                break;                
             case OpCode::LOAD_FN: // Load a Function | Carrega Uma Função.
             {
                 ByteFn* Fn = Memory.New<ByteFn>();
@@ -1351,11 +1376,15 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
 
             // GETS:
 
-            case OpCode::GET_MEMBER:
+            case OpCode::GET_MEMBER: // Get Value Member | Pega Um Membro de um Valor.
             {
+                // Take Member | Pega o Membro.
+                ByteValue Member = CallStack->GetTop()->Pop();
+
                 // Take Object | Pega o Objeto.
-                ByteValue Val = CallStack->GetTop()->Pop();
-                ByteObject* Obj = VM_Utils::GetByteObject(Val);
+                ByteValue Object = CallStack->GetTop()->Pop();
+
+                ByteObject* Obj = VM_Utils::GetByteObject(Object);
 
                 // Error Prevention | Prevenção de Erros.
                 if (!Obj)
@@ -1370,8 +1399,10 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                     );
                     OrbitLog::SyntaxLog::ThrowLog(Data);
                     return 1;
-                } else if (!Obj->acessible) {
+                }
 
+                if (!Obj->acessible)
+                {
                     OrbitLog::SyntaxLog::SyntaxError(
                         "RunTime", 
                         "Trying to Acess a Non-Acessible Object Type", 
@@ -1381,11 +1412,13 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                         CurrInst->Pos.collumn
                     );
                     OrbitLog::SyntaxLog::ThrowLog(Data);
-                    return 1;                    
+                    return 1;
                 }
 
-                Val = CallStack->GetTop()->Pop();
-                Obj->Acess(Val, *CurrInst, &BC, Data);
+                ByteValue Result = Obj->Acess(Member, *CurrInst, &BC, Data);
+                CallStack->GetTop()->PushBack(Result);
+                
+                break;
             }
             case OpCode::GET_INDEX: // Get Index of Arr | Pega o Indice do Arr.
             {
