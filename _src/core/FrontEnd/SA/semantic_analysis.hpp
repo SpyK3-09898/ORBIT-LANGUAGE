@@ -195,6 +195,7 @@ struct SAState
 struct SAResult 
 {
     Scope* GlobalScope = nullptr;
+    vec<Scope*> ScopeTable;
     unord_map<ASTNode*, TypeInfo> ExpressionTypes;
     unord_map<str_view, Symbol*> SymbolTable;
     unord_map<ui16, Symbol*> Symbols;

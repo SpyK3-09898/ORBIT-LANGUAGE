@@ -959,14 +959,14 @@ Scope* EntryScope(BodyNode& Node, SAState& State, SAResult& Res, RunTimeData& Da
     Scope* S = Mem.New<Scope>();
 
     S->Parent = State.CurrScope;
-    S->Type = Node.Type;
-    S->Owner = &Node;
-
+    S->Type   = Node.Type;
+    S->Owner  = &Node;
     if (State.CurrScope)
         State.CurrScope->Next = S;
 
     State.CurrScope = S;
     State.ScopeStack.push_back(S);
+    Res.ScopeTable.push_back(S);
 
     return S;
 }

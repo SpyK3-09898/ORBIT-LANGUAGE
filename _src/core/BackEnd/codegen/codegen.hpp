@@ -109,13 +109,19 @@ class CodeGenerator
 {
     private:
 
-        vec<CodeGenState*> LibraryStates;
+        vec<CodeGenState*> LibraryStates; // Get State From A Symbol | Pega o Estado a Partir de um Simbolo:
         CodeGenState* GetStateForSym(Symbol* Sym, CodeGenState& State)
         {
             if (!Sym)
                 return &State;
-            if (Sym->LinkedScope && Sym->LinkedScope->CG_State)
-                return Sym->LinkedScope->CG_State;
+
+            Scope* ScopeIt = Sym->DeclaredScope;
+            while (ScopeIt)
+            {
+                if (ScopeIt->CG_State)
+                    return ScopeIt->CG_State;
+                ScopeIt = ScopeIt->Parent;
+            }
 
             return &State;
         }

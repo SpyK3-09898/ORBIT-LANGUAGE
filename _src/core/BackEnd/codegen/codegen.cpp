@@ -572,9 +572,19 @@ void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& St
     Symbol* O = T.Father;
     CompileNode(Node->Object, State, BC, SARes, Data, Memory, O);
 
+    // Compile Member | Compila o Membro.
+    if (!Node->Member)
+    {
+        OrbitLog::Error("codegen.cpp", "Invalid Member Access", true, 400);
+        return;
+    }
+
+    CompileNode(Node->Member, State, BC, SARes, Data, Memory, Owner);
+
     // Generate Inst | Gera a Instrução.
     ByteInstruction* Inst = 
         CodeGenUtils::CreateInst(Node, OpCode::GET_MEMBER, 0, 0, Data, Memory);
+
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 }
 
@@ -1163,10 +1173,17 @@ ByteCode CodeGenerator::InitCG(ParseResult& PRes, SAResult& SARes, RunTimeData& 
         ParseResult& LibPR = Cont.second.first;
         SAResult* LibSA = Cont.second.second;
         CodeGenState* LibState = Memory.New<CodeGenState>();
-        if (!LibPR.AST or !LibSA)
+        if (!LibPR.AST || !LibSA)
             continue;
         
         // Set Library Symbols | Define os Simbolos da Lib.
+        LibState->currChunk = static_cast<int>(packId);
+        LibraryStates.push_back(LibState);
+        LibSA->GlobalScope->CG_State = LibState;
+        for (Scope* Sp : LibSA->ScopeTable)
+            Sp->CG_State = LibState;
+
+        CompileNode(LibPR.AST, *LibState, BC, *LibSA, Data, Memory);
         for (auto& [Id, Sym] : LibSA->Symbols)
         {
             if (!Sym || !Sym->isExported)
@@ -1176,12 +1193,6 @@ ByteCode CodeGenerator::InitCG(ParseResult& PRes, SAResult& SARes, RunTimeData& 
 
             BC.ExportSlots[packId][Sym->Id] = LibState->GetLocal(Sym->Id);
         }
-        
-        LibState->currChunk = static_cast<int>(packId);
-        LibraryStates.push_back(LibState);
-
-        // Update Prev State | Atualzia o Estado Previamente.
-        CompileNode(LibPR.AST, *LibState, BC, *LibSA, Data, Memory);
     }
 
     // Compile AST | Compila a AST.

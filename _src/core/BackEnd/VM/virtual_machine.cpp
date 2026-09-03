@@ -27,6 +27,26 @@
 // Utils of O-VM | Utilidades da O-VM.
 namespace VM_Utils {
 
+    // Get Object of Byte-Value | Pega o Objeto do ByteValue.
+    ByteObject* GetByteObject(ByteValue& Val)
+    {
+        return std::visit([](auto&& Value) -> ByteObject*
+        {
+            using T = std::decay_t<decltype(Value)>;
+
+            if constexpr (std::is_pointer_v<T> &&
+                        std::is_base_of_v<ByteObject, std::remove_pointer_t<T>>)
+            {
+                return Value;
+            }
+            else
+            {
+                return nullptr;
+            }
+
+        }, Val);
+    }
+
     // Convert Left To Right | Converte Esquerda para a Direita.
     ByteValue ConvertValue(ByteValue& Val, TypeKind K1, SubTypeKind K2, NodePos& Pos, RunTimeData& Data)
     {
@@ -449,6 +469,27 @@ ObjectDescr* GarbageCollector::Register(void* Object, void (*Destroy)(void*, Are
 }
 
 // =========== OBJECTS ========== //
+
+// Base Acess | Acesso Basico.
+ByteValue ByteObject::Acess
+(
+    ByteValue& Val,
+    ByteInstruction& CurrInst,
+    ByteCode* BC,
+    RunTimeData& Data
+)
+{
+    OrbitLog::SyntaxLog::SyntaxError
+    (
+        "RunTime",
+        "Object Does Not Support Member Access",
+        "Object Cannot Be Acessed",
+        "Remove Acess",
+        CurrInst.Pos.line, CurrInst.Pos.collumn
+    );
+    OrbitLog::SyntaxLog::ThrowLog(Data);
+    return nullptr;
+}
 
 // PACKAGES:
 
@@ -1312,7 +1353,39 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
 
             case OpCode::GET_MEMBER:
             {
-                
+                // Take Object | Pega o Objeto.
+                ByteValue Val = CallStack->GetTop()->Pop();
+                ByteObject* Obj = VM_Utils::GetByteObject(Val);
+
+                // Error Prevention | Prevenção de Erros.
+                if (!Obj)
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "RunTime", 
+                        "Trying to Acess a Non-Object Type", 
+                        "This Object Cannot Be Acessed, Because Dont is a Object",
+                        "Add a Valid Type",
+                        CurrInst->Pos.line, 
+                        CurrInst->Pos.collumn
+                    );
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                    return 1;
+                } else if (!Obj->acessible) {
+
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "RunTime", 
+                        "Trying to Acess a Non-Acessible Object Type", 
+                        "This Object Cannot Be Acessed, Because Cannot Be Acessed",
+                        "Add a Valid Type",
+                        CurrInst->Pos.line, 
+                        CurrInst->Pos.collumn
+                    );
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                    return 1;                    
+                }
+
+                Val = CallStack->GetTop()->Pop();
+                Obj->Acess(Val, *CurrInst, &BC, Data);
             }
             case OpCode::GET_INDEX: // Get Index of Arr | Pega o Indice do Arr.
             {

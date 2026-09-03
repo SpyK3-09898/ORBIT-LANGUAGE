@@ -99,8 +99,15 @@ struct ByteObject
 
     // Object Description | Descrição do Objeto.
     public: ObjectDescr* Descr;
+    bool acessible=false;
 
-    ByteValue Acess(ByteValue& Val);
+    virtual ByteValue Acess
+    (
+        ByteValue& Val,
+        ByteInstruction& CurrInst,
+        ByteCode* BC,
+        RunTimeData& Data
+    );
 };
 
 // Iterator | Iterador.
@@ -147,9 +154,12 @@ struct BytePackage : ByteObject
     unord_map<ui16, ByteValue> Members;
     
     // FUNCTIONS | FUNÇÕES
+    BytePackage() { acessible=true; };
 
     // Member Acess | Acesso de Membros.
-    ByteValue Acess(ByteValue& Val, ByteInstruction& CurrInst, ByteCode* BC, RunTimeData& Data);
+    ByteValue Acess
+        (ByteValue& Val, ByteInstruction& CurrInst, ByteCode* BC, RunTimeData& Data) 
+        override;
 
     // GC | CB
     ~BytePackage() = default;
