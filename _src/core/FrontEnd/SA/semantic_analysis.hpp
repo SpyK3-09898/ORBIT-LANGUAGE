@@ -37,9 +37,11 @@ enum class SymbolTypes: ui8
     TABLE,      // 7
     STRUCT,     // 8
     CLASS,      // 9
-    ENUM,       // 10
-    MODULE,     // 11
-    LIBRARY     // 12
+    INST_CLASS, // 10
+    INST_STRUCT,// 11
+    ENUM,       // 12
+    MODULE,     // 13
+    LIBRARY     // 14
 };
 
 // Kindof Types | kind dos Tipos.
@@ -72,6 +74,8 @@ enum class TypeKind
     // OBJ
     STRUCT,
     CLASS,
+    INST_STRUCT,
+    INST_CLASS,
     NAMESPACE,
     MODULE,
     LIBRARIE,
@@ -228,6 +232,8 @@ class SemanticAnalizer
         void LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpFunction(FnDecl& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpNameSpace(NameSpaceDecl& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
+        void LookUpStruct(StructDeclNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
+        void LookUpClass(ClassDeclNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
 
         void LookUpIf(IfNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpElif(ElifNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);

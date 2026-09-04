@@ -230,6 +230,62 @@ void DumbNode(ASTNode& Node, fstream& file, RunTimeData& Data, int Depth = 0)
             break;
         }
 
+                case NodeType::STRUCT_DECL:
+        {
+            auto& N = static_cast<StructDeclNode&>(Node);
+
+            file << Indent << "Struct\n";
+            file << Indent << "Name: " << N.Name << '\n';
+            file << Indent << "Is UDT: " << (N.isUDT ? "true" : "false") << '\n';
+
+            if (N.Extend)
+            {
+                file << Indent << "Extend:\n";
+                DumbNode(*N.Extend, file, Data, Depth + 1);
+            }
+
+            if (N.Body)
+            {
+                file << Indent << "Body:\n";
+                DumbNode(*N.Body, file, Data, Depth + 1);
+            }
+
+            break;
+        }
+
+        case NodeType::CLASS_DECL:
+        {
+            auto& N = static_cast<ClassDeclNode&>(Node);
+
+            file << Indent << "Class\n";
+            file << Indent << "Name: " << N.Name << '\n';
+            file << Indent << "Is UDT: " << (N.isUDT ? "true" : "false") << '\n';
+
+            if (N.Extend)
+            {
+                file << Indent << "Extend:\n";
+                DumbNode(*N.Extend, file, Data, Depth + 1);
+            }
+
+            if (N.Body)
+            {
+                file << Indent << "Body:\n";
+                DumbNode(*N.Body, file, Data, Depth + 1);
+            }
+
+            break;
+        }
+
+        case NodeType::TYPEDEF_DECL:
+        {
+            auto& N = static_cast<TypeDefDeclNode&>(Node);
+
+            file << Indent << "TypeDef\n";
+            file << Indent << "Name: " << N.Name << '\n';
+
+            break;
+        }
+
         case NodeType::RETURN:
         {
             auto& N = static_cast<ReturnNode&>(Node);

@@ -1,0 +1,7 @@
+
+_extends ORBIT;
+
+_method Dual;
+
+_import stdlib as standart;
+typedef using std=standart.*;

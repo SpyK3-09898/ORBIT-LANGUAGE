@@ -45,11 +45,10 @@ namespace SAUtils {
     // In Object Scopes | Em Escopos de Objetos.
     Scope* InObjScope(SAState& State)
     {
-        return 
-            FindScopeType(BodyTypes::NAMESPACE, State)
-            //or
-            //FindScopeType(BodyTypes::, State)
-        ;
+        if (auto* S = FindScopeType(BodyTypes::NAMESPACE, State)) return S;
+        if (auto* S = FindScopeType(BodyTypes::STRUCT,    State)) return S;
+        if (auto* S = FindScopeType(BodyTypes::CLASS,     State)) return S;
+        return nullptr;
     }
 
     // Create A New Symbol | Cria um Novo Simbolo.
@@ -357,7 +356,7 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
                 TInfo->Kind = TypeKind::UNK;
             }
 
-            // NAMESPACES
+                        // NAMESPACES
             if (
                 ObjSym &&
                 (ObjSym->Type == SymbolTypes::NAMESPACE or
@@ -408,7 +407,59 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
                         Ma.Member->SymbolId = MemberSym->Id;
                     Node->SymbolId = MemberSym->Id;
                 }
-            } else // OTHERS:
+            }
+            // STRUCTS / CLASSES
+            else if (
+                ObjSym &&
+                (ObjSym->Type == SymbolTypes::STRUCT or
+                 ObjSym->Type == SymbolTypes::CLASS) and
+                ObjSym->LinkedScope
+            )
+            {
+                // Take Member Name | Pega O Nome Do Membro.
+                string M_Name;
+                if (Ma.Member && Ma.Member->Type == NodeType::IDENTIFIER)
+                    M_Name = static_cast<IdentifierNode*>(Ma.Member)->Name;
+                else if (Ma.Member && Ma.Member->Type == NodeType::MEMBER_ACCESS)
+                    return GetExpressionType(Ma.Member, State, Res, Data, Memory);
+                else { // Invalid Acess | Acesso Invalido:
+
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "Semantic", 
+                        "Trying To Acess A Invalid Member", 
+                        "Member Of Type: " +Ma.GetNodeType()+" Cannot Be Acessed",
+                        "Acess A Valid Member",
+                        Ma.pos.line, Ma.pos.collumn
+                    );
+                    if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+                    TInfo->Kind = TypeKind::UNK;
+                }
+
+                // Take Symbol of Member | Pega O Simbolo Do Membro.
+                Symbol* MemberSym = ObjSym->LinkedScope->FindSymLocal(M_Name);
+                if (!MemberSym)
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "Semantic",
+                        "Trying To Acess A Undeclared Member ",
+                        "Member '" +M_Name+ "' Not Found in Object '" + ObjSym->Name + "'",
+                        "Check the Name or Declare-It",
+                        Ma.pos.line, Ma.pos.collumn
+                    );
+                    if (!Data.flags.debugMode)
+                        OrbitLog::SyntaxLog::ThrowLog(Data);
+
+                    TInfo->Kind = TypeKind::UNK;
+                }
+                else // Try Copy Sym | Tenta Copiar O Simbolo:
+                {
+                    *TInfo = *MemberSym->TInfo;
+                    if (Ma.Member)
+                        Ma.Member->SymbolId = MemberSym->Id;
+                    Node->SymbolId = MemberSym->Id;
+                }
+            }
+            else // OTHERS:
                 TInfo->Kind = TypeKind::MONO_STATE;
 
             Res.ExpressionTypes[Node] = *TInfo;
@@ -1065,7 +1116,16 @@ void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, 
         case NodeType::NAMESPACE_DECL:
             LookUpNameSpace
             (static_cast<NameSpaceDecl&>(Node), State, Res, Data, Memory, Owner);
-            break;        
+            break;       
+        case NodeType::STRUCT_DECL:
+            LookUpStruct
+            (static_cast<StructDeclNode&>(Node), State, Res, Data, Memory, Owner);
+            break;
+
+        case NodeType::CLASS_DECL:
+            LookUpClass
+            (static_cast<ClassDeclNode&>(Node), State, Res, Data, Memory, Owner);
+            break; 
 
         // EXPRESSIONS
         case NodeType::LITERAL:
@@ -1523,6 +1583,7 @@ void SemanticAnalizer::LookUpWhile(WhileNode& Node, SAState& State, SAResult& Re
             Node.Cond->pos.collumn
         );
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        LookUpBody(*Node.Body, State, Res, Data, Memory);
         return;
     } else if (TInfo->SubKind ==  SubTypeKind::TRUE) {
 
@@ -1558,6 +1619,7 @@ void SemanticAnalizer::LookUpElif(ElifNode& Node, SAState& State, SAResult& Res,
             Node.Cond->pos.collumn
         );
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        LookUpBody(*Node.Body, State, Res, Data, Memory);
         return;
     } else if (TInfo->SubKind ==  SubTypeKind::TRUE)
         OrbitLog::SyntaxLog::SyntaxWarn(
@@ -1587,6 +1649,7 @@ void SemanticAnalizer::LookUpIf(IfNode& Node, SAState& State, SAResult& Res, Run
             Node.Cond->pos.collumn
         );
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        LookUpBody(*Node.IfBody, State, Res, Data, Memory);
         return;
     } else if (TInfo->SubKind ==  SubTypeKind::TRUE)
     {
@@ -1863,6 +1926,28 @@ void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult
             }
         }
     }
+    if ((ValTInfo->Kind == TypeKind::STRUCT or ValTInfo->Kind == TypeKind::CLASS) and !Node.probablyObj)
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Parsing", 
+            "'obj' Expected",
+            "<OBJECT> Recived, But Var Decl Dont Use 'obj' Statement", 
+            "Change Declaration To 'obj' Instead 'var/list'",
+            Node.pos.line, Node.pos.collumn
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;
+    } else if (Node.probablyObj and (ValTInfo->Kind != TypeKind::STRUCT or ValTInfo->Kind != TypeKind::CLASS)) {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Parsing", 
+            "Expected <OBJECT>, But Got: "+SAUtils::GetStringOfKind(ValTInfo->Kind),
+            "'obj' Used, But Recived Value Isn't A <OBJECT>", 
+            "Change Declaration To 'var/list' Instead 'obj",
+            Node.pos.line, Node.pos.collumn
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;        
+    }
 
     // Symbol | Simbolo.
     Symbol* Sym = SAUtils::CreateSymbol(Node.Name, Node, State, Res, Memory);
@@ -1922,6 +2007,7 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
             Node.pos.line, Node.pos.collumn
         );
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        LookUpBody(*Node.Body, State, Res, Data, Memory);
         return;
     }
 
@@ -2033,6 +2119,185 @@ void SemanticAnalizer::LookUpNameSpace(NameSpaceDecl& Node, SAState& State, SARe
     if (Node.Body)
     {
         LookUpBody(*Node.Body, State, Res, Data, Memory, NsScope);
+        // LookUpBody já fez LeaveScope. Só garantimos o CurrScope (mesmo padrão do LookUpFunction).
+        State.CurrScope = PreviousScope;
+    }
+    else
+    {
+        // Exit Scope | Sai do Escopo. (só quando não tem body)
+        State.CurrScope = PreviousScope;
+        State.ScopeStack.pop_back();
+    }
+}
+
+// LookUp Struct Decl Node | Olha um StructDeclNode.
+void SemanticAnalizer::LookUpStruct(StructDeclNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
+{
+    // Error Prev | Prevenção de Erros.
+    if (State.CurrScope->FindSymLocal(Node.Name))
+    {
+        try {
+
+            int i = Node.Name.back() - '0';
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                Node.Name+" Already Exists",
+                "Shadowing Is ONLY Allowed In Diff Scopes",
+                "Change Name, Ex: "+Node.Name+std::to_string(++i),
+                Node.pos.line, Node.pos.collumn
+            );
+        } catch (...) {
+            OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            Node.Name+" Already Exists",
+            "Shadowing Is ONLY Allowed In Diff Scopes",
+            "Change Name, Ex: "+Node.Name+"2",
+            Node.pos.line, Node.pos.collumn
+            );
+        }
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        if (Node.Body)
+            LookUpBody(*Node.Body, State, Res, Data, Memory);
+        return;
+    }
+
+    // Error Prevention | Prevenção de Erros.
+    if (Node.Extend)
+    {
+        LookUpNode(*Node.Extend, State, Res, Data, Memory);
+        TypeInfo* ExtInfo = GetExpressionType(Node.Extend, State, Res, Data, Memory);
+        if (
+            ExtInfo->Kind != TypeKind::STRUCT &&
+            ExtInfo->Kind != TypeKind::CLASS
+        )
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic", 
+                "Cannot Inherit of: "+SAUtils::GetIValueName(Node.Extend), 
+                "<STRUCT>s Can Only Inherit of Other Structs Or Classes", 
+                "Add A Valid Type",
+                Node.pos.line, Node.pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            if (Node.Body)
+                LookUpBody(*Node.Body, State, Res, Data, Memory);
+            return;
+        }
+    }
+
+    // Create Symbol | Cria o Simbolo.
+    Symbol* Sym = SAUtils::CreateSymbol(Node.Name, Node, State, Res, Memory);
+    Sym->Type               = SymbolTypes::STRUCT;
+    Sym->TInfo->Kind        = TypeKind::STRUCT;
+    Sym->TInfo->SubKind     = SubTypeKind::NONE;
+    Sym->InferType->Kind    = TypeKind::STRUCT;
+    Sym->InferType->SubKind = SubTypeKind::NONE;
+    Sym->inited             = true;
+
+    // Create Scope for Struct | Cria Escopo do Struct.
+    Scope* StructScope  = Memory.New<Scope>();
+    StructScope->Parent = State.CurrScope;
+    StructScope->Owner  = &Node;
+    StructScope->Type   = BodyTypes::STRUCT;
+
+    // Enter Scope | Entra no Escopo.
+    Scope* PreviousScope = State.CurrScope;
+    State.ScopeStack.push_back(StructScope);
+    State.CurrScope = StructScope;
+    Sym->LinkedScope = StructScope;
+
+    // Analyze Body | Analisa o Corpo.
+    if (Node.Body)
+    {
+        LookUpBody(*Node.Body, State, Res, Data, Memory, StructScope);
+        // LookUpBody já fez LeaveScope. Só garantimos o CurrScope (mesmo padrão do LookUpFunction).
+        State.CurrScope = PreviousScope;
+    }
+    else
+    {
+        // Exit Scope | Sai do Escopo. (só quando não tem body)
+        State.CurrScope = PreviousScope;
+        State.ScopeStack.pop_back();
+    }
+}
+
+// LookUp Class Decl Node | Olha um ClassDeclNode.
+void SemanticAnalizer::LookUpClass(ClassDeclNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
+{
+    // Error Prev | Prevenção de Erros.
+    if (State.CurrScope->FindSymLocal(Node.Name))
+    {
+        try {
+
+            int i = Node.Name.back() - '0';
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                Node.Name+" Already Exists",
+                "Shadowing Is ONLY Allowed In Diff Scopes",
+                "Change Name, Ex: "+Node.Name+std::to_string(++i),
+                Node.pos.line, Node.pos.collumn
+            );
+        } catch (...) {
+            OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            Node.Name+" Already Exists",
+            "Shadowing Is ONLY Allowed In Diff Scopes",
+            "Change Name, Ex: "+Node.Name+"2",
+            Node.pos.line, Node.pos.collumn
+            );
+        }
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        if (Node.Body)
+            LookUpBody(*Node.Body, State, Res, Data, Memory);
+        return;
+    }
+
+    // Error Prevention | Prevenção de Erros.
+    if (Node.Extend)
+    {
+        LookUpNode(*Node.Extend, State, Res, Data, Memory);
+        TypeInfo* ExtInfo = GetExpressionType(Node.Extend, State, Res, Data, Memory);
+        if (ExtInfo->Kind != TypeKind::CLASS)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic", 
+                "Cannot Inherit of: "+SAUtils::GetIValueName(Node.Extend), 
+                "<CLASS>s Can Only Inherit of Other Classes", 
+                "Add A Valid Type",
+                Node.pos.line, Node.pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            if (Node.Body)
+                LookUpBody(*Node.Body, State, Res, Data, Memory);
+            return;
+        }
+    }
+
+    // Create Symbol | Cria o Simbolo.
+    Symbol* Sym = SAUtils::CreateSymbol(Node.Name, Node, State, Res, Memory);
+    Sym->Type               = SymbolTypes::CLASS;
+    Sym->TInfo->Kind        = TypeKind::CLASS;
+    Sym->TInfo->SubKind     = SubTypeKind::NONE;
+    Sym->InferType->Kind    = TypeKind::CLASS;
+    Sym->InferType->SubKind = SubTypeKind::NONE;
+    Sym->inited             = true;
+
+    // Create Scope for Class | Cria Escopo da Class.
+    Scope* ClassScope  = Memory.New<Scope>();
+    ClassScope->Parent = State.CurrScope;
+    ClassScope->Owner  = &Node;
+    ClassScope->Type   = BodyTypes::CLASS;
+
+    // Enter Scope | Entra no Escopo.
+    Scope* PreviousScope = State.CurrScope;
+    State.ScopeStack.push_back(ClassScope);
+    State.CurrScope = ClassScope;
+    Sym->LinkedScope = ClassScope;
+
+    // Analyze Body | Analisa o Corpo.
+    if (Node.Body)
+    {
+        LookUpBody(*Node.Body, State, Res, Data, Memory, ClassScope);
         // LookUpBody já fez LeaveScope. Só garantimos o CurrScope (mesmo padrão do LookUpFunction).
         State.CurrScope = PreviousScope;
     }

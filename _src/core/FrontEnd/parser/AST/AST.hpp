@@ -14,6 +14,8 @@
 #include "../../../RunTimeData.hpp"
 #include "../../../Library/lib_manager.hpp"
 #include <cstdint>
+#include <cstdio>
+#include <stdio.h>
 #include <utility>
 
 // ======= INSTRUCTIONS ======= //
@@ -288,6 +290,7 @@ struct ASTNode
 
             case NodeType::RETURN:         return "<RETURN>";
             case NodeType::ECHO:           return "<ECHO>";
+            case NodeType::ACESS_CHANGE:   return "<ACESS-NODE>";
 
             case NodeType::IMPORT:         return "<IMPORT>";
             case NodeType::LIBRARY:        return "<LIBRARY>";
@@ -553,6 +556,7 @@ struct VarDeclNode : DeclarationNode
     LiteralTypes InferType = LiteralTypes::MONO_STATE;
     MutableTypes MutType;
     ExpressionNode* Val;
+    bool probablyObj=false;
 
     // CONSTRUCTOR | CONSTRUTOR
     VarDeclNode(NodePos P)

@@ -734,7 +734,7 @@ ControlNode* ControlParser::ParseControl(
                             "~", "Add a ':' After <PUBLIC/PRIVATE> Statement",
                             Entry->pos.line, Entry->pos.collumn
                         );
-                        return ParserUtils::MakeNode<ControlNode>
+                        return ParserUtils::MakeNode<ErrorStmtNode>
                             (State, Res, Memory);
                     }
                     

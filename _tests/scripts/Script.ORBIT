@@ -1,6 +1,7 @@
 
 _library __MAIN__;
 
-_import stdlib as standart;
-
-echo cout standart.Oi.y;
+struct Tudo:
+end
+class Oi from Tudo:
+end

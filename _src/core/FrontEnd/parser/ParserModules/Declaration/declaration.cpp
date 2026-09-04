@@ -39,7 +39,7 @@ namespace DeclUtils
         RunTimeData& Data,
         ExpressionParser& ExprParser,
         Arena& Memory,
-        bool isList=false   
+        int type=0
     )
     {
         // Check if Have Identifier | Verifica se um Identificador foi Passado.
@@ -97,6 +97,14 @@ namespace DeclUtils
                 Token* E = Inst.Advance();
                 ParserUtils::UpdateStatePos(E, State);
 
+                if (Inst.Peek() != nullptr &&
+                    Inst.Peek()->Type == TokenType::CNTXT_KW &&
+                    Inst.Peek()->Lexeme(Data) == "new")
+                {
+                    Decl->probablyObj = true;
+                    Inst.Advance();
+                }
+
                 Instruction NewInst{
                     Inst.Modifiers,
                     vec<Token*>(
@@ -138,6 +146,14 @@ namespace DeclUtils
                 {
                     Token* E = Inst.Advance();
                     ParserUtils::UpdateStatePos(E, State);
+
+                    if (Inst.Peek() != nullptr &&
+                        Inst.Peek()->Type == TokenType::CNTXT_KW &&
+                        Inst.Peek()->Lexeme(Data) == "new")
+                    {
+                        Decl->probablyObj = true;
+                        Inst.Advance();
+                    }
 
                     Instruction NewInst{
                         Inst.Modifiers,
@@ -187,9 +203,10 @@ namespace DeclUtils
             ValueNode->Value = NullLitVal{};
             Decl->Val = ValueNode;
         }
+
         if (Decl->Val->Type == NodeType::ARRAY_VALUE or Decl->Val->Type == NodeType::TABLE_VALUE)
         {
-            if (!isList)
+            if (type == 0)
             {
                 OrbitLog::SyntaxLog::SyntaxError(
                     "Parsing",
@@ -206,7 +223,7 @@ namespace DeclUtils
         }
         else 
         {
-            if (isList)
+            if (type == 1)
             {
                 OrbitLog::SyntaxLog::SyntaxError(
                     "Parsing",
@@ -580,6 +597,7 @@ namespace DeclUtils
         ParseBasicDeclaration
         (*Decl, Inst, State, Res, Data, ExprParser, Memory); 
         Decl->isUDT=true;
+        Decl->Name = Name->Lexeme(Data);
 
         // Error Prevention | Prevenção de Erros.
         if (!E)
@@ -759,7 +777,8 @@ namespace DeclUtils
         ParseBasicDeclaration
         (*Decl, Inst, State, Res, Data, ExprParser, Memory); 
         Decl->isUDT=true;
-
+        Decl->Name = Name->Lexeme(Data);
+        
         // Error Prevention | Prevenção de Erros.
         if (!E)
         {
@@ -974,21 +993,12 @@ DeclarationNode* DeclarationParser::ParseDeclaration(
 {
     Token* Entry = Inst.Tokens[0];
     string Lexeme = Entry->Lexeme(Data);
-    switch (Entry->Type) {
+    switch (Entry->Type) 
+    {
      
         case TokenType::KEYWORD:
 
-            if (Lexeme == "var")
-                return DeclUtils::ParseVarDecl(
-                    Entry, 
-                    Inst, 
-                    State, 
-                    Res,
-                    Data, 
-                    ExprParser,
-                    Memory
-                );
-            if (Lexeme == "list")
+            if (Lexeme == "var" or Lexeme == "list")
                 return DeclUtils::ParseVarDecl(
                     Entry, 
                     Inst, 
@@ -997,8 +1007,30 @@ DeclarationNode* DeclarationParser::ParseDeclaration(
                     Data, 
                     ExprParser,
                     Memory,
-                    true
+                    0
                 );
+            else if (Lexeme == "list")
+                return DeclUtils::ParseVarDecl(
+                    Entry, 
+                    Inst, 
+                    State, 
+                    Res,
+                    Data, 
+                    ExprParser,
+                    Memory,
+                    1
+                );   
+            else if (Lexeme == "obj")
+                return DeclUtils::ParseVarDecl(
+                    Entry, 
+                    Inst, 
+                    State, 
+                    Res,
+                    Data, 
+                    ExprParser,
+                    Memory,
+                    2
+                );         
             else if (Lexeme == "func" or Lexeme == "fn")
                 return DeclUtils::ParseFnDecl(
                     Entry, 
@@ -1019,6 +1051,26 @@ DeclarationNode* DeclarationParser::ParseDeclaration(
                     ExprParser,
                     Memory
                 );
+            else if (Lexeme == "struct")
+                return DeclUtils::ParseStruct(
+                    Entry, 
+                    Inst, 
+                    State, 
+                    Res, 
+                    Data, 
+                    ExprParser,
+                    Memory
+                );
+            else if (Lexeme == "class")
+                return DeclUtils::ParseClass(
+                    Entry, 
+                    Inst, 
+                    State, 
+                    Res, 
+                    Data, 
+                    ExprParser,
+                    Memory
+                );            
         default:
             return nullptr;
     }

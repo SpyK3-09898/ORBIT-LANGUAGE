@@ -33,7 +33,7 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
     }
     vec<string> KeyWords
     {
-        "var", "list",  "namespace",
+        "var", "list", "obj", "namespace",
         "if", "else", "elif",
         "while", "for", 
         "func", "fn", "return",
@@ -47,12 +47,12 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
     vec<string> CntxtKW
     {
         "new", "in", "cout", "cerr", 
-        "In", "Out", "Dual", "as", 
+        "In", "Out", "Dual", "as", "new", 
         "using", "shared", "from"
     };
     vec<string> Modifiers
     {
-        "const", "fallback", 
+        "const", "fallback"
         "export", "public", "private"
     };
     vec<string> LitTypes
