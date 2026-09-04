@@ -114,6 +114,7 @@ enum class NodeType : uint8_t
 
     RETURN,
     ECHO,
+    ACESS_CHANGE,
 
     IMPORT,
     LIBRARY,
@@ -123,6 +124,9 @@ enum class NodeType : uint8_t
     VAR_DECL,
     FN_DECL,
     NAMESPACE_DECL,
+    TYPEDEF_DECL,
+    CLASS_DECL,
+    STRUCT_DECL,
 
     // EXPRESSIONS
     LITERAL,
@@ -148,6 +152,8 @@ enum class BodyTypes: uint8_t
     CONTROL_IF,
     FUNCTION,
     NAMESPACE,
+    STRUCT,
+    CLASS,
     LOOP_WHILE,
     LOOP_FOR,
     OTHER
@@ -167,6 +173,14 @@ enum class MutableTypes : uint8_t
     MUT,
     CONST,
     UNK
+};
+
+// Object Acess Restrict.
+enum class AcessTypes: uint8_t
+{
+    NONE,
+    PRIVATE,
+    PUBLIC
 };
 
 // Literal Value Types | Tipos de Valores Literais.
@@ -282,6 +296,9 @@ struct ASTNode
             case NodeType::VAR_DECL:       return "<VAR_DECL>";
             case NodeType::FN_DECL:        return "<FN_DECL>";
             case NodeType::NAMESPACE_DECL: return "<NAMESPACE>";
+            case NodeType::TYPEDEF_DECL:   return "<TYPE-DEF>";
+            case NodeType::STRUCT_DECL:    return "<STRUCT-DECL>";
+            case NodeType::CLASS_DECL:     return "<CLASS-DECL>";
 
             case NodeType::LITERAL:        return "<LITERAL>";
             case NodeType::IDENTIFIER:     return "<IDENTIFIER>";
@@ -519,6 +536,10 @@ struct ErrorExprNode : ExpressionNode
 // Base Decl Node | No de Decl Base
 struct DeclarationNode : ASTNode
 {
+    // DATA | DADOS.
+    AcessTypes AcessType = AcessTypes::NONE;
+    bool isUDT=false;
+    
     // CONSTRUCTOR | CONSTRUTOR 
     DeclarationNode(NodeType T, NodePos P)
         : ASTNode(T, P) {};
@@ -562,6 +583,43 @@ struct NameSpaceDecl : DeclarationNode
     // CONSTRUCTOR | CONSTRUTOR
     NameSpaceDecl(NodePos& P)
         : DeclarationNode(NodeType::NAMESPACE_DECL, P) {};
+};
+
+// Class Decl | Declarações de Classes.
+struct StructDeclNode : DeclarationNode
+{
+    // DATA | DADOS.
+    BodyNode* Body;
+    ExpressionNode* Extend;
+    string Name;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    StructDeclNode(NodePos& P)
+        : DeclarationNode(NodeType::STRUCT_DECL, P) {};    
+};
+
+// Class Decl | Declarações de Classes.
+struct ClassDeclNode : DeclarationNode
+{
+    // DATA | DADOS.
+    BodyNode* Body;
+    ExpressionNode* Extend;
+    string Name;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    ClassDeclNode(NodePos& P)
+        : DeclarationNode(NodeType::CLASS_DECL, P) {};    
+};
+
+// Aliases Decl | Declaração de Apelidos.
+struct TypeDefDeclNode : DeclarationNode
+{
+    // DATA
+    string Name;    
+
+    // CONSTRUCTOR | CONSTRUTOR
+    TypeDefDeclNode(NodePos& P)
+        : DeclarationNode(NodeType::TYPEDEF_DECL, P) {};
 };
 
 // ERRORS | ERROS
@@ -695,11 +753,24 @@ struct ReturnNode : ControlNode
 // Debug-Echo | Eco.
 struct EchoNode : ControlNode
 {
+    // DATA | DADOS
     EchoTypes Type;
     ExpressionNode* Value;
 
+    // CONSTRUCTOR | CONSTRUTOR
     EchoNode(NodePos P)
         : ControlNode(NodeType::ECHO, P) {};
+};
+
+// Acess Change Statement | Mudança de Acesso.
+struct AcessChangeNode : ControlNode
+{
+    // DATA | DADOS
+    AcessTypes AcessType;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    AcessChangeNode(NodePos P)
+        : ControlNode(NodeType::ACESS_CHANGE, P) {};
 };
 
 // Error Statements Nodes | Errors de Nos de Statement.
@@ -765,9 +836,10 @@ struct ParseState
     bool SingleStatement = false;
     bool consumedInst=false;
     NodePos Pos; // Current Pos of Parser | Posição Atual do Lexer.
-    vec<IfNode*> IfStack;
-    vec<BodyNode*> Bodys;
-    BodyNode* CurrBody;
+    vec<IfNode*>    IfStack;
+    vec<BodyNode*>  Bodys;
+    vec<AcessTypes> AcessStack;
+    BodyNode*       CurrBody;
 
     // Return if Type is in Stack | Retorna se o Tipo Tem na Stack.
     bool HaveTypeInBodyStack(BodyTypes Type)
@@ -816,6 +888,8 @@ namespace ParserUtils {
     // Pop The Body Stack | Retira o Ultimo Elemento da Pilha de Body.
     inline void PopBodyStack(ParseState& State, RunTimeData& Data)
     {
+        if (State.AcessStack.size() > 0)
+            State.AcessStack.pop_back();
         if (State.Bodys.size() == 1)
         {
             OrbitLog::SyntaxLog::SyntaxError(

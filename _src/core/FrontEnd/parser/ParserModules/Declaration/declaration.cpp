@@ -12,9 +12,23 @@
 #include "tools/console.hpp"
 #include "../../../../RunTimeData.hpp"
 
+// ======= PREVS | PREVIAS ====== //
+
+void ParseBasicDeclaration(
+    DeclarationNode& Node,
+    Instruction& Inst,
+    ParseState& State,
+    ParseResult& Res,
+    RunTimeData& Data,
+    ExpressionParser& ExprParser,
+    Arena& Memory
+);
+
 // ======= UTILS | UTILIDADES ======= //
 
-namespace DeclUtils {
+// Declaration Parser Utils | Utilidades do Parser se Declarações.
+namespace DeclUtils 
+{
 
     // PARSE VAR DECLARATIONS | PARSEIA DECLARAÇOES DE VARIAVEIS.
     DeclarationNode* ParseVarDecl(
@@ -57,7 +71,9 @@ namespace DeclUtils {
         ParserUtils::UpdateStatePos(NameToken, State);
 
         VarDeclNode* Decl = ParserUtils::MakeNode<VarDeclNode>(State, Res,Memory);
-
+        ParseBasicDeclaration
+        (*Decl, Inst, State, Res, Data, ExprParser, Memory); 
+        
         for (Token* Arg : Inst.Modifiers)
         {
             string argLexeme = Arg->Lexeme(Data);
@@ -342,7 +358,9 @@ namespace DeclUtils {
         Cond.pop_back(); // :
 
         FnDecl* Decl = ParserUtils::MakeNode<FnDecl>(State, Res, Memory);
-
+        ParseBasicDeclaration
+        (*Decl, Inst, State, Res, Data, ExprParser, Memory); 
+        
         if (!Cond.empty())
         {
             int level = 0;
@@ -464,6 +482,8 @@ namespace DeclUtils {
         // CREATE NAMESPACCE
         NameSpaceDecl* Decl = ParserUtils::MakeNode<NameSpaceDecl>(State, Res, Memory);
         Decl->Name = E->Lexeme(Data);
+        ParseBasicDeclaration
+        (*Decl, Inst, State, Res, Data, ExprParser, Memory); 
 
         // ERROR PREVENTION | PREVENÇÃO DE ERROS
         E = Inst.Advance();
@@ -505,6 +525,438 @@ namespace DeclUtils {
 
         // FINALIZE | FINALIZA:
         return Decl;
+    }
+
+    // PARSE STRUCT/CLASS DECL | PARSEIA DECLARAÇÕES DE ESTRUTURAS E CLASSES.
+    DeclarationNode* ParseStruct(
+        Token* Entry,
+        Instruction& Inst,
+        ParseState& State,
+        ParseResult& Res,
+        RunTimeData& Data,
+        ExpressionParser& ExprParser,
+        Arena& Memory    
+    )
+    {
+        Token* E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+        
+        Token* Name = Inst.Advance();
+        ParserUtils::UpdateStatePos(Name, State);
+
+        // Error Prev | Prevenção de Erros.
+        if (!Name)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing", 
+                "Expected <IDENTIFIER> After 'struct' UDT", 
+                "<STRUCT>'s Need A Name To Be Builded", 
+                "Add A Valid Name to Struct",
+                E->pos.line, E->pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>
+                (State, Res, Memory);
+        }
+        else if (Name->Type != TokenType::IDENTIFIER)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing", 
+                "Expected <IDENTIFIER> After 'struct' UDT, But Got: "+Name->Lexeme(Data), 
+                "<STRUCT>'s Need A Name To Be Builded", 
+                "Add A Valid Name to Struct",
+                Name->pos.line, Name->pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>
+                (State, Res, Memory);
+        }
+
+        E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+        
+        StructDeclNode* Decl = ParserUtils::MakeNode<StructDeclNode>
+            (State, Res, Memory);
+        ParseBasicDeclaration
+        (*Decl, Inst, State, Res, Data, ExprParser, Memory); 
+        Decl->isUDT=true;
+
+        // Error Prevention | Prevenção de Erros.
+        if (!E)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing", 
+                "Expected <COLON> After 'struct Name' UDT", 
+                "<STRUCT>'s Need A ':' For Semantic", 
+                "Add A Valid <COLON> After <IDENTIFIER>",
+                Name->pos.line, Name->pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>
+                (State, Res, Memory);
+        }
+
+        if (E->Type == TokenType::CNTXT_KW)
+        {
+            if (E->Lexeme(Data) == "from")
+            {
+                vec<Token*> Cond;
+                bool FoundColon = false;
+
+                while (true)
+                {
+                    Token* Tok = Inst.Advance();
+
+                    if (!Tok)
+                        break;
+
+                    ParserUtils::UpdateStatePos(Tok, State);
+
+                    if (Tok->Type == TokenType::COLON)
+                    {
+                        E = Tok;
+                        FoundColon = true;
+                        break;
+                    }
+
+                    Cond.push_back(Tok);
+                }
+
+                // ERROR PREV | PREVENÇÃO DE ERRO.
+                if (Cond.size() == 0)
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "Parsing",
+                        "Expected <PATH> After 'from'",
+                        "Expected <CONDITION> After If Statement",
+                        "Add a Valid Cond",
+                        Inst.Tokens[0]->pos.line,
+                        Inst.Tokens[0]->pos.collumn
+                    );
+                    if (!Data.flags.debugMode)
+                        OrbitLog::SyntaxLog::ThrowLog(Data);
+                    return ParserUtils::MakeNode<ErrorDeclNode>(State, Res, Memory);
+                }
+                else if (!FoundColon)
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "Parsing",
+                        "Invalid <STRUCT>",
+                        "Expected ':' After Struct Path",
+                        "Finalize Struct Instruction",
+                        Cond.back()->pos.line,
+                        Cond.back()->pos.collumn
+                    );
+                    if (!Data.flags.debugMode)
+                        OrbitLog::SyntaxLog::ThrowLog(Data); 
+                    return ParserUtils::MakeNode<ErrorDeclNode>(State, Res, Memory);
+                }
+
+                Instruction ICond{Inst.Modifiers, Cond};
+                Decl->Extend = ExprParser.ParseExpression(
+                    ICond, 
+                    State, 
+                    Res, 
+                    Data, 
+                    Memory
+                );
+            }
+            else
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Parsing", 
+                    "Expected <COLON> After 'struct Name' UDT", 
+                    "<STRUCT>'s Need A ':' For Semantic", 
+                    "Add A Valid <COLON> After <IDENTIFIER>",
+                    E->pos.line, E->pos.collumn
+                );
+                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+                return ParserUtils::MakeNode<ErrorDeclNode>
+                    (State, Res, Memory);
+            }
+        }
+        else if (E->Type != TokenType::COLON)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing", 
+                "Expected <COLON> After 'struct Name' UDT", 
+                "<STRUCT>'s Need A ':' For Semantic", 
+                "Add A Valid <COLON> After <IDENTIFIER>",
+                E->pos.line, E->pos.collumn
+            );
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>
+                (State, Res, Memory);
+        }
+
+        // CREATE A NEW BODY | CRIA UM NOVO BODY
+        BodyNode* Body = ParserUtils::
+            MakeNode<BodyNode>(State, Res, Memory);
+
+        // SET BODY
+        Body->Father = Decl;
+        Body->Type = BodyTypes::STRUCT;
+        Decl->Body = Body;
+
+        // UPDATE STACK | ATUALIZA O PILHA.
+        State.consumedInst = true;
+        ParserUtils::AddInst<StructDeclNode>(Decl, State, Res, Memory);
+        ParserUtils::UpdateBodyStack(Body, State, Data);
+        State.lastIndent = Body->pos.indent;
+
+        return Decl;
+    }
+    DeclarationNode* ParseClass(
+        Token* Entry,
+        Instruction& Inst,
+        ParseState& State,
+        ParseResult& Res,
+        RunTimeData& Data,
+        ExpressionParser& ExprParser,
+        Arena& Memory    
+    )
+    {
+        Token* E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+        
+        Token* Name = Inst.Advance();
+        ParserUtils::UpdateStatePos(Name, State);
+
+        // Error Prev | Prevenção de Erros.
+        if (!Name)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing", 
+                "Expected <IDENTIFIER> After 'class' UDT", 
+                "<CLASS>'s Need A Name To Be Builded", 
+                "Add A Valid Name to Class",
+                E->pos.line, E->pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>
+                (State, Res, Memory);
+        }
+        else if (Name->Type != TokenType::IDENTIFIER)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing", 
+                "Expected <IDENTIFIER> After 'class' UDT, But Got: "+Name->Lexeme(Data), 
+                "<CLASS>'s Need A Name To Be Builded", 
+                "Add A Valid Name to Class",
+                Name->pos.line, Name->pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>
+                (State, Res, Memory);
+        }
+
+        E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+        
+        ClassDeclNode* Decl = ParserUtils::MakeNode<ClassDeclNode>
+            (State, Res, Memory);
+        ParseBasicDeclaration
+        (*Decl, Inst, State, Res, Data, ExprParser, Memory); 
+        Decl->isUDT=true;
+
+        // Error Prevention | Prevenção de Erros.
+        if (!E)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing", 
+                "Expected <COLON> After 'class Name' UDT", 
+                "<CLASS>'s Need A ':' For Semantic", 
+                "Add A Valid <COLON> After <IDENTIFIER>",
+                Name->pos.line, Name->pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>
+                (State, Res, Memory);
+        }
+
+        if (E->Type == TokenType::CNTXT_KW)
+        {
+            if (E->Lexeme(Data) == "from")
+            {
+                vec<Token*> Cond;
+                bool FoundColon = false;
+
+                while (true)
+                {
+                    Token* Tok = Inst.Advance();
+
+                    if (!Tok)
+                        break;
+
+                    ParserUtils::UpdateStatePos(Tok, State);
+
+                    if (Tok->Type == TokenType::COLON)
+                    {
+                        E = Tok;
+                        FoundColon = true;
+                        break;
+                    }
+
+                    Cond.push_back(Tok);
+                }
+
+                // ERROR PREV | PREVENÇÃO DE ERRO.
+                if (Cond.size() == 0)
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "Parsing",
+                        "Expected <PATH> After 'from'",
+                        "Expected <CONDITION> After If Statement",
+                        "Add a Valid Cond",
+                        Inst.Tokens[0]->pos.line,
+                        Inst.Tokens[0]->pos.collumn
+                    );
+                    if (!Data.flags.debugMode)
+                        OrbitLog::SyntaxLog::ThrowLog(Data);
+                    return ParserUtils::MakeNode<ErrorDeclNode>(State, Res, Memory);
+                }
+                else if (!FoundColon)
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "Parsing",
+                        "Invalid <CLASS>",
+                        "Expected ':' After Class Path",
+                        "Finalize Class Instruction",
+                        Cond.back()->pos.line,
+                        Cond.back()->pos.collumn
+                    );
+                    if (!Data.flags.debugMode)
+                        OrbitLog::SyntaxLog::ThrowLog(Data); 
+                    return ParserUtils::MakeNode<ErrorDeclNode>(State, Res, Memory);
+                }
+
+                Instruction ICond{Inst.Modifiers, Cond};
+                Decl->Extend = ExprParser.ParseExpression(
+                    ICond, 
+                    State, 
+                    Res, 
+                    Data, 
+                    Memory
+                );
+            }
+            else
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Parsing", 
+                    "Expected <COLON> After 'class Name' UDT", 
+                    "<CLASS>'s Need A ':' For Semantic", 
+                    "Add A Valid <COLON> After <IDENTIFIER>",
+                    E->pos.line, E->pos.collumn
+                );
+                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+                return ParserUtils::MakeNode<ErrorDeclNode>
+                    (State, Res, Memory);
+            }
+        }
+        else if (E->Type != TokenType::COLON)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing", 
+                "Expected <COLON> After 'class Name' UDT", 
+                "<CLASS>'s Need A ':' For Semantic", 
+                "Add A Valid <COLON> After <IDENTIFIER>",
+                E->pos.line, E->pos.collumn
+            );
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>
+                (State, Res, Memory);
+        }
+
+        // CREATE A NEW BODY | CRIA UM NOVO BODY
+        BodyNode* Body = ParserUtils::
+            MakeNode<BodyNode>(State, Res, Memory);
+
+        // SET BODY
+        Body->Father = Decl;
+        Body->Type = BodyTypes::CLASS;
+        Decl->Body = Body;
+
+        // UPDATE STACK | ATUALIZA O PILHA.
+        State.consumedInst = true;
+        ParserUtils::AddInst<ClassDeclNode>(Decl, State, Res, Memory);
+        ParserUtils::UpdateBodyStack(Body, State, Data);
+        State.lastIndent = Body->pos.indent;
+
+        return Decl;
+    }
+
+    // PARSE ALIAS DECL | PARSEIA DECLARÇÕES DE APELIDOS.
+    DeclarationNode* ParseTypeDef(
+        Token* Entry,
+        Instruction& Inst,
+        ParseState& State,
+        ParseResult& Res,
+        RunTimeData& Data,
+        ExpressionParser& ExprParser,
+        Arena& Memory    
+    );
+}
+
+// ======= CORE | NUCLEO ======= //
+
+// Basic Declararion Parsing | Declaração Basica de Parsing.
+void ParseBasicDeclaration(
+    DeclarationNode& Node,
+    Instruction& Inst,
+    ParseState& State,
+    ParseResult& Res,
+    RunTimeData& Data,
+    ExpressionParser& ExprParser,
+    Arena& Memory
+)
+{
+    bool acessSeted=false;
+    if (State.AcessStack.size() > 0)
+    {
+        Node.AcessType=State.AcessStack.back();
+        acessSeted=true;
+    }
+    // Modifiers
+    int i=0;
+    for (Token* Mod : Inst.Modifiers)
+    {
+        string Lexeme = Mod->Lexeme(Data);
+        if (Lexeme == "public")
+        {
+            // OverWriting | SobreScrita
+            if (!acessSeted and (State.AcessStack.size() > 0 and State.AcessStack.back() != AcessTypes::PUBLIC))
+            {
+                OrbitLog::SyntaxLog::SyntaxWarn(
+                    "Parsing",
+                    "Acess OverWriting", 
+                    "'public' has been overwrited by: <PRIVATE> In Upper Scope", 
+                    "Move: "+Node.GetNodeType()+" To A Public Region",
+                    Node.pos.line, Node.pos.collumn
+                );
+                continue;
+            }
+            Node.AcessType = AcessTypes::PUBLIC;
+        }
+        else if (Lexeme == "private")
+        {
+            // OverWriting | Sobrescrita
+            if (!acessSeted and (State.AcessStack.size() > 0 and State.AcessStack.back() != AcessTypes::PRIVATE))
+            {
+                OrbitLog::SyntaxLog::SyntaxWarn(
+                    "Parsing",
+                    "Acess OverWriting", 
+                    "'private' has been overwrited by: <PUBLIC> In Upper Scope", 
+                    "Move: "+Node.GetNodeType()+" To A Public Region",
+                    Node.pos.line, Node.pos.collumn
+                );
+                continue;
+            }
+            Node.AcessType = AcessTypes::PRIVATE;
+        }
+        Inst.Modifiers.erase(Inst.Modifiers.begin()+i, Inst.Modifiers.end());
+        i++;
     }
 }
 

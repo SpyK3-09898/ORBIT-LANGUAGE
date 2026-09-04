@@ -37,19 +37,23 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
         "if", "else", "elif",
         "while", "for", 
         "func", "fn", "return",
+        "class", "struct",
+        "public", "private",
         "end",
-        "echo",
-        "_extend", "_library", "_import", "_import_from", "_method", "_typedef"
+        "echo", "_typedef", "_extend", "_library", 
+        "_import", "_import_from", "_method", "_typedef",
+        "_private", "_public"
     };
     vec<string> CntxtKW
     {
         "new", "in", "cout", "cerr", 
         "In", "Out", "Dual", "as", 
-        "using", "shared"
+        "using", "shared", "from"
     };
     vec<string> Modifiers
     {
-        "const", "fallback", "export"
+        "const", "fallback", 
+        "export", "public", "private"
     };
     vec<string> LitTypes
     {

@@ -707,6 +707,43 @@ ControlNode* ControlParser::ParseControl(
                 return ControlUtils::ParseReturn(Inst, State, Res, Data, DeclParser, ExprParser, Memory, true);
             else if (Lexeme == "echo")
                 return ControlUtils::ParseEcho(Inst, State, Res, Data, DeclParser, ExprParser, Memory);
+            else if (Lexeme == "_private" or Lexeme == "_public")
+                {
+                    // Error Prev | Prevenção de Erros.
+                    if (Inst.Tokens.size() > 2)
+                    {
+                        OrbitLog::SyntaxLog::SyntaxWarn(
+                            "Parsing", 
+                            "Extra Tokens After <PRIVATE/PUBLIC> Declaration, Ignoring", 
+                            "Instructions ONLY Have 2 Tokens", 
+                            "Add a ';' or <NEW-LINE> To Separate Tokens",
+                            Inst.Tokens[2]->pos.line, Inst.Tokens[2]->pos.collumn
+                        );
+                    } 
+                    if (
+                        Inst.Tokens.size() == 1 
+                        or
+                        Inst.Tokens[2]->Type 
+                        != 
+                        TokenType::COLON
+                    )
+                    {
+                        OrbitLog::SyntaxLog::SyntaxError(
+                            "Parsing", 
+                            "Expected <COLON> After <PUBLIC/PRIVATE> Statement", 
+                            "~", "Add a ':' After <PUBLIC/PRIVATE> Statement",
+                            Entry->pos.line, Entry->pos.collumn
+                        );
+                        return ParserUtils::MakeNode<ControlNode>
+                            (State, Res, Memory);
+                    }
+                    
+                    AcessChangeNode* Node = ParserUtils::MakeNode<AcessChangeNode>
+                        (State, Res, Memory);
+                    Node->AcessType = Lexeme == "_public" ? AcessTypes::PUBLIC : AcessTypes::PRIVATE;    
+                    State.AcessStack.push_back(Node->AcessType);
+                    return Node;
+                }    
             else if (Lexeme == "end")
                 {
                     if (
