@@ -147,6 +147,16 @@ enum class NodeType : uint8_t
     RANGE
 };
 
+// Category of Nodes | Categoria dos Nós.
+enum class NodeCat : uint8_t
+{
+    EXPRESSION,
+    DECLARATION,
+    CONTROL,
+    SPECIAL,
+    PROGRAM
+};
+
 // Type of Body Insts | Tipos de Instruções de Corpo.
 enum class BodyTypes: uint8_t
 {
@@ -261,12 +271,13 @@ struct SAResult;
 // Pos of Nodes | Posição dos Nodes
 using NodePos = CodePosition;
 
-// Bas AST Node | No de AST base
+// Base AST Node | No de AST base
 struct ASTNode
 {
     // DATA
     NodePos pos;
     NodeType Type;
+    NodeCat Category = NodeCat::PROGRAM;
     ui16 SymbolId=0;
     bool export_decl=false;
 
@@ -329,7 +340,7 @@ struct ASTNode
 
 // UTIL
 inline NodePos MakePosFromToken(Token* Tok)
-{  
+{
     return NodePos{
         Tok->pos.indent,
         Tok->pos.start,
@@ -391,7 +402,7 @@ struct ExpressionNode : ASTNode
 {
     // CONSTRUCTOR | CONSTRUTOR
     ExpressionNode(NodeType T, NodePos P)
-        : ASTNode(T, P) {};
+        : ASTNode(T, P) { Category = NodeCat::EXPRESSION; };
 };
 
 struct LiteralNode : ExpressionNode
@@ -545,7 +556,7 @@ struct DeclarationNode : ASTNode
     
     // CONSTRUCTOR | CONSTRUTOR 
     DeclarationNode(NodeType T, NodePos P)
-        : ASTNode(T, P) {};
+        : ASTNode(T, P) { Category = NodeCat::DECLARATION; };
 };
 
 // Var Decl | Declaração de Variaveis
@@ -641,7 +652,7 @@ struct ControlNode : ASTNode
 {
     // CONSTRUCTOR | CONSTRUTOR
     ControlNode(NodeType T, NodePos P)
-        : ASTNode(T, P) {}
+        : ASTNode(T, P) { Category = NodeCat::CONTROL; }
 };
 
 // Else Control Statement | Controle de Instrução 'Else'.
@@ -792,7 +803,7 @@ struct SpecialNode : ASTNode
 {
     // CONSTRUCTOR | CONSTRUTOR
     SpecialNode(NodeType T, NodePos P)
-        : ASTNode(T, P) {}
+        : ASTNode(T, P) { Category = NodeCat::SPECIAL; }
 };
 
 // Library Defines | Definições de Bibliotecas.

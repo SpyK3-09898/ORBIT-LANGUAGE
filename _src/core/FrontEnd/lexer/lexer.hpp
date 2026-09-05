@@ -247,6 +247,9 @@ struct LexState
 {
     TokenPos currPos; // Current Position of Lexer | Posição Atual dos Tokens.
     ui32 index = 0; // Current Global Position Of Lexer | Posição Atual Global dos Tokens
+    
+    LexState() // CONSTRUCTOR | CONSTRUTOR
+    { currPos.line = 1; }
 };
 
 // Result of Lex Program | Resultado do Programa de  Lexing.

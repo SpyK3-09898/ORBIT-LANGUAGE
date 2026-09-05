@@ -110,6 +110,7 @@ struct Symbol
     TypeInfo* InferType;
     Scope* DeclaredScope;
     Scope* LinkedScope;
+    ASTNode* Owner;
 
     vec<pair<string, TypeInfo*>> Objs;
 
@@ -125,6 +126,7 @@ struct Symbol
     ui8 contextId    = 0;
     ui8 packId       = -1;
     bool inited      = false;
+    bool isPrivated  = false;
     bool isExported  = false;
 };
 

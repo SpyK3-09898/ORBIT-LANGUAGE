@@ -598,6 +598,9 @@ namespace DeclUtils
         (*Decl, Inst, State, Res, Data, ExprParser, Memory); 
         Decl->isUDT=true;
         Decl->Name = Name->Lexeme(Data);
+        for (Token* Mod : Inst.Modifiers)
+            if (Mod->Lexeme(Data) == "export")
+                Decl->export_decl=true;
 
         // Error Prevention | Prevenção de Erros.
         if (!E)
@@ -778,6 +781,9 @@ namespace DeclUtils
         (*Decl, Inst, State, Res, Data, ExprParser, Memory); 
         Decl->isUDT=true;
         Decl->Name = Name->Lexeme(Data);
+        for (Token* Mod : Inst.Modifiers)
+            if (Mod->Lexeme(Data) == "export")
+                Decl->export_decl=true;
         
         // Error Prevention | Prevenção de Erros.
         if (!E)
@@ -995,10 +1001,8 @@ DeclarationNode* DeclarationParser::ParseDeclaration(
     string Lexeme = Entry->Lexeme(Data);
     switch (Entry->Type) 
     {
-     
         case TokenType::KEYWORD:
-
-            if (Lexeme == "var" or Lexeme == "list")
+            if (Lexeme == "var")
                 return DeclUtils::ParseVarDecl(
                     Entry, 
                     Inst, 

@@ -66,6 +66,7 @@ namespace SAUtils {
         Sym->TInfo = TInfo;
         Sym->InferType = InferType;
         Sym->Pos = Node.pos;
+        Sym->Owner = &Node;
 
         Sym->TInfo->Kind = TypeKind::_NULL;
         Sym->TInfo->SubKind = SubTypeKind::NONE;
@@ -85,6 +86,58 @@ namespace SAUtils {
             Sym->isExported = true;
 
         return Sym;
+    }
+
+    // Find A Symbol | Encontra Um Simbolo.
+    pair<Symbol*, bool> FindSymbol(string Name, Symbol* Owner, SAState& State, RunTimeData& Data)
+    {
+        bool found = false;
+        Symbol* Sym = nullptr;
+        if (Owner && Owner->LinkedScope)
+        {
+            Sym = Owner->LinkedScope->FindSym(Name);
+            found = Sym != nullptr;
+            if (!Sym)
+            {
+                if (Owner->Type == SymbolTypes::STRUCT)
+                {
+                    auto* Decl = static_cast<StructDeclNode*>(Owner->Owner);
+                    if (Decl->Extend)
+                    {
+                        auto* Extend = static_cast<IdentifierNode*>(Decl->Extend);
+                        if (Extend->Name != Owner->Name)
+                        {
+                            auto Result = FindSymbol(Extend->Name, nullptr, State, Data);
+                            if (Result.second)
+                                return FindSymbol(Name, Result.first, State, Data);
+                        }
+                    }
+                }
+                else if (Owner->Type == SymbolTypes::CLASS)
+                {
+                    auto* Decl = static_cast<ClassDeclNode*>(Owner->Owner);
+                    if (Decl->Extend)
+                    {
+                        auto* Extend = static_cast<IdentifierNode*>(Decl->Extend);
+                        if (Extend->Name != Owner->Name)
+                        {
+                            auto Result = FindSymbol(Extend->Name, nullptr, State, Data);
+                            if (Result.second)
+                                return FindSymbol(Name, Result.first, State, Data);
+                        }
+                    }
+                }
+            }
+        }
+        else if (State.CurrScope)
+        {
+            Sym = State.CurrScope->FindSym(Name);
+            found = Sym != nullptr;
+            if (Sym->isPrivated)
+                return {nullptr, false};
+        }
+
+        return { Sym, found };
     }
 
     // Return Kind Version of Literal | Retorna a Versão Kind do Literal.
@@ -1702,6 +1755,7 @@ void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult
     if (!State.CurrScope)
         return;
 
+    // Error Prev | Prevenção de Erros.
     if (State.CurrScope->FindSymLocal(Node.Name))
     {
         try {
@@ -1937,7 +1991,7 @@ void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult
         );
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
         return;
-    } else if (Node.probablyObj and (ValTInfo->Kind != TypeKind::STRUCT or ValTInfo->Kind != TypeKind::CLASS)) {
+    } else if (Node.probablyObj and (ValTInfo->Kind != TypeKind::STRUCT and ValTInfo->Kind != TypeKind::CLASS and ValTInfo->Kind != TypeKind::ANY and ValTInfo->Kind != TypeKind::MONO_STATE)) {
         OrbitLog::SyntaxLog::SyntaxError(
             "Parsing", 
             "Expected <OBJECT>, But Got: "+SAUtils::GetStringOfKind(ValTInfo->Kind),
@@ -2207,18 +2261,21 @@ void SemanticAnalizer::LookUpStruct(StructDeclNode& Node, SAState& State, SAResu
     Sym->LinkedScope = StructScope;
 
     // Analyze Body | Analisa o Corpo.
-    if (Node.Body)
+    for (ASTNode* N : Node.Body->Data)
     {
-        LookUpBody(*Node.Body, State, Res, Data, Memory, StructScope);
-        // LookUpBody já fez LeaveScope. Só garantimos o CurrScope (mesmo padrão do LookUpFunction).
-        State.CurrScope = PreviousScope;
+        if(N->Category != NodeCat::DECLARATION)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing", 
+                "<DECLARATION> Expected",
+                "<NODE-CATEGORY> Isn't <DECLARATION>, But This Body ONLY Accept Declarations",
+                "Set In A Constructor",
+                N->pos.line, N->pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        }
     }
-    else
-    {
-        // Exit Scope | Sai do Escopo. (só quando não tem body)
-        State.CurrScope = PreviousScope;
-        State.ScopeStack.pop_back();
-    }
+    LookUpBody(*Node.Body, State, Res, Data, Memory, StructScope);
 }
 
 // LookUp Class Decl Node | Olha um ClassDeclNode.
@@ -2321,19 +2378,10 @@ void SemanticAnalizer::LookUpLiteral(LiteralNode& Node, SAState& State, SAResult
 void SemanticAnalizer::LookUpIdentifier(IdentifierNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // Error Prev | Prevenção de Erros.
-    bool found = false;
-    Symbol* Sym = nullptr;
-
-    if (Owner && Owner->LinkedScope)
-    {
-        Sym = Owner->LinkedScope->FindSym(Node.Name);
-        found = Sym != nullptr;
-    }
-    else if (State.CurrScope)
-    {
-        Sym = State.CurrScope->FindSym(Node.Name);
-        found = Sym != nullptr;
-    }
+    pair<Symbol*, bool> FindRes = SAUtils::FindSymbol
+    (Node.Name, Owner, State, Data);
+    bool found  = FindRes.second;
+    Symbol* Sym = FindRes.first;
 
     if (!found)
     {
@@ -3211,10 +3259,7 @@ SAResult SemanticAnalizer::InitSA(ParseResult& PRes, RunTimeData& Data, Arena& M
             "Fix the Parser before running Semantic Analysis",
             0, 0
         );
-
-        if (!Data.flags.debugMode)
-            OrbitLog::SyntaxLog::ThrowLog(Data);
-
+        OrbitLog::SyntaxLog::ThrowLog(Data);
         return Res;
     }
 

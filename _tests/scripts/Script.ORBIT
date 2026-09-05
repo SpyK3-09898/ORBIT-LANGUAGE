@@ -1,7 +1,14 @@
 
 _library __MAIN__;
 
-struct Tudo:
+struct Usuario:
+    var Name;
+    var Money;
 end
-class Oi from Tudo:
+
+class Banco:
+
+    list Usuarios = {};
+    if(true):
+    end
 end
