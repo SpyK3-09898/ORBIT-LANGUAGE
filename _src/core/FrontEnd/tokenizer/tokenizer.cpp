@@ -9,6 +9,7 @@
 #include "../lexer/lexer.hpp"
 
 #include "utils/aliases.hpp"
+#include "tools/console.hpp"
 #include "../../RunTimeData.hpp"
 
 #include <fstream>
@@ -38,7 +39,6 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
         "while", "for", 
         "func", "fn", "return",
         "class", "struct",
-        "public", "private",
         "end",
         "echo", "_typedef", "_extend", "_library", 
         "_import", "_import_from", "_method", "_typedef",
@@ -71,9 +71,40 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
     {
         bool changed=false;
         string Lexeme = Tok->Lexeme(Data);
-        if (Tok->Type == TokenType::IDENTIFIER) {
+        if (Tok->Type == TokenType::IDENTIFIER) 
+        {
             if (contains_at(KeyWords, Lexeme))
-                { LastType = Tok->Type; Tok->Type = TokenType::KEYWORD; changed=true; }
+            { 
+                if (Lexeme == "_public" or Lexeme == "_private")
+                {
+                    if (Res.Tokens.size() < i+1) 
+                    {
+                        OrbitLog::SyntaxLog::SyntaxError(
+                            "Tokenizer",
+                            "Expected <COLON> After <ACESS-TYPE> Definition",
+                            "'_public/_private' Statement Need A ':' To Semantic",
+                            "Add A ':'",
+                            Res.Tokens[i]->pos.line, Res.Tokens[i]->pos.collumn
+                        );
+                        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+                        continue;
+                    }
+                    else if (Res.Tokens[i+1]->Type != TokenType::COLON)
+                    {
+                        OrbitLog::SyntaxLog::SyntaxError(
+                            "Tokenizer",
+                            "Expected <COLON> After <ACESS-TYPE> Definition",
+                            "'_public/_private' Statement Need A ':' To Semantic",
+                            "Add A ':'",
+                            Res.Tokens[i+1]->pos.line, Res.Tokens[i+1]->pos.collumn
+                        );
+                        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+                        continue;
+                    }
+                }
+                LastType = Tok->Type; Tok->Type = TokenType::KEYWORD; 
+                changed=true; 
+            }
             else if (contains_at(Modifiers, Lexeme))
                 { LastType = Tok->Type; Tok->Type = TokenType::MODIFIER; changed=true; }
             else if (contains_at(CntxtKW, Lexeme))

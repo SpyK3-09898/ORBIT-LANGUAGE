@@ -27,7 +27,8 @@
 // ========= UTILS ========== //
 
 // Semantic Analysis Utils | Utilidades do Analisador.
-namespace SAUtils {
+namespace SAUtils 
+{
 
     // Find Scope Whit Type | Encontra O Escopo Com o Tupo.
     Scope* FindScopeType(BodyTypes Type, SAState& State)
@@ -88,56 +89,103 @@ namespace SAUtils {
         return Sym;
     }
 
+    // Return Name of IValues | Retorna o Nome dos I-Values.
+    string GetIValueName(ExpressionNode* Node)
+    {
+        if (!Node)
+            return "UNKNOW";
+
+        switch (Node->Type)
+        {
+            case NodeType::IDENTIFIER:
+            {
+                IdentifierNode* Id = static_cast<IdentifierNode*>(Node);
+                return Id->Name;
+            }
+
+            case NodeType::MEMBER_ACCESS:
+            {
+                MemberAccessNode* Ma = static_cast<MemberAccessNode*>(Node);
+                return GetIValueName(Ma->Member);
+            }
+
+            default:
+                return "UNKNOW";
+        }
+    }
+
     // Find A Symbol | Encontra Um Simbolo.
     pair<Symbol*, bool> FindSymbol(string Name, Symbol* Owner, SAState& State, RunTimeData& Data)
     {
-        bool found = false;
-        Symbol* Sym = nullptr;
+        // Prefer LinkedScope Of Owner First | Prefere O LinkedScope Do Owner Primeiro.
         if (Owner && Owner->LinkedScope)
         {
-            Sym = Owner->LinkedScope->FindSym(Name);
-            found = Sym != nullptr;
-            if (!Sym)
+            Symbol* Found = Owner->LinkedScope->FindSymLocal(Name);
+
+            if (Found)
             {
-                if (Owner->Type == SymbolTypes::STRUCT)
+                // Only Struct/Class Have Private/Static Rules | So Struct/Class Tem Regras De Private/Static.
+                if (Owner->Type == SymbolTypes::STRUCT || Owner->Type == SymbolTypes::CLASS)
                 {
-                    auto* Decl = static_cast<StructDeclNode*>(Owner->Owner);
-                    if (Decl->Extend)
+                    // Mold → Only Static (And Not Private) | Molde → So Static (E Nao Private).
+                    bool isMold = (Owner->TInfo &&
+                                (Owner->TInfo->Kind == TypeKind::STRUCT ||
+                                Owner->TInfo->Kind == TypeKind::CLASS));
+
+                    if (isMold)
                     {
-                        auto* Extend = static_cast<IdentifierNode*>(Decl->Extend);
-                        if (Extend->Name != Owner->Name)
-                        {
-                            auto Result = FindSymbol(Extend->Name, nullptr, State, Data);
-                            if (Result.second)
-                                return FindSymbol(Name, Result.first, State, Data);
-                        }
+                        if (!Found->isStatic || Found->isPrivated)
+                            return { nullptr, false };
+                    }
+                    // Instance → Only Block Private | Instancia → So Bloqueia Private.
+                    else
+                    {
+                        if (Found->isPrivated)
+                            return { nullptr, false };
                     }
                 }
-                else if (Owner->Type == SymbolTypes::CLASS)
+
+                return { Found, true };
+            }
+
+            // Inheritance Via AST Extend (Only Struct/Class) | Heranca Via Extend Da AST (So Struct/Class).
+            if (Owner->Type == SymbolTypes::STRUCT && Owner->Owner)
+            {
+                auto* Decl = static_cast<StructDeclNode*>(Owner->Owner);
+                if (Decl->Extend)
                 {
-                    auto* Decl = static_cast<ClassDeclNode*>(Owner->Owner);
-                    if (Decl->Extend)
-                    {
-                        auto* Extend = static_cast<IdentifierNode*>(Decl->Extend);
-                        if (Extend->Name != Owner->Name)
-                        {
-                            auto Result = FindSymbol(Extend->Name, nullptr, State, Data);
-                            if (Result.second)
-                                return FindSymbol(Name, Result.first, State, Data);
-                        }
-                    }
+                    string BaseName = SAUtils::GetIValueName(Decl->Extend);
+                    auto [BaseSym, ok] = FindSymbol(BaseName, nullptr, State, Data);
+                    if (ok && BaseSym)
+                        return FindSymbol(Name, BaseSym, State, Data);
                 }
             }
-        }
-        else if (State.CurrScope)
-        {
-            Sym = State.CurrScope->FindSym(Name);
-            found = Sym != nullptr;
-            if (Sym->isPrivated)
-                return {nullptr, false};
+            else if (Owner->Type == SymbolTypes::CLASS && Owner->Owner)
+            {
+                auto* Decl = static_cast<ClassDeclNode*>(Owner->Owner);
+                if (Decl->Extend)
+                {
+                    string BaseName = SAUtils::GetIValueName(Decl->Extend);
+                    auto [BaseSym, ok] = FindSymbol(BaseName, nullptr, State, Data);
+                    if (ok && BaseSym)
+                        return FindSymbol(Name, BaseSym, State, Data);
+                }
+            }
+
+            // Owner Had LinkedScope But Name Not Found → Stop | Owner Tinha LinkedScope Mas Nome Nao Achou → Para.
+            // (Does Not Fall To Normal Scope To Avoid Override) | (Nao Cai No Escopo Normal Pra Nao Sobrescrever).
+            return { nullptr, false };
         }
 
-        return { Sym, found };
+        // No Owner LinkedScope → Normal Scope Search | Sem LinkedScope Do Owner → Busca No Escopo Normal.
+        if (State.CurrScope)
+        {
+            Symbol* Sym = State.CurrScope->FindSym(Name);
+            if (Sym)
+                return { Sym, true };
+        }
+
+        return { nullptr, false };
     }
 
     // Return Kind Version of Literal | Retorna a Versão Kind do Literal.
@@ -220,37 +268,6 @@ namespace SAUtils {
             case TypeKind::FN:               return "<FN>";
 
             default:                         return "<UNKNOWN>";
-        }
-    }
-
-    // Return Name of IValues | Retorna o Nome dos I-Values.
-    string GetIValueName(ExpressionNode* Node)
-    {
-        if (!Node)
-            return "UNKNOW";
-
-        switch (Node->Type)
-        {
-            case NodeType::IDENTIFIER:
-            {
-                IdentifierNode* Id = static_cast<IdentifierNode*>(Node);
-                return Id->Name;
-            }
-
-            case NodeType::MEMBER_ACCESS:
-            {
-                MemberAccessNode* Ma = static_cast<MemberAccessNode*>(Node);
-
-                string ObjectName = GetIValueName(Ma->Object);
-
-                if (ObjectName == "UNKNOW")
-                    return "UNKNOW";
-
-                return ObjectName;
-            }
-
-            default:
-                return "UNKNOW";
         }
     }
 
@@ -1034,8 +1051,30 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
 
         case NodeType::FN_CALL:
         {
-            TInfo->Kind = TypeKind::MONO_STATE;
-            break;
+            FunctionCall& Call = static_cast<FunctionCall&>(*Node);
+
+            // Resolve Callee | Resolve O Callee.
+            TypeInfo* CalleeInfo = GetExpressionType(Call.Callee, State, Res, Data, Memory);
+
+            // Calling A Mold Creates An Instance | Chamar Um Molde Cria Uma Instancia.
+            if (CalleeInfo->Kind == TypeKind::STRUCT)
+            {
+                TInfo->Kind = TypeKind::STRUCT_INST;
+                TInfo->Father = CalleeInfo->Father;
+            }
+            else if (CalleeInfo->Kind == TypeKind::CLASS)
+            {
+                TInfo->Kind = TypeKind::CLASS_INST;
+                TInfo->Father = CalleeInfo->Father;
+            }
+            else
+            {
+                // Normal Function → Unknown Return | Funcao Normal → Retorno Desconhecido.
+                TInfo->Kind = TypeKind::MONO_STATE;
+            }
+
+            Res.ExpressionTypes[Node] = *TInfo;
+            return &Res.ExpressionTypes[Node];
         }
 
         case NodeType::ASSIGNMENT:
@@ -2005,10 +2044,14 @@ void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult
 
     // Symbol | Simbolo.
     Symbol* Sym = SAUtils::CreateSymbol(Node.Name, Node, State, Res, Memory);
+    
+    // Set Access Flags (Only On Struct/Class) | Define As Flags De Acesso (So Em Struct/Class).
+    if (State.CurrScope and
+    (State.CurrScope->Type == BodyTypes::STRUCT or State.CurrScope->Type == BodyTypes::CLASS))
+        Sym->isPrivated = (Node.AcessType == AcessTypes::PRIVATE);
 
     Sym->Mut = Node.MutType;
     Sym->Type = SymbolTypes::VAR;
-
     TypeInfo* InferType = SAUtils::GetKindOfLiteral(Node.InferType);
 
     // Take Kind
@@ -2066,7 +2109,11 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
     }
 
     Symbol* FnSym = SAUtils::CreateSymbol(Node.Name, Node, State, Res, Memory);
-
+    // Set Access Flags (Only On Struct/Class) | Define As Flags De Acesso (So Em Struct/Class).
+    if (State.CurrScope and
+    (State.CurrScope->Type == BodyTypes::STRUCT or State.CurrScope->Type == BodyTypes::CLASS))
+        FnSym->isPrivated = (Node.AcessType == AcessTypes::PRIVATE);
+    
     FnSym->Type = SymbolTypes::FN;
     FnSym->TInfo->Kind = TypeKind::FN;
     FnSym->TInfo->SubKind = SubTypeKind::NONE;
@@ -2215,20 +2262,36 @@ void SemanticAnalizer::LookUpStruct(StructDeclNode& Node, SAState& State, SAResu
         return;
     }
 
-    // Error Prevention | Prevenção de Erros.
+    // Resolve Inheritance | Resolve A Heranca.
     if (Node.Extend)
     {
+            
+        // Look Up Extend Expression | Olha A Expressao De Extensao.
         LookUpNode(*Node.Extend, State, Res, Data, Memory);
-        TypeInfo* ExtInfo = GetExpressionType(Node.Extend, State, Res, Data, Memory);
-        if (
-            ExtInfo->Kind != TypeKind::STRUCT &&
-            ExtInfo->Kind != TypeKind::CLASS
-        )
+        Symbol* Base = nullptr;
+
+        // Prefer SymbolId Filled By LookUp | Prefere O SymbolId Preenchido Pelo LookUp.
+        if (Node.Extend->SymbolId != 0)
+        {
+            auto It = Res.Symbols.find(Node.Extend->SymbolId);
+            if (It != Res.Symbols.end())
+                Base = It->second;
+        }
+
+        // Fallback: Use Final Name | Fallback: Usa O Nome Final.
+        if (!Base)
+        {
+            string FinalName = SAUtils::GetIValueName(Node.Extend);
+            auto [Found, ok] = SAUtils::FindSymbol(FinalName, nullptr, State, Data);
+            if (ok) Base = Found;
+        }
+
+        if (!Base || (Base->Type != SymbolTypes::STRUCT && Base->Type != SymbolTypes::CLASS))
         {
             OrbitLog::SyntaxLog::SyntaxError(
-                "Semantic", 
-                "Cannot Inherit of: "+SAUtils::GetIValueName(Node.Extend), 
-                "<STRUCT>s Can Only Inherit of Other Structs Or Classes", 
+                "Semantic",
+                "Cannot Inherit of: " + SAUtils::GetIValueName(Node.Extend),
+                "<STRUCT>s Can Only Inherit of Other Structs Or Classes",
                 "Add A Valid Type",
                 Node.pos.line, Node.pos.collumn
             );
@@ -2920,26 +2983,61 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
                 Node.SymbolId = Node.Member->SymbolId;
             break;
         }
+
         case SymbolTypes::STRUCT:
-        {
-            if (Node.Member)
-                LookUpNode(*Node.Member, State, Res, Data, Memory, Sym);
-
-            if (Node.Member && Node.Member->SymbolId != 0)
-                Node.SymbolId = Node.Member->SymbolId;
-
-            break;
-        }
         case SymbolTypes::CLASS:
         {
-            if (Node.Member)
-                LookUpNode(*Node.Member, State, Res, Data, Memory, Sym);
+            if (!Node.Member)
+                break;
+
+            // Take Member Name | Pega O Nome Do Membro.
+            string MemberName = SAUtils::GetIValueName(Node.Member);
+
+            // Find Member (With Inheritance And Private Check) | Encontra O Membro (Com Heranca E Checagem De Private).
+            auto [MemberSym, found] = SAUtils::FindSymbol(MemberName, Sym, State, Data);
+
+            if (!found or !MemberSym)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Semantic",
+                    "Trying To Acess A Undeclared Member",
+                    "Member '" + MemberName + "' Not Found in Object '" + Sym->Name + "'",
+                    "Check the Name or Declare-It",
+                    Node.pos.line, Node.pos.collumn
+                );
+                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+                break;
+            }
+
+            // Type Access vs Instance Access | Acesso Por Tipo vs Acesso Por Instancia.
+            bool isTypeAccess = (Sym->TInfo and
+                (Sym->TInfo->Kind == TypeKind::STRUCT or Sym->TInfo->Kind == TypeKind::CLASS));
+
+            // Block Instance Member On Type (Unless Static) | Bloqueia Membro De Instancia No Tipo (A Nao Ser Static).
+            if (isTypeAccess and !MemberSym->isStatic)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Semantic",
+                    "Cannot Access Instance Member On Type",
+                    "Member '" + MemberName + "' Is Not Static. Instantiate The Struct/Class First",
+                    "Use An Instance Or Mark The Member As Static",
+                    Node.pos.line, Node.pos.collumn
+                );
+                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+                break;
+            }
+
+            // Continue Chain | Continua A Cadeia.
+            LookUpNode(*Node.Member, State, Res, Data, Memory, Sym);
 
             if (Node.Member && Node.Member->SymbolId != 0)
                 Node.SymbolId = Node.Member->SymbolId;
+            else
+                Node.SymbolId = MemberSym->Id;
 
             break;
         }
+        
         default:
         {
             OrbitLog::SyntaxLog::SyntaxError(

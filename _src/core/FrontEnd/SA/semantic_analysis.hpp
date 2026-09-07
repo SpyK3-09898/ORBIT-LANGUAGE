@@ -37,8 +37,8 @@ enum class SymbolTypes: ui8
     TABLE,      // 7
     STRUCT,     // 8
     CLASS,      // 9
-    INST_CLASS, // 10
-    INST_STRUCT,// 11
+    CLASS_INST, // 10
+    STRUCT_INST,// 11
     ENUM,       // 12
     MODULE,     // 13
     LIBRARY     // 14
@@ -74,8 +74,8 @@ enum class TypeKind
     // OBJ
     STRUCT,
     CLASS,
-    INST_STRUCT,
-    INST_CLASS,
+    STRUCT_INST,
+    CLASS_INST,
     NAMESPACE,
     MODULE,
     LIBRARIE,
@@ -127,6 +127,7 @@ struct Symbol
     ui8 packId       = -1;
     bool inited      = false;
     bool isPrivated  = false;
+    bool isStatic    = false;
     bool isExported  = false;
 };
 

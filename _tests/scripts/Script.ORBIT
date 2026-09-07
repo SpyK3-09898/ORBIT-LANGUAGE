@@ -1,14 +1,10 @@
 
 _library __MAIN__;
 
-struct Usuario:
-    var Name;
-    var Money;
+struct Estrutura:
+
+    public var x = 15;
 end
 
-class Banco:
-
-    list Usuarios = {};
-    if(true):
-    end
-end
+obj E = Estrutura();
+E.x = 10;
