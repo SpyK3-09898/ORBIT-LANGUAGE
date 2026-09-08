@@ -39,9 +39,10 @@ enum class SymbolTypes: ui8
     CLASS,      // 9
     CLASS_INST, // 10
     STRUCT_INST,// 11
-    ENUM,       // 12
-    MODULE,     // 13
-    LIBRARY     // 14
+    SELF,       // 12
+    ENUM,       // 13
+    MODULE,     // 14
+    LIBRARY     // 15
 };
 
 // Kindof Types | kind dos Tipos.
@@ -76,6 +77,7 @@ enum class TypeKind
     CLASS,
     STRUCT_INST,
     CLASS_INST,
+    SELF,
     NAMESPACE,
     MODULE,
     LIBRARIE,
@@ -110,7 +112,9 @@ struct Symbol
     TypeInfo* InferType;
     Scope* DeclaredScope;
     Scope* LinkedScope;
-    ASTNode* Owner;
+    Symbol* This   = nullptr;
+    Symbol* Super  = nullptr;
+    ASTNode* Owner = nullptr;
 
     vec<pair<string, TypeInfo*>> Objs;
 
