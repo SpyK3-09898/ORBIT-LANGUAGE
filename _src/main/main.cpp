@@ -196,7 +196,7 @@ int main(int argc, char* argv[])
                 Data.LogDir = GetOrbitOrigin(argv) / "_tests/logs";
                 RunOrbit(argv[2], Data);
             }
-        }else if (Entry == "--build") {
+        } else if (Entry == "--build") {
             
             if (argc < 3)
                 throw runt_err("File Expected after commandd '--run'");
@@ -288,10 +288,263 @@ int main(int argc, char* argv[])
                 PrintLn("Min: "+std::to_string(Min));
                 PrintLn("Max: "+std::to_string(Max));
             }
-        } else if (Entry == "--version") {
+        } else if (Entry == "--test") {
 
+            PrintLn("[##########] 0%. .. ...");
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            int errCount=0;
+            int succCount=0;
+
+            PrintLn("Checking core library. .. ...");
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+            if (
+                !fs::exists
+                (GetOrbitOrigin(argv) / "_lib" / "libs" / "ORBIT") 
+            ) {
+                errCount++;
+                PrintLn("\tLooking for ORBIT library root. .. ...");
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                PrintLn("\t\tCannot find: ", fs::path(GetOrbitOrigin(argv) / "_lib" / "libs" / "ORBIT").string(), ". .. ...");
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            } else {
+                succCount++;
+                PrintLn("\tLooking for ORBIT library root. .. ...");
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                PrintLn("\t\tFound: ", fs::path(GetOrbitOrigin(argv) / "_lib" / "libs" / "ORBIT").string(), ". .. ...");
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            }
+
+            PrintLn("\tLooking for stdlib. .. ...");
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+            if (
+                !fs::exists
+                (GetOrbitOrigin(argv) / "_lib" / "libs" / "ORBIT" / "stdlib") 
+            ) {
+                errCount++;
+                PrintLn("\t\tCannot find: ", fs::path(GetOrbitOrigin(argv) / "_lib" / "libs" / "ORBIT" / "stdlib").string(), ". .. ...");
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            } else {
+                succCount++;
+                PrintLn("\t\tFound: ", fs::path(GetOrbitOrigin(argv) / "_lib" / "libs" / "ORBIT" / "stdlib").string(), ". .. ...");
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            }
+
+            PrintLn("Checking PATH environment. .. ...");
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+            bool InPath = [&]()
+            {
+                const char* Path = std::getenv("PATH");
+
+                if (!Path)
+                    return false;
+
+            #ifdef _WIN32
+                const char Separator = ';';
+            #else
+                const char Separator = ':';
+            #endif
+
+                std::string Paths = Path;
+
+                for (size_t Start = 0; Start < Paths.size();)
+                {
+                    size_t End = Paths.find(Separator, Start);
+
+                    if (End == std::string::npos)
+                        End = Paths.size();
+
+            #ifdef _WIN32
+                    std::string Executable = Paths.substr(Start, End - Start) + "\\orbit.exe";
+            #else
+                    std::string Executable = Paths.substr(Start, End - Start) + "/orbit";
+            #endif
+
+                    if (std::filesystem::exists(Executable))
+                        return true;
+
+                    Start = End + 1;
+                }
+
+                return false;
+            }();
+            if (!InPath)
+                { 
+                    PrintLn("\t\tCannot find ORBIT in <PATH>. .. ..."); 
+                    errCount++; 
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                }
+            else { 
+                PrintLn("\t\tORBIT found in <PATH>. .. ...");   
+                succCount++; 
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            }
+
+            PrintLn("[---#######] 30%. .. ...");
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+
+            PrintLn("Checking essential source files. .. ...");
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+            fs::path W_Path = GetOrbitOrigin(argv);
+            vec<fs::path> EssRunTimeFiles{
+                W_Path / "_src/core/FrontEnd/lexer/lexer.cpp",
+                W_Path / "_src/core/FrontEnd/tokenizer/tokenizer.cpp",
+                W_Path / "_src/core/FrontEnd/parser/parser.cpp",
+                W_Path / "_src/core/FrontEnd/parser/ParserModules/Specials/special.cpp",
+                W_Path / "_src/core/FrontEnd/parser/ParserModules/Control/control.cpp",
+                W_Path / "_src/core/FrontEnd/parser/ParserModules/Declaration/declaration.cpp",
+                W_Path / "_src/core/FrontEnd/parser/ParserModules/Expressions/expression.cpp",
+                W_Path / "_src/core/BackEnd/codegen/codegen.cpp",
+                W_Path / "_src/core/Arena/Arena.cpp"
+            };
+            for (fs::path P : EssRunTimeFiles)
+            {
+                PrintLn("\tChecking file. .. ...");
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                if (fs::exists(P))
+                    { 
+                        PrintLn("\t\tFound: ", P.string(), ". .. ...");     
+                        succCount++; 
+                        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                    }
+                else { 
+                    PrintLn("\t\tCannot find: ", P.string(), ". .. ..."); 
+                    errCount++; 
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                }
+            }
+
+            PrintLn("[------####] 60%. .. ...");
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+
+            PrintLn("Checking essential folders. .. ...");
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+            vec<fs::path> EsseFolderPath{
+                W_Path / "build",
+                W_Path / "_bin",
+                W_Path / "_cache",
+                W_Path / "_dev",
+                W_Path / "_dist",
+                W_Path / "_github",
+                W_Path / "_include",
+                W_Path / "_lib",
+                W_Path / "_others",
+                W_Path / "_src",
+                W_Path / "_templates",
+                W_Path / "_templates" / "_project",
+                W_Path / "_templates" / "_scripts",
+                W_Path / "_tests",
+                W_Path / "_tests" / "logs",
+                W_Path / "_tests" / "scripts",
+                W_Path / "_tests" / "test"
+            };
+            for (fs::path P : EsseFolderPath)
+            {
+                PrintLn("\tChecking folder. .. ...");
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                if (fs::exists(P))
+                     { 
+                        PrintLn("\t\tFound: ", P.string(), ". .. ..."); 
+                        succCount++;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                     }
+                else { 
+                    PrintLn("\t\tCannot find: ", P.string(), ". .. ..."); 
+                    errCount++; 
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                }
+            }
+
+            PrintLn("[---------#] 90%. .. ...");
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+
+            PrintLn("Checking origin files. .. ...");
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+            vec<fs::path> EssOriginFiles{
+                W_Path / "CMakeLists.txt",
+                W_Path / "version.hpp",
+            };
+            for (fs::path P : EssOriginFiles)
+            {
+                PrintLn("\tChecking file. .. ...");
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                if (fs::exists(P))
+                     { 
+                        PrintLn("\t\tFound: ", P.string(), ". .. ...");   
+                        succCount++; 
+                        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                     }
+                else { 
+                    PrintLn("\t\tCannot find: ", P.string(), ". .. ..."); 
+                    errCount++;  
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                }
+            }
+            
+            PrintLn("[----------] 100%. .. ...");
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+
+            if (errCount == 0)
+                PrintLn("ORBIT DOWNLOADED SUCCESSFULLY!. .. ...");
+            else if (errCount > succCount)
+                PrintLn("ORBIT DOWNLOAD IS CORRUPTED, PLEASE RE-STORE( --restore ) AND CHECK AGAIN. .. ...");    
+            else {
+                PrintLn("Errors found: ", errCount, ", Success: ", succCount, ". .. ...");
+            }
+        } else if (Entry == "--restore") {
+
+            fs::path W_Path = GetOrbitOrigin(argv);
+            vec<fs::path> RestorableFolders{
+                W_Path / "_others",
+                W_Path / "_tests",
+                W_Path / "_tests" / "logs",
+                W_Path / "_tests" / "scripts",
+                W_Path / "_tests" / "test",
+                W_Path / "_github",
+            };
+
+            PrintLn("Restoring ORBIT. .. ...");
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+            PrintLn("[##########] 0%. .. ..."); 
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+
+            bool needRestore=false;
+            for (fs::path P : RestorableFolders){
+                if (!fs::exists(P))
+                    needRestore=true;
+            };
+
+            PrintLn("[-----#####] 50%. .. ...");
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            
+            if (needRestore) 
+            {
+                PrintLn("\tCreating missing folders. .. ...");
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                for (fs::path P : RestorableFolders)
+                    if (!fs::exists(P)) {
+                        fs::create_directories(P);
+                        PrintLn("\t\tCreated: ", P.string(), ". .. ...");
+                        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                    }
+            } else {
+                PrintLn("[----------] 100%. .. ...");
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                PrintLn("NOTHING TO RESTORE. .. ...");
+                return 0;
+            }
+            PrintLn("[----------] 100%. .. ...");
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+            PrintLn("ORBIT RESTORED, CHECK WITH '--test'. .. ...");
+        } else if (Entry == "--version") {
             fs::path p(argv[0]); p = p.parent_path().parent_path();
-            PrintLn("ORBIT - version: ", p.filename());
+            PrintLn(" ~ ORBIT - version: ", p.filename(), ", Developed By: SpyK3(2026) ;). .. ...");
         } else {
             throw runt_err("Invalid command: "+Entry);
         }
