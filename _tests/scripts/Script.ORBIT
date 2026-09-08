@@ -6,5 +6,5 @@ struct Estrutura:
     public var x = 15;
 end
 
-obj E = Estrutura();
+obj E = new Estrutura();
 E.x = 10;

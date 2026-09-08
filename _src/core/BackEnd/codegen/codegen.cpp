@@ -1239,3 +1239,4 @@ ByteCode CodeGenerator::InitCG(ParseResult& PRes, SAResult& SARes, RunTimeData& 
 }
 
 // EOF.
+ 

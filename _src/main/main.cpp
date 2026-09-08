@@ -83,7 +83,7 @@ void Await(int Time)
 // ===== MAIN FN ====== //
 int main(int argc, char* argv[])
 {
-    // Try Init ORBIT
+    // Try Init ORBIT | Tenta Inciar A ORBIT
     try {
 
         if (argc == 1)
@@ -295,7 +295,7 @@ int main(int argc, char* argv[])
             int errCount=0;
             int succCount=0;
 
-            PrintLn("Checking core library. .. ...");
+            PrintLn(" Checking core library. .. ...");
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
             if (
@@ -331,7 +331,7 @@ int main(int argc, char* argv[])
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
             }
 
-            PrintLn("Checking PATH environment. .. ...");
+            PrintLn(" Checking PATH environment. .. ...");
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
             bool InPath = [&]()
@@ -385,7 +385,7 @@ int main(int argc, char* argv[])
             PrintLn("[---#######] 30%. .. ...");
             std::this_thread::sleep_for(std::chrono::seconds(1));
 
-            PrintLn("Checking essential source files. .. ...");
+            PrintLn(" Checking essential source files. .. ...");
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
             fs::path W_Path = GetOrbitOrigin(argv);
@@ -535,7 +535,6 @@ int main(int argc, char* argv[])
                     }
             } else {
                 PrintLn("[----------] 100%. .. ...");
-                std::this_thread::sleep_for(std::chrono::seconds(1));
                 PrintLn("NOTHING TO RESTORE. .. ...");
                 return 0;
             }

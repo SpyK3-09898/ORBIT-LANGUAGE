@@ -1,6 +1,7 @@
 
 
 
+
 // ============= SEMANTIC ANALIZER =========== //
 // Analyzes the Code for Semantic Errors | Analiza o Codigo em Busca de Erros Semanticos.
 // Developed By: SpyK3(2026) | License: GitHub(MIT).
@@ -115,7 +116,7 @@ namespace SAUtils
     }
 
     // Find A Symbol | Encontra Um Simbolo.
-    pair<Symbol*, bool> FindSymbol(string Name, Symbol* Owner, SAState& State, RunTimeData& Data)
+    pair<Symbol*, bool> FindSymbol(string Name, Symbol* Owner, SAState& State, RunTimeData& Data, bool isInstanceAccess = false)
     {
         // Prefer LinkedScope Of Owner First | Prefere O LinkedScope Do Owner Primeiro.
         if (Owner && Owner->LinkedScope)
@@ -127,21 +128,29 @@ namespace SAUtils
                 // Only Struct/Class Have Private/Static Rules | So Struct/Class Tem Regras De Private/Static.
                 if (Owner->Type == SymbolTypes::STRUCT || Owner->Type == SymbolTypes::CLASS)
                 {
-                    // Mold → Only Static (And Not Private) | Molde → So Static (E Nao Private).
-                    bool isMold = (Owner->TInfo &&
-                                (Owner->TInfo->Kind == TypeKind::STRUCT ||
-                                Owner->TInfo->Kind == TypeKind::CLASS));
-
-                    if (isMold)
+                    if (isInstanceAccess)
                     {
-                        if (!Found->isStatic || Found->isPrivated)
-                            return { nullptr, false };
-                    }
-                    // Instance → Only Block Private | Instancia → So Bloqueia Private.
-                    else
-                    {
+                        // Instance → Only Block Private | Instancia → So Bloqueia Private.
                         if (Found->isPrivated)
                             return { nullptr, false };
+                    }
+                    else
+                    {
+                        // Mold → Only Static (And Not Private) | Molde → So Static (E Nao Private).
+                        bool isMold = (Owner->TInfo &&
+                                    (Owner->TInfo->Kind == TypeKind::STRUCT ||
+                                    Owner->TInfo->Kind == TypeKind::CLASS));
+
+                        if (isMold)
+                        {
+                            if (!Found->isStatic || Found->isPrivated)
+                                return { nullptr, false };
+                        }
+                        else
+                        {
+                            if (Found->isPrivated)
+                                return { nullptr, false };
+                        }
                     }
                 }
 
@@ -155,9 +164,9 @@ namespace SAUtils
                 if (Decl->Extend)
                 {
                     string BaseName = SAUtils::GetIValueName(Decl->Extend);
-                    auto [BaseSym, ok] = FindSymbol(BaseName, nullptr, State, Data);
+                    auto [BaseSym, ok] = FindSymbol(BaseName, nullptr, State, Data, isInstanceAccess);
                     if (ok && BaseSym)
-                        return FindSymbol(Name, BaseSym, State, Data);
+                        return FindSymbol(Name, BaseSym, State, Data, isInstanceAccess);
                 }
             }
             else if (Owner->Type == SymbolTypes::CLASS && Owner->Owner)
@@ -166,9 +175,9 @@ namespace SAUtils
                 if (Decl->Extend)
                 {
                     string BaseName = SAUtils::GetIValueName(Decl->Extend);
-                    auto [BaseSym, ok] = FindSymbol(BaseName, nullptr, State, Data);
+                    auto [BaseSym, ok] = FindSymbol(BaseName, nullptr, State, Data, isInstanceAccess);
                     if (ok && BaseSym)
-                        return FindSymbol(Name, BaseSym, State, Data);
+                        return FindSymbol(Name, BaseSym, State, Data, isInstanceAccess);
                 }
             }
 
@@ -506,8 +515,10 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
                 }
 
                 // Take Symbol of Member | Pega O Simbolo Do Membro.
-                Symbol* MemberSym = ObjSym->LinkedScope->FindSymLocal(M_Name);
-                if (!MemberSym)
+                // Detect if access is via instance (STRUCT_INST / CLASS_INST)
+                bool isInst = (ObjInfo && (ObjInfo->Kind == TypeKind::STRUCT_INST || ObjInfo->Kind == TypeKind::CLASS_INST));
+                auto [MemberSym, found] = SAUtils::FindSymbol(M_Name, ObjSym, State, Data, isInst);
+                if (!found || !MemberSym)
                 {
                     OrbitLog::SyntaxLog::SyntaxError(
                         "Semantic",
@@ -2019,7 +2030,14 @@ void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult
             }
         }
     }
-    if ((ValTInfo->Kind == TypeKind::STRUCT or ValTInfo->Kind == TypeKind::CLASS) and !Node.probablyObj)
+    if (
+        (   ValTInfo->Kind == TypeKind::STRUCT 
+            or ValTInfo->Kind == TypeKind::CLASS 
+            or
+            ValTInfo->Kind == TypeKind::STRUCT_INST 
+            or ValTInfo->Kind == TypeKind::CLASS_INST
+        ) and !Node.probablyObj
+    )
     {
         OrbitLog::SyntaxLog::SyntaxError(
             "Parsing", 
@@ -2030,7 +2048,16 @@ void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult
         );
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
         return;
-    } else if (Node.probablyObj and (ValTInfo->Kind != TypeKind::STRUCT and ValTInfo->Kind != TypeKind::CLASS and ValTInfo->Kind != TypeKind::ANY and ValTInfo->Kind != TypeKind::MONO_STATE)) {
+    } else if (
+        Node.probablyObj 
+        and(ValTInfo->Kind != TypeKind::STRUCT and 
+            ValTInfo->Kind != TypeKind::CLASS and
+            ValTInfo->Kind != TypeKind::STRUCT_INST and 
+            ValTInfo->Kind != TypeKind::CLASS_INST and
+            ValTInfo->Kind != TypeKind::ANY and 
+            ValTInfo->Kind != TypeKind::MONO_STATE
+        )
+    ) {
         OrbitLog::SyntaxLog::SyntaxError(
             "Parsing", 
             "Expected <OBJECT>, But Got: "+SAUtils::GetStringOfKind(ValTInfo->Kind),
@@ -2078,6 +2105,8 @@ void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult
     {
         Sym->TInfo->Kind = ValTInfo->Kind;
         Sym->TInfo->SubKind = ValTInfo->SubKind;
+        if (ValTInfo->Father)
+            Sym->TInfo->Father = ValTInfo->Father;
         Sym->inited = true;
     }
     else
@@ -2324,21 +2353,32 @@ void SemanticAnalizer::LookUpStruct(StructDeclNode& Node, SAState& State, SAResu
     Sym->LinkedScope = StructScope;
 
     // Analyze Body | Analisa o Corpo.
-    for (ASTNode* N : Node.Body->Data)
+    if (Node.Body)
     {
-        if(N->Category != NodeCat::DECLARATION)
+        for (ASTNode* N : Node.Body->Data)
         {
-            OrbitLog::SyntaxLog::SyntaxError(
-                "Parsing", 
-                "<DECLARATION> Expected",
-                "<NODE-CATEGORY> Isn't <DECLARATION>, But This Body ONLY Accept Declarations",
-                "Set In A Constructor",
-                N->pos.line, N->pos.collumn
-            );
-            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            if(N->Category != NodeCat::DECLARATION)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Parsing", 
+                    "<DECLARATION> Expected",
+                    "<NODE-CATEGORY> Isn't <DECLARATION>, But This Body ONLY Accept Declarations",
+                    "Set In A Constructor",
+                    N->pos.line, N->pos.collumn
+                );
+                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            }
         }
+        LookUpBody(*Node.Body, State, Res, Data, Memory, StructScope);
+        // LookUpBody já fez LeaveScope. Só garantimos o CurrScope (mesmo padrão do LookUpFunction).
+        State.CurrScope = PreviousScope;
     }
-    LookUpBody(*Node.Body, State, Res, Data, Memory, StructScope);
+    else
+    {
+        // Exit Scope | Sai do Escopo. (só quando não tem body)
+        State.CurrScope = PreviousScope;
+        State.ScopeStack.pop_back();
+    }
 }
 
 // LookUp Class Decl Node | Olha um ClassDeclNode.
@@ -2969,6 +3009,17 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
     if (Res.Symbols.find(Sym->Id) == Res.Symbols.end())
         Res.Symbols[Sym->Id] = Sym;
 
+    // Resolve mold for instances (VAR whose type is STRUCT/CLASS or INST)
+    Symbol* MoldSym = Sym;
+    if (Sym->TInfo && Sym->TInfo->Father)
+    {
+        TypeKind K = Sym->TInfo->Kind;
+        if (
+            K == TypeKind::STRUCT      or K == TypeKind::CLASS or
+            K == TypeKind::STRUCT_INST or K == TypeKind::CLASS_INST
+        ) MoldSym = Sym->TInfo->Father;
+    }
+
     // Main Switch | Switch Principal.
     switch (Sym->Type) 
     {
@@ -2994,7 +3045,7 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
             string MemberName = SAUtils::GetIValueName(Node.Member);
 
             // Find Member (With Inheritance And Private Check) | Encontra O Membro (Com Heranca E Checagem De Private).
-            auto [MemberSym, found] = SAUtils::FindSymbol(MemberName, Sym, State, Data);
+            auto [MemberSym, found] = SAUtils::FindSymbol(MemberName, Sym, State, Data, false);
 
             if (!found or !MemberSym)
             {
@@ -3034,12 +3085,42 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
                 Node.SymbolId = Node.Member->SymbolId;
             else
                 Node.SymbolId = MemberSym->Id;
-
             break;
         }
         
         default:
         {
+            if (MoldSym && (MoldSym->Type == SymbolTypes::STRUCT || MoldSym->Type == SymbolTypes::CLASS) && MoldSym->LinkedScope)
+            {
+                if (!Node.Member)
+                    break;
+
+                string MemberName = SAUtils::GetIValueName(Node.Member);
+                auto [MemberSym, found] = SAUtils::FindSymbol(MemberName, MoldSym, State, Data, true);
+                if (!found or !MemberSym)
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "Semantic",
+                        "Trying To Acess A Undeclared Member",
+                        "Member '" + MemberName + "' Not Found in Object '" + MoldSym->Name + "'",
+                        "Check the Name or Declare-It",
+                        Node.pos.line, Node.pos.collumn
+                    );
+                    if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+                    break;
+                }
+
+                // Continue Chain | Continua A Cadeia.
+                if (Node.Member)
+                {
+                    Node.Member->SymbolId = MemberSym->Id;
+                    if (Res.Symbols.find(MemberSym->Id) == Res.Symbols.end())
+                        Res.Symbols[MemberSym->Id] = MemberSym;
+                }
+                Node.SymbolId = MemberSym->Id;
+                break;
+            }
+
             OrbitLog::SyntaxLog::SyntaxError(
                 "Semantic", 
                 "Trying to Acess A Non-Object", 
