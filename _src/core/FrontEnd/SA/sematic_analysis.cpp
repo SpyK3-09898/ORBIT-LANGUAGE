@@ -337,6 +337,7 @@ bool TypesKindEqual(TypeKind L, TypeKind R)
 // Get Expression Types | Pega o Tipo das Expressoes.
 TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
 {
+    // Err Prev | Prevenção de Erro.
     if (!Node)
     {
         TypeInfo* TInfo = Memory.New<TypeInfo>();
@@ -345,14 +346,17 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
         return TInfo;
     }
 
+    // Cache
     auto Cached = Res.ExpressionTypes.find(Node);
     if (Cached != Res.ExpressionTypes.end())
         return &Cached->second;
 
+    // Create TInfo | Cria o TInfo
     TypeInfo* TInfo = Memory.New<TypeInfo>();
     TInfo->Kind = TypeKind::MONO_STATE;
     TInfo->SubKind = SubTypeKind::NONE;
 
+    // Main Switch | Switch Principal.
     switch (Node->Type)
     {
         case NodeType::LITERAL:
@@ -558,6 +562,8 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
                     Node->SymbolId = MemberSym->Id;
                 }
             }
+
+            // SELFS
             else if (ObjSym and ObjSym->Type == SymbolTypes::SELF)
             {
                 if (SAUtils::GetIValueName(Ma.Member) == "this")
@@ -586,6 +592,7 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
             else // OTHERS:
                 TInfo->Kind = TypeKind::MONO_STATE;
 
+            TInfo->Father = ObjSym->This;
             Res.ExpressionTypes[Node] = *TInfo;
             return &Res.ExpressionTypes[Node];
         }
@@ -3134,7 +3141,6 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
 
             // Find Member (With Inheritance And Private Check) | Encontra O Membro (Com Heranca E Checagem De Private).
             auto [MemberSym, found] = SAUtils::FindSymbol(MemberName, Sym, State, Data, false);
-
             if (!found or !MemberSym)
             {
                 OrbitLog::SyntaxLog::SyntaxError(

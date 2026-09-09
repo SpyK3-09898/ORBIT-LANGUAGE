@@ -9,4 +9,5 @@ struct Estrutura:
     end
 end
 
-echo cout Estrutura.y;
+const obj E = new Estrutura;
+echo cout E.Oi();
