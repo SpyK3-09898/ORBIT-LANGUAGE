@@ -3,8 +3,10 @@ _library __MAIN__;
 
 struct Estrutura:
 
-    public var x = 15;
+    public var y = 15;
+    public func Oi():
+        return self.this.y;
+    end
 end
 
-obj E = new Estrutura();
-E.x = 10;
+echo cout Estrutura.y;

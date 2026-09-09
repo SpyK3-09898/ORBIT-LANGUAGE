@@ -183,18 +183,36 @@ namespace SAUtils
             }
 
             // Owner Had LinkedScope But Name Not Found → Stop | Owner Tinha LinkedScope Mas Nome Nao Achou → Para.
-            // (Does Not Fall To Normal Scope To Avoid Override) | (Nao Cai No Escopo Normal Pra Nao Sobrescrever).
             return { nullptr, false };
         }
 
-        // No Owner LinkedScope → Normal Scope Search | Sem LinkedScope Do Owner → Busca No Escopo Normal.
+        Scope* ObjScope = SAUtils::InObjScope(State);
+
+        // Local Search Bounded By ObjScope | Busca Local Limitada Pelo ObjScope.
+        Scope* S = State.CurrScope;
+        while (S && S != ObjScope)
+        {
+            Symbol* LocalSym = S->FindSymLocal(Name);
+            if (LocalSym)
+                return { LocalSym, true };
+            S = S->Parent;
+        }
+
+        // Block Direct Struct/Class Member Access | Bloqueia Acesso Direto A Membros De Struct/Class.
+        if (ObjScope &&
+            (ObjScope->Type == BodyTypes::STRUCT ||
+             ObjScope->Type == BodyTypes::CLASS) &&
+            !Owner &&
+            ObjScope->FindSymLocal(Name))
+            return { nullptr, false };
+
+        // No Owner LinkedScope → Normal Scope Search | Sem Owner LinkedScope → Busca No Escopo Normal.
         if (State.CurrScope)
         {
             Symbol* Sym = State.CurrScope->FindSym(Name);
             if (Sym)
                 return { Sym, true };
         }
-
         return { nullptr, false };
     }
 
@@ -516,8 +534,7 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
                 }
 
                 // Take Symbol of Member | Pega O Simbolo Do Membro.
-                // Detect if access is via instance (STRUCT_INST / CLASS_INST)
-                bool isInst = (ObjInfo && (ObjInfo->Kind == TypeKind::STRUCT_INST || ObjInfo->Kind == TypeKind::CLASS_INST));
+                bool isInst = (ObjInfo and (ObjInfo->Kind == TypeKind::STRUCT_INST or ObjInfo->Kind == TypeKind::CLASS_INST));
                 auto [MemberSym, found] = SAUtils::FindSymbol(M_Name, ObjSym, State, Data, isInst);
                 if (!found || !MemberSym)
                 {
@@ -561,8 +578,8 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
                     }
                     
                     if (S->Type == BodyTypes::STRUCT)
-                        TInfo->Kind = TypeKind::STRUCT;
-                    else TInfo->Kind = TypeKind::CLASS;
+                        TInfo->Kind = TypeKind::STRUCT_INST;
+                    else TInfo->Kind = TypeKind::CLASS_INST;
                 } else if (SAUtils::GetIValueName(Ma.Member) == "super")
                     TInfo->Kind = TypeKind::SELF;
             }
@@ -1104,12 +1121,8 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
                 TInfo->Kind = TypeKind::CLASS_INST;
                 TInfo->Father = CalleeInfo->Father;
             }
-            else
-            {
-                // Normal Function → Unknown Return | Funcao Normal → Retorno Desconhecido.
+            else // Normal Function -> Unknown Return | Funcao Normal -> Retorno Desconhecido.
                 TInfo->Kind = TypeKind::MONO_STATE;
-            }
-
             Res.ExpressionTypes[Node] = *TInfo;
             return &Res.ExpressionTypes[Node];
         }
@@ -1300,6 +1313,11 @@ void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, 
         case NodeType::FN_CALL:
             LookUpFunctionCall
             (static_cast<FunctionCall&>(Node), State, Res, Data, Memory, Owner);
+            break;
+        
+        case NodeType::RETURN:
+            LookUpReturn
+            (static_cast<ReturnNode&>(Node), State, Res, Data, Memory);
             break;
 
         case NodeType::ARRAY_VALUE:
@@ -2164,28 +2182,30 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
     }
 
     Symbol* FnSym = SAUtils::CreateSymbol(Node.Name, Node, State, Res, Memory);
-    
-    FnSym->Type = SymbolTypes::FN;
-    FnSym->TInfo->Kind = TypeKind::FN;
-    FnSym->TInfo->SubKind = SubTypeKind::NONE;
-    FnSym->InferType->Kind = TypeKind::FN;
-    FnSym->InferType->SubKind = SubTypeKind::NONE;
-    FnSym->inited = true;
-    if (SAUtils::InObjScope(State))
-        FnSym->LinkedScope = SAUtils::InObjScope(State);
+    {
+        FnSym->Type = SymbolTypes::FN;
+        FnSym->TInfo->Kind = TypeKind::FN;
+        FnSym->TInfo->SubKind = SubTypeKind::NONE;
+        FnSym->InferType->Kind = TypeKind::FN;
+        FnSym->InferType->SubKind = SubTypeKind::NONE;
+        FnSym->inited = true;
+        if (SAUtils::InObjScope(State))
+            FnSym->LinkedScope = SAUtils::InObjScope(State);
+    }
 
     Scope* PreviousScope = State.CurrScope;
     BodyNode* Body = Node.Body;
 
+    // Set Access Flags (Only On Struct/Class) | Define As Flags De Acesso (So Em Struct/Class).
     if (!Body)
         return;
-    // Set Access Flags (Only On Struct/Class) | Define As Flags De Acesso (So Em Struct/Class).
     Scope* S = EntryScope(*Body, State, Res, Data, Memory);
+    Scope* ObjScope = SAUtils::InObjScope(State);
     if (
-        State.CurrScope 
+        ObjScope
         and(
-            State.CurrScope->Type == BodyTypes::STRUCT 
-            or State.CurrScope->Type == BodyTypes::CLASS
+            ObjScope->Type == BodyTypes::STRUCT
+            or ObjScope->Type == BodyTypes::CLASS
         )
     )
     {
@@ -2203,13 +2223,13 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
         SelfSym->TInfo->Kind     = TypeKind::SELF;
 
         // Take Name | Pega O Nome.
-        Scope* Sc = SAUtils::InObjScope(State);
+        Scope* Sc = ObjScope;
         string N;
         if (Sc->Type == BodyTypes::STRUCT)
             N = static_cast<StructDeclNode*>(Sc->Owner)->Name;
         else N = static_cast<ClassDeclNode*>(Sc->Owner)->Name;
         
-        Symbol* ObjSym = Sc->FindSymLocal(N);
+        Symbol* ObjSym = Sc->FindSym(N);
         SelfSym->This = ObjSym;
 
         // Take Super | Pega O Super.
@@ -2223,7 +2243,7 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
         if (Extend)
         {
             string SuperName = SAUtils::GetIValueName(Extend);
-            SuperSym = State.CurrScope->FindSym(SuperName);
+            SuperSym = Sc->FindSym(SuperName);
         }
 
         SelfSym->Super = SuperSym;
@@ -2605,7 +2625,6 @@ void SemanticAnalizer::LookUpIdentifier(IdentifierNode& Node, SAState& State, SA
         {
             Node.SymbolId = Sym->Id;
         }
-
         Sym->read_count++;
     }
 }
@@ -3156,21 +3175,42 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
                 Node.SymbolId = MemberSym->Id;
             break;
         }
-
+        
         case SymbolTypes::SELF:
         {
-            if (SAUtils::GetIValueName(Node.Member) != "this" or SAUtils::GetIValueName(Node.Member) != "super")
+            string MemberName = SAUtils::GetIValueName(Node.Member);
+            if (MemberName != "this" and MemberName != "super")
             {
                 OrbitLog::SyntaxLog::SyntaxError(
                     "Semantic",
                     "Trying To Acess A Undeclared Member",
-                    "Member '" + SAUtils::GetIValueName(Node.Member) + "' Not Found in Object '" + Sym->Name + "'",
+                    "Member '" + MemberName + "' Not Found in Object '" + Sym->Name + "'",
                     "Check the Name or Declare-It",
                     Node.pos.line, Node.pos.collumn
                 );
                 if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
                 break;
             }
+
+            Symbol* Target = (MemberName == "this") ? Sym->This : Sym->Super;
+            if (!Target)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Semantic",
+                    "Invalid <SELF> Access",
+                    MemberName == "super"
+                        ? "Struct/Class Has No <EXTEND>, So 'super' Is Unavailable"
+                        : "Cannot Resolve 'this'",
+                    "~", Node.pos.line, Node.pos.collumn
+                );
+                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+                break;
+            }
+
+            Node.SymbolId = Target->Id;
+            if (Res.Symbols.find(Target->Id) == Res.Symbols.end())
+                Res.Symbols[Target->Id] = Target;
+            break;
         }
         
         default:
@@ -3485,7 +3525,7 @@ void GenerateSALog(SAState& State, SAResult& Res, RunTimeData& Data)
             text += "\n\tKIND: ";
             text += "\n\t\t|  Kind: "+std::to_string(static_cast<int>(Sym->TInfo->Kind));
             text += "\n\t\t|_ Kind: "+std::to_string(static_cast<int>(Sym->TInfo->SubKind));
-            text += "\tSCOPE: " + std::format("{:p}", static_cast<void*>(Sym->DeclaredScope));
+            text += "\tSCOPE: " + std::format("{:p}", static_cast<void*>(Sym->DeclaredScope))+" | "+Sym->DeclaredScope->Owner->GetNodeType();
             text += "\n\tDATA: \n\t\t|  RA: "+std::to_string(Sym->read_count);
             text += "\n\t\t|  WA: "+std::to_string(Sym->write_count);
             text += "\n\t\t|_ INIT: "+std::to_string(Sym->inited)+"\n\n";
