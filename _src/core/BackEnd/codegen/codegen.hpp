@@ -29,6 +29,7 @@ struct IfCompileState
 // State of ByteCode Generator | Estado do Gerador de ByteCodes.
 struct CodeGenState 
 {
+    vec<vec<ui16>> DefinitionRecord{};
     unord_map<ui16, ui32> Locals;
     unord_map<Symbol*, ui32> LocalsSym;
     unord_map<Symbol*, i64> Functions;
@@ -135,7 +136,7 @@ class CodeGenerator
 
         // PROGRAMS:
         void CompileProgram(ProgramNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory);
-        void CompileBody(BodyNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory);
+        void CompileBody(BodyNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
 
         // SPECIALS:
         void CompileLibraryDef(LibraryNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory);
@@ -160,6 +161,8 @@ class CodeGenerator
         void CompileVarDecl(VarDeclNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory);
         void CompileFnDecl(FnDecl* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory);
         void CompileNameSpaceDecl(NameSpaceDecl* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory);
+        void CompileStructDecl(StructDeclNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory);
+        void CompileClassDecl(ClassDeclNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory);
         void CompileErrorDecl(ErrorDeclNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory);
 
         // CONTROL-FLOW:

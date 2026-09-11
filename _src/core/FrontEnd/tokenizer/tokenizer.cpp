@@ -52,8 +52,8 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
     };
     vec<string> Modifiers
     {
-        "const", "fallback"
-        "export", "public", "private"
+        "const", "fallback",
+        "export", "public", "private", "static"
     };
     vec<string> LitTypes
     {

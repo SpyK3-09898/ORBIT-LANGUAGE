@@ -34,6 +34,7 @@ using  ByteValue = variant< // RunTime Value | Valor de RunTime.
     string,
     NoneLitVal,
     NullLitVal,
+    vec<ui16>,
     shared_ptr<ByteArray>,
     shared_ptr<ByteTable>,
     ByteFn*,
@@ -118,10 +119,9 @@ struct ByteIterator : ByteObject
     i64 End;
     i32 Step;
 
-    // CONSTRUCTOR
+    // CONSTRUCTOR & DESTRUCTOR | CONSTRUTOR E DESTRUTOR
     ByteIterator(i64 start, i64 end, i32 step)
         : Curr(start - step), End(end), Step(step) {}
-
     ~ByteIterator() = default;
     static void Destroy(void* Ptr, Arena& Memory)
     {
@@ -141,6 +141,31 @@ struct ByteIterator : ByteObject
     void Advance() // Advance it | Avança o Iterador:
     {
         Curr += Step;
+    }
+};
+
+// RunTime TypeObject Repr | Representação de Objetos de Tipo.
+enum TypeObjType
+{
+    STRUCT,
+    CLASS
+};
+struct ByteTypeObj : ByteObject
+{
+    // DATA | DADOS
+    Chunk* Chunk;
+    ByteTypeObj* Parent;
+    ui8 chunkId=0;
+    ui32 SymbolCount=0;
+    vec<ui16> Members;
+    TypeObjType ObjType;
+
+    // CONSTRUCTOR & DESTRUCTOR | CONSTRUTOR E DESTRUTOR
+    ~ByteTypeObj() = default;
+    static void Destroy(void* Ptr, Arena& Memory)
+    {
+        ByteTypeObj* It = static_cast<ByteTypeObj*>(Ptr);
+        It->~ByteTypeObj();
     }
 };
 
@@ -235,19 +260,27 @@ enum class OpCode: uint8_t
 
     GET_INDEX,
     LOAD_INDEX,
+
+    LOAD_SELF,
+    GET_THIS,
+    GET_SUPER,
+
     STORE_INDEX,
 
     LOAD_FN,
     LOAD_PACK,
+    LOAD_TYPE,
 
     // BUILDS | CONSTRUÇÕES.
     BUILD_ARRAY,
     BUILD_TABLE,
     BUILD_RANGE,
+    BUILD_TYPE_OBJ,
     BUILD_PACKAGE,
 
     // SETS
     SET_TKEY,
+    SET_TPATH,
 
     // ITERS
     ITER_NEXT,
@@ -264,7 +297,11 @@ enum class OpCode: uint8_t
     RETURN,
 
     AND,
-    OR
+    OR,
+
+    // PROGRAM
+    ENTRY_POINT,
+    END_OF_PROGRAM
 };
 
 // STRUCTS

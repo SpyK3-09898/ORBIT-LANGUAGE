@@ -278,8 +278,8 @@ struct ASTNode
     NodePos pos;
     NodeType Type;
     NodeCat Category = NodeCat::PROGRAM;
-    ui16 SymbolId=0;
-    bool export_decl=false;
+    ui16 SymbolId    = 0;
+    bool export_decl = false;
 
     // UTILS | UTILIDADES
     inline string GetNodeType()
@@ -553,6 +553,7 @@ struct DeclarationNode : ASTNode
     // DATA | DADOS.
     AcessTypes AcessType = AcessTypes::NONE;
     bool isUDT=false;
+    bool isStatic=false;
     
     // CONSTRUCTOR | CONSTRUTOR 
     DeclarationNode(NodeType T, NodePos P)

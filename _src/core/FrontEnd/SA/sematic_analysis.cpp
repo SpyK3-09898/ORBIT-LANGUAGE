@@ -87,7 +87,9 @@ namespace SAUtils
         State.nextId++;
         if (Node.export_decl)
             Sym->isExported = true;
-
+        if (Node.Category == NodeCat::DECLARATION)
+            if (static_cast<DeclarationNode&>(Node).isStatic)
+                Sym->isStatic=true;
         return Sym;
     }
 
@@ -591,7 +593,6 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
             }
             else // OTHERS:
                 TInfo->Kind = TypeKind::MONO_STATE;
-
             TInfo->Father = ObjSym->This;
             Res.ExpressionTypes[Node] = *TInfo;
             return &Res.ExpressionTypes[Node];

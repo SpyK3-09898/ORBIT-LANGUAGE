@@ -1054,6 +1054,9 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
         // Main Switch | Switch Principal:
         switch (OP) 
         {
+            // PROGRAM-CONTROL:
+            case OpCode::ENTRY_POINT: break;
+            case OpCode::END_OF_PROGRAM: return 0;
 
             // STACK-CONTROL:
             case OpCode::PUSH: // Push A New Value to Sack | Coloca um Novo Valor na Pilha:

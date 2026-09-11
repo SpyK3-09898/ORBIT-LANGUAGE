@@ -980,6 +980,8 @@ void ParseBasicDeclaration(
             }
             Node.AcessType = AcessTypes::PRIVATE;
         }
+        else if (Lexeme == "static")
+        { Node.isStatic=true; }
         Inst.Modifiers.erase(Inst.Modifiers.begin()+i, Inst.Modifiers.end());
         i++;
     }

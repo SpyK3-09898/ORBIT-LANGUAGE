@@ -287,14 +287,11 @@ void CodeGenerator::CompileProgram(ProgramNode* Node, CodeGenState& State, ByteC
 }
 
 // Compile Code Body Block | Compila um Bloco de Corpo de Código
-void CodeGenerator::CompileBody(BodyNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
+void CodeGenerator::CompileBody(BodyNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     if (!Node) return;
-
     for (ASTNode* N : Node->Data)
-    {
-        CompileNode(N, State, BC, SARes, Data, Memory);
-    }
+        CompileNode(N, State, BC, SARes, Data, Memory, Owner);
 }
 
 // EXPRESSION
@@ -799,6 +796,8 @@ void CodeGenerator::CompileVarDecl(VarDeclNode* Node, CodeGenState& State, ByteC
     // Compile | Compila:
     CompileNode(Node->Val, State, BC, SARes, Data, Memory);
     ui32 ID = State.CreateLocal(Sym->Id);
+    if (!State.DefinitionRecord.empty())
+        State.DefinitionRecord.back().push_back(Sym->Id);
 
     // Gen Inst | Gera a Instrução.
     ByteInstruction* Inst = CodeGenUtils::
@@ -819,6 +818,8 @@ void CodeGenerator::CompileFnDecl(FnDecl* Node, CodeGenState& State, ByteCode& B
         OrbitLog::Error("codegen.cpp", "Cannot Find Function Symbol: "+Node->Name, true, 404);
         return;
     }
+    if (!State.DefinitionRecord.empty())
+        State.DefinitionRecord.back().push_back(Sym->Id);
 
     // Create Chunk | Cria a Chunk
     BC.Chunks.push_back(Memory.New<Chunk>());
@@ -853,6 +854,57 @@ void CodeGenerator::CompileNameSpaceDecl(NameSpaceDecl* Node, CodeGenState& Stat
 {
     if (Node->Body)
         CompileNode(Node->Body, State, BC, SARes, Data, Memory);
+}
+
+// Compile Type Objects Definitions | Compila Definições de Objetos de Tipo.
+void CodeGenerator::CompileStructDecl(StructDeclNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
+{
+    // Take Sym | Pega o Simbolo.
+    Symbol* Sym = CodeGenUtils::GetSym(Node, SARes);
+    if (!Sym)
+    {
+        OrbitLog::Error(
+            "codegen.cpp",
+            "Cannot Find Struct Symbol: "+Node->Name,
+            true,
+            404
+        );
+        return;
+    } else if (Sym && Sym->read_count == 0 and Sym->write_count == 0 and !Node->export_decl)
+        return;
+
+    // State  Estado.
+    CodeGenState* SymState = GetStateForSym(Sym, State) ;
+    if (!Sym->LinkedScope)
+    {
+        OrbitLog::Error(
+            "codegen.cpp",
+            "Struct Has No Linked Scope: "+Node->Name,
+            true,
+            404
+        );
+        return;
+    }
+
+    // Compile Struct Members | Compila os Membros de Structs.
+    State.DefinitionRecord.push_back({});
+    CompileNode(Node->Body, State, BC, SARes, Data, Memory, Sym);
+
+    // Set Members | Define os Membros.
+    ui32 ID = State.CreateLocal(Sym->Id);
+    vec<ui16> Ids = State.DefinitionRecord.back();
+    State.DefinitionRecord.pop_back();
+
+    // Inherith | Herança.
+    CompileNode(Node->Extend, State, BC, SARes, Data, Memory);
+    ByteInstruction* PathInst = CodeGenUtils::CreateInst
+        (Node, OpCode::SET_TPATH, 0, 0, Data, Memory);
+
+    // Set Inst | Define A Instrução.
+    ByteInstruction* Inst = CodeGenUtils::CreateInst
+        (Node, OpCode::BUILD_TYPE_OBJ, Ids, Ids, Data, Memory);
+    BC.Chunks[BC.currChunk]->Instructions.push_back(PathInst);
+    BC.Chunks[BC.currChunk]->Instructions.push_back(Inst);
 }
 
 // Handle/Compile Declaration Errors | Manipula/Compila Erros em Declarações
@@ -1191,6 +1243,23 @@ ByteCode CodeGenerator::InitCG(ParseResult& PRes, SAResult& SARes, RunTimeData& 
     ByteCode BC;
     BC.Chunks.push_back(Memory.New<Chunk>());
     CodeGenState State; 
+    ByteInstruction* I = CodeGenUtils::CreateInst(
+        PRes.AST, 
+        OpCode::ENTRY_POINT, 
+        0, 
+        0, 
+        Data, 
+        Memory
+    );
+    ByteInstruction* E = CodeGenUtils::CreateInst(
+        PRes.AST, 
+        OpCode::END_OF_PROGRAM, 
+        0, 
+        0, 
+        Data, 
+        Memory
+    );
+    BC.Chunks[0]->Instructions.push_back(I);
     
     // Run Contexts And Generate Chunk
     // Percorre os Contextos e Gera as Chunks.
@@ -1200,6 +1269,7 @@ ByteCode CodeGenerator::InitCG(ParseResult& PRes, SAResult& SARes, RunTimeData& 
         ui8 packId = BC.Chunks.size();
         BC.Chunks.push_back(Memory.New<Chunk>());
         BC.Contexts[Cont.first] = packId;
+        BC.Chunks.back()->Instructions.push_back(I);
 
         // Compile Library AST Into Pack Chunk
         // Compila a AST da Lib Na Chunk do Pack.
@@ -1226,11 +1296,14 @@ ByteCode CodeGenerator::InitCG(ParseResult& PRes, SAResult& SARes, RunTimeData& 
 
             BC.ExportSlots[packId][Sym->Id] = LibState->GetLocal(Sym->Id);
         }
+
+        BC.Chunks.back()->Instructions.push_back(E);
     }
 
     // Compile AST | Compila a AST.
     CompileNode(PRes.AST, State, BC, SARes, Data, Memory);
-
+    BC.Chunks.back()->Instructions.push_back(E);
+    
     if (Data.flags.generateLog)
         GenerateCodeGenLog(BC, Data);
     if (Data.flags.debugMode)

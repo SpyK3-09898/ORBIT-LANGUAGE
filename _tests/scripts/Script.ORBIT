@@ -3,8 +3,8 @@ _library __MAIN__;
 
 struct Estrutura:
 
-    public var y = 15;
-    public func Oi():
+    static public var y = 15;
+    static public func Oi():
         return self.this.y;
     end
 end

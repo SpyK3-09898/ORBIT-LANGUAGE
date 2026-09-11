@@ -1,0 +1,35 @@
+
+{
+    "files.associations": {
+        "*.Orbit": "orbit"
+    },
+    "[orbit]": {
+        "editor.insertSpaces": false,
+        "editor.tabSize": 4
+    },
+
+    "material-icon-theme.folders.associations": {
+        "_": "ci",
+        "ORBIT": "interface",
+        "AST": "firestore",
+        "parser": "contract",
+        "lexer": "serverless",
+        "arena": "class",
+        "tokenizer": "keys",
+        "ParseModules": "salt",
+        "ParserModules": "salt",
+        "platform": "client",
+        "time": "temp",
+        "clock": "temp",
+        "SA": "expo",
+        "thread": "benchmark",
+        "codegen": "components",
+        "compiler": "metro",
+        "IR": "archive",
+        "llvm": "database",
+        "prints": "azure-pipelines"
+    },
+    "material-icon-theme.files.associations": {
+        "*.ORBIT": "rocket"
+    }
+}
