@@ -254,6 +254,15 @@ namespace VM_Utils {
                         Pos.line, Pos.collumn
                     );
                     OrbitLog::SyntaxLog::ThrowLog(Data);
+                } else if (holds_alt<ByteTypeObj*>(Val)) {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "RunTime", 
+                        "Non Viable Conversion In: <STRING>, To: <TYPE-OBJECT>", 
+                        "Cannot Cast Left And Right", 
+                        "Add A Valid Type",
+                        Pos.line, Pos.collumn
+                    );
+                    OrbitLog::SyntaxLog::ThrowLog(Data);                     
                 } else if (holds_alt<nullptr_t>(Val)) 
                     return "␀";
                 else {
@@ -377,6 +386,7 @@ namespace VM_Utils {
         else if (holds_alt<ByteIterator*>(Val)) return "Iterator";
         else if (holds_alt<ByteFn*>(Val)) return "Function";
         else if (holds_alt<BytePackage*>(Val)) return "Package";
+        else if (holds_alt<ByteTypeObj*>(Val)) return "TypeObject";
         else if (holds_alt<nullptr_t>(Val)) return "<␀>";
         else return "Unk";
     }
@@ -545,6 +555,74 @@ ByteValue BytePackage::Acess(ByteValue& Val, ByteInstruction& CurrInst, ByteCode
         OrbitLog::SyntaxLog::ThrowLog(Data);
     }
     return It->second;
+}
+
+// TYPES:
+
+// Acess a Member of a Type | Acessa o Membro do Objeto de Tipo.
+ByteValue ByteTypeObj::Acess(
+    ByteValue& Val,
+    ByteInstruction& CurrInst,
+    ByteCode* BC,
+    RunTimeData& Data
+)
+{
+    // Get Member ID | Pega o ID do Membro.
+    if (!holds_alt<i64>(Val))
+        OrbitLog::Error(
+            "virtual_machine.cpp",
+            "Expected <MEMBER-ID>, But Got: " +
+            VM_Utils::ConvertByteToString(Val),
+            true,
+            RUNTIME_ERROR
+        );
+    ui16 MemberID = static_cast<ui16>(std::get<i64>(Val));
+
+    // Find Member | Procura o Membro.
+    auto It = std::find(
+        Members.begin(),
+        Members.end(),
+        MemberID
+    );
+
+    if (It == Members.end())
+        OrbitLog::Error(
+            "virtual_machine.cpp",
+            "Member does not belong to TypeObject.",
+            true,
+            RUNTIME_ERROR
+        );
+
+    // Get Member ID | Pega o ID do Membro.
+    ui16 ID = *It;
+
+    // Get Member Slot | Pega o Slot do Membro.
+    ui32 Slot = 0;
+
+    if (BC->ExportSlots.contains(chunkId))
+    {
+        auto& Slots = BC->ExportSlots.at(chunkId);
+
+        if (Slots.contains(ID))
+            Slot = Slots.at(ID);
+        else
+            OrbitLog::Error(
+                "virtual_machine.cpp",
+                "Cannot Resolve Member Slot.",
+                true,
+                RUNTIME_ERROR
+            );
+    }
+    else
+        OrbitLog::Error(
+            "virtual_machine.cpp",
+            "Cannot Resolve TypeObject Chunk Context.",
+            true,
+            RUNTIME_ERROR
+        );
+
+    // Return Member | Retorna o Membro.
+    return BC->Chunks[chunkId]->Instructions[Slot]->R1;
 }
 
 // =========== CORE =========== //
@@ -1264,6 +1342,27 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 CallStack->GetTop()->PushBack(It->second);
                 break;
             }
+            case OpCode::LOAD_TYPE: // Load A Type Object
+            {
+                ui32 Id = static_cast<ui32>(std::get<i64>(CurrInst->R1));
+                auto& Objs = CallStack->GetTop()->Objects;
+
+                auto It = Objs.find(Id);
+                if (It == Objs.end())
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "RunTime",
+                        "Cannot Find Object",
+                        "Object Id: " + std::to_string(Id) + " Not Found In Objects",
+                        "Check Import / BUILD_PACK",
+                        CurrInst->Pos.line, CurrInst->Pos.collumn
+                    );
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                }
+
+                CallStack->GetTop()->PushBack(It->second);
+                break;
+            }
 
             // BUILDS:
             
@@ -1368,7 +1467,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 CallStack->GetTop()->PushBack(Arr);
                 break;
             }
-            case OpCode::BUILD_TABLE: // Build a Table Value | Constroi um Valor de Tabelas.
+            case OpCode::BUILD_TABLE: // Build a Table Value | Constroi Um Valor de Tabelas.
             {
                 ByteTable T;
                 shared_ptr Tab = std::make_shared<ByteTable>(T);
@@ -1376,7 +1475,74 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
 
                 break;
             }
+            case OpCode::BUILD_TYPE_OBJ: // Build a TypeObject | Constroi um Objeto de Tipo.
+            {
+                // Get Data | Pega os Dados.
+                Chunk* CurrChunk = BC.Chunks[BC.currChunk];
+                ByteTypeObj* Obj = Memory.New<ByteTypeObj>();
 
+                // Define Object | Define o Objeto.
+                Obj->ID      = std::get<i64>(CurrInst->R1);
+                Obj->Members = std::get<vec<ui16>>(CurrInst->R2);
+                Obj->Chunk   = CurrChunk;
+                Obj->chunkId = BC.currChunk;
+
+                // Inherith | Herança.
+                if (std::get<bool>(CurrInst->L1))
+                {
+                    if (CurrChunk->LastObj.empty())
+                        OrbitLog::Error(
+                            "virtual_machine.cpp",
+                            "Type inheritance was requested, but no parent object was provided.",
+                            true,
+                            RUNTIME_ERROR
+                        );
+
+                    ByteObject* ParentObj = CurrChunk->LastObj.back();
+                    ByteTypeObj* Parent = static_cast<ByteTypeObj*>(ParentObj);
+
+                    // Set Parent | Define o Pai.
+                    Obj->Parent = Parent;
+
+                    // Inherit Parents | Herda a cadeia de pais.
+                    Obj->Parents = Parent->Parents;
+                    Obj->Parents.push_back(Obj);
+
+                    // Inherit Members | Herda os Membros.
+                    vec<ui16> OwnMembers = Obj->Members;
+
+                    Obj->Members = Parent->Members;
+                    Obj->Members.insert(
+                        Obj->Members.end(),
+                        OwnMembers.begin(),
+                        OwnMembers.end()
+                    );
+
+                    CurrChunk->LastObj.pop_back();
+                }
+                else
+                {
+                    // Root Type | Tipo Raiz.
+                    Obj->Parent = nullptr;
+                    Obj->Parents.push_back(Obj);
+                }
+
+                // Define Symbol Count | Define a Quantidade de Simbolos.
+                Obj->SymbolCount = Obj->Members.size();
+
+                // Register Object | Registra o Objeto.
+                GC.Register(
+                    Obj,
+                    ByteTypeObj::Destroy,
+                    Memory
+                );
+
+                // Store Object | Armazena o Objeto.
+                CallStack->GetTop()->Locals[Obj->ID] = Obj;
+                CallStack->GetTop()->Objects[static_cast<ui32>(Obj->ID)] = Obj;
+                break;
+            }
+            
             // GETS:
 
             case OpCode::GET_MEMBER: // Get Value Member | Pega Um Membro de um Valor.
@@ -1386,7 +1552,6 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
 
                 // Take Object | Pega o Objeto.
                 ByteValue Object = CallStack->GetTop()->Pop();
-
                 ByteObject* Obj = VM_Utils::GetByteObject(Object);
 
                 // Error Prevention | Prevenção de Erros.
@@ -1403,7 +1568,6 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                     OrbitLog::SyntaxLog::ThrowLog(Data);
                     return 1;
                 }
-
                 if (!Obj->acessible)
                 {
                     OrbitLog::SyntaxLog::SyntaxError(
@@ -1537,10 +1701,20 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 Table.push_back({Str, Value});
                 break;
             }
+            // Set Type Objects Path In Stack | Coloca o Caminho de Objetos De Tipo Na Stack.
+            case OpCode::SET_TPATH:
+            {
+                ByteValue Val = CallStack->GetTop()->Pop();
+                if (!holds_alt<ByteTypeObj*>(Val))
+                    OrbitLog::Error("virtual_machine.cpp", "Expected <BYTE-OBJECT>, But Got: "+VM_Utils::ConvertByteToString(Val), true, RUNTIME_ERROR);
+                ByteTypeObj* Obj = std::get<ByteTypeObj*>(Val);
+                BC.Chunks[BC.currChunk]->LastObj.push_back(Obj);
+                break;
+            }
 
             // ITERS:
             // Add '.InEnd()' Result in Stack | Adiciona o Resultado a Função: '.InEnd()' Na Stack.
-            case OpCode::ITER_HAS_NEXT:
+            case OpCode::ITER_HAS_NEXT: 
             {
                 ByteValue& Val = CallStack->GetTop()->Stack.back();
 

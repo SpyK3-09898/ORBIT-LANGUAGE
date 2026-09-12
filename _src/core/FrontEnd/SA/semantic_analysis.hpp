@@ -42,7 +42,7 @@ enum class SymbolTypes: ui8
     SELF,       // 12
     ENUM,       // 13
     MODULE,     // 14
-    LIBRARY     // 15
+    LIBRARY,    // 15
 };
 
 // Kindof Types | kind dos Tipos.
@@ -81,6 +81,7 @@ enum class TypeKind
     NAMESPACE,
     MODULE,
     LIBRARIE,
+    PATH,
     ITERATOR,
 
     // OTHERS | OUTROS.
@@ -103,6 +104,8 @@ struct TypeInfo
     TypeKind Kind = TypeKind::MONO_STATE;
     SubTypeKind SubKind = SubTypeKind::NONE;
     Symbol* Father;
+    ui16 ObjectId;
+    vec<ui16> IdList;
 };
 
 // Symbol Repr | Representação dos Simbolos.
@@ -233,6 +236,7 @@ class SemanticAnalizer
         void LookUpIndexAccess(IndexAccessNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpRange(RangeNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpFunctionCall(FunctionCall& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
+        void LookUpTernary(TernaryNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpArray(ArrayValue& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpTable(TableValue& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
 

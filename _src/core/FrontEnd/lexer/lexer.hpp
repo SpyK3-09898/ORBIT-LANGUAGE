@@ -88,6 +88,7 @@ enum class TokenType: uint8_t
     MOD,
     POT,
     HOLE,
+    QUEST,
 
     EQPL,
     EQMIN,
@@ -112,6 +113,7 @@ enum class TokenType: uint8_t
     DOT,
     COMMA,
     RANGE,
+    BUILD_RANGE,
     ITERATOR_ACESS,
     AMPERSAND,
 
@@ -186,6 +188,7 @@ struct Token
             case TokenType::ITERATOR_ACESS:
             case TokenType::POT:          return "<POT>";
             case TokenType::HOLE:         return "<HOLE>";
+            case TokenType::QUEST:        return "<QUEST>";
 
             case TokenType::EQPL:         return "<EQPL>";
             case TokenType::EQMIN:        return "<EQMIN>";
@@ -210,6 +213,7 @@ struct Token
             case TokenType::DOT:          return "<DOT>";
             case TokenType::COMMA:        return "<COMMA>";
             case TokenType::RANGE:        return "<RANGE>";
+            case TokenType::BUILD_RANGE:  return "<RANGE-BUILDER>";
             case TokenType::AMPERSAND:    return "<AMPERSAND>";
 
             // BLOCKS

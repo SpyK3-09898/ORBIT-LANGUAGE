@@ -63,11 +63,14 @@ enum class Operator : uint8_t;
 
 // NODES
 
+// BASE
 struct ASTNode;
 
+// PROGRAM | PROGRAMA.
 struct BodyNode;
 struct ProgramNode;
 
+// EXPRESSION | EXPRESSOES.
 struct ExpressionNode;
 struct LiteralNode;
 struct IdentifierNode;
@@ -79,12 +82,14 @@ struct IndexAccessNode;
 struct RangeNode;
 struct ErrorExprNode;
 
+// DECLARATIONS | DECLARAÇÕES.
 struct DeclarationNode;
 struct VarDeclNode;
 struct ReturnNode;
 struct FnDecl;
 struct ErrorDeclNode;
 
+// CONTROL | CONTROLE
 struct ControlNode;
 struct ElseNode;
 struct ElifNode;
@@ -136,6 +141,7 @@ enum class NodeType : uint8_t
 
     UNARY,
     BINARY,
+    TERNARY,
     ASSIGNMENT,
 
     MEMBER_ACCESS,
@@ -144,7 +150,8 @@ enum class NodeType : uint8_t
     TABLE_VALUE,
     ARRAY_VALUE,
 
-    RANGE
+    RANGE,
+    RANGE_BUILD
 };
 
 // Category of Nodes | Categoria dos Nós.
@@ -319,6 +326,7 @@ struct ASTNode
 
             case NodeType::UNARY:          return "<UNARY>";
             case NodeType::BINARY:         return "<BINARY>";
+            case NodeType::TERNARY:        return "<TERNARY>";
             case NodeType::ASSIGNMENT:     return "<ASSIGNMENT>";
 
             case NodeType::MEMBER_ACCESS:  return "<MEMBER_ACCESS>";
@@ -452,6 +460,19 @@ struct BinaryNode : ExpressionNode
         : ExpressionNode(NodeType::BINARY, P) {};
 };
 
+// TERNARY EXPRESSION | Expressão Ternaria.
+struct TernaryNode : ExpressionNode
+{
+    // DATA | DADOS.
+    ExpressionNode* Condition;
+    ExpressionNode* ValueIfTrue;
+    ExpressionNode* ValueIfFalse;
+
+    // CONSTRUCTOR | CONSTRUTOR.
+    TernaryNode(NodePos P)
+        : ExpressionNode(NodeType::TERNARY, P) {};  
+};
+
 // ASSIGNMENT EXPRESSION | Expressão de Atribuição
 struct AssignmentNode : ExpressionNode
 {
@@ -489,6 +510,14 @@ struct IndexAccessNode : ExpressionNode
     // CONSTRUCTOR | CONSTRUTOR
     IndexAccessNode(NodePos P)
         : ExpressionNode(NodeType::INDEX_ACCESS, P) {};
+};
+
+// RANGE BUILDER | Constroi Um Construtor de Intervalo.
+struct RangeBuildNode : ExpressionNode
+{
+    // CONSTRUCTOR | CONSTRUTOR
+    RangeBuildNode(NodePos P)
+        : ExpressionNode(NodeType::RANGE, P) {};
 };
 
 // RANGE EXPRESSION | Expressão de Intervalo

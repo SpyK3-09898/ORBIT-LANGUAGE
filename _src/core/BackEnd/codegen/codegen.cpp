@@ -152,8 +152,10 @@ namespace CodeGenUtils {
 // Compile a Random Node | Compila um Nó Aleatorio
 void CodeGenerator::CompileNode(ASTNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
+    // Error Prev | Prevenção de Erros.
     if (!Node) return;
 
+    // Main Switch | Switch Principal.
     switch (Node->Type)
     {
         // PROGRAM
@@ -180,6 +182,11 @@ void CodeGenerator::CompileNode(ASTNode* Node, CodeGenState& State, ByteCode& BC
 
         case NodeType::BINARY:
             CompileBinary(static_cast<BinaryNode*>(Node), State, BC, SARes, Data, Memory);
+            break;
+        
+        case NodeType::TERNARY:
+            CompileTernary
+            (static_cast<TernaryNode*>(Node), State, BC, SARes, Data, Memory);
             break;
 
         case NodeType::ASSIGNMENT:
@@ -225,6 +232,14 @@ void CodeGenerator::CompileNode(ASTNode* Node, CodeGenState& State, ByteCode& BC
 
         case NodeType::NAMESPACE_DECL:
             CompileNameSpaceDecl(static_cast<NameSpaceDecl*>(Node), State, BC, SARes, Data, Memory);
+            break;
+
+        case NodeType::STRUCT_DECL:
+            CompileStructDecl(static_cast<StructDeclNode*>(Node), State, BC, SARes, Data, Memory);
+            break;
+        
+        case NodeType::CLASS_DECL:
+            CompileClassDecl(static_cast<ClassDeclNode*>(Node), State, BC, SARes, Data, Memory);
             break;
 
         // CONTROL-FLOW
@@ -349,10 +364,9 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
         Inst = CodeGenUtils::CreateInst
             (Node, OpCode::LOAD_FN, id, BC.Chunks[id]->ParamCount, Data, Memory);
     } else if (S == SymbolTypes::NAMESPACE)
-    {
         // NameSpaces are only a shortcut | NameSpaces são apenas um atalho.
         return;
-    } else if (S == SymbolTypes::LIBRARY or S == SymbolTypes::MODULE) 
+    else if (S == SymbolTypes::LIBRARY or S == SymbolTypes::MODULE) 
         Inst = CodeGenUtils::CreateInst(
             Node,
             OpCode::LOAD_PACK,
@@ -361,6 +375,12 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
             Data,
             Memory
         );
+    else if (S == SymbolTypes::STRUCT or S == SymbolTypes::CLASS)
+        Inst = CodeGenUtils::CreateInst
+            (Node, OpCode::LOAD_TYPE, SymState->GetLocal(Sym->Id), Sym->packId, Data, Memory);
+    else if (S == SymbolTypes::STRUCT_INST or S == SymbolTypes::CLASS_INST)
+        Inst = CodeGenUtils::CreateInst
+            (Node, OpCode::LOAD_OBJ, SymState->GetLocal(Sym->Id), 0, Data, Memory);    
     else
     {
         OrbitLog::Error
@@ -485,6 +505,37 @@ void CodeGenerator::CompileBinary(BinaryNode* Node, CodeGenState& State, ByteCod
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 }
 
+// Compile Ternary Operation | Compila Operações Ternarias.
+void CodeGenerator::CompileTernary(TernaryNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
+{
+    // Compile Condition | Compila Condição.
+    CompileNode(Node->Condition, State, BC, SARes, Data, Memory);
+
+    // Jump If False | Pula Se Falso.
+    ByteInstruction* JIF = CodeGenUtils::CreateInst
+        (Node, OpCode::JUMP_IF_FALSE, 0, 0, Data, Memory);
+    BC.Chunks[BC.currChunk]->Instructions.push_back(JIF);
+
+    // Compile True Value | Compila Valor Verdadeiro.
+    CompileNode(Node->ValueIfTrue, State, BC, SARes, Data, Memory);
+
+    // Jump To End | Pula Para O Final.
+    ByteInstruction* JumpEnd = CodeGenUtils::CreateInst
+        (Node, OpCode::JUMP, 0, 0, Data, Memory);
+    BC.Chunks[BC.currChunk]->Instructions.push_back(JumpEnd);
+
+    // False Value Position | Posição Do Valor Falso.
+    size_t FalsePos = BC.Chunks[BC.currChunk]->Instructions.size();
+    JIF->R1 = static_cast<i64>(FalsePos);
+
+    // Compile False Value | Compila Valor Falso.
+    CompileNode(Node->ValueIfFalse, State, BC, SARes, Data, Memory);
+
+    // Ternary End Position | Posição Do Final Do Ternario.
+    size_t EndPos = BC.Chunks[BC.currChunk]->Instructions.size();
+    JumpEnd->R1 = static_cast<i64>(EndPos);
+}
+
 // Compile Variable Assignment | Compila Atribuição de Variável
 void CodeGenerator::CompileAssignment(AssignmentNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
@@ -564,14 +615,18 @@ void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& St
             Inst = CodeGenUtils::CreateInst
                 (Node, OpCode::LOAD_FN, id, BC.Chunks[id]->ParamCount, Data, Memory);
         } else if (S == SymbolTypes::NAMESPACE)
-        {
             // NameSpaces are only a shortcut | NameSpaces são apenas um atalho.
             return;
-        } else if (S == SymbolTypes::LIBRARY or S == SymbolTypes::MODULE)
-        {
+        else if (S == SymbolTypes::LIBRARY or S == SymbolTypes::MODULE)
             Inst = CodeGenUtils::CreateInst
                 (Node, OpCode::LOAD_PACK, RuntimeSym->contextId, 0, Data, Memory);
-        } else
+        else if (S == SymbolTypes::STRUCT or S == SymbolTypes::CLASS)
+            Inst = CodeGenUtils::CreateInst
+                (Node, OpCode::LOAD_PACK, RuntimeSym->contextId, 0, Data, Memory);    
+        else if (S == SymbolTypes::STRUCT_INST or S == SymbolTypes::CLASS_INST)
+            Inst = CodeGenUtils::CreateInst
+                (Node, OpCode::LOAD_OBJ, (i64)MemberId, 0, Data, Memory);    
+        else
         {
             OrbitLog::Error
             ("codegen.cpp", "Invalid Symbol Type for: '"+RuntimeSym->Name+"', Type: "+std::to_string(static_cast<int>(S)), true, 400);
@@ -856,7 +911,8 @@ void CodeGenerator::CompileNameSpaceDecl(NameSpaceDecl* Node, CodeGenState& Stat
         CompileNode(Node->Body, State, BC, SARes, Data, Memory);
 }
 
-// Compile Type Objects Definitions | Compila Definições de Objetos de Tipo.
+// Compile Type Objects Definitions(Struct) 
+// Compila Definições de Objetos de Tipo(Estrutura).
 void CodeGenerator::CompileStructDecl(StructDeclNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
     // Take Sym | Pega o Simbolo.
@@ -896,14 +952,74 @@ void CodeGenerator::CompileStructDecl(StructDeclNode* Node, CodeGenState& State,
     State.DefinitionRecord.pop_back();
 
     // Inherith | Herança.
-    CompileNode(Node->Extend, State, BC, SARes, Data, Memory);
-    ByteInstruction* PathInst = CodeGenUtils::CreateInst
-        (Node, OpCode::SET_TPATH, 0, 0, Data, Memory);
+    if (Node->Extend)
+    {
+        CompileNode(Node->Extend, State, BC, SARes, Data, Memory);
+        ByteInstruction* PathInst = CodeGenUtils::CreateInst
+            (Node, OpCode::SET_TPATH, 0, 0, Data, Memory);
+        BC.Chunks[BC.currChunk]->Instructions.push_back(PathInst);
+    }
 
     // Set Inst | Define A Instrução.
     ByteInstruction* Inst = CodeGenUtils::CreateInst
-        (Node, OpCode::BUILD_TYPE_OBJ, Ids, Ids, Data, Memory);
-    BC.Chunks[BC.currChunk]->Instructions.push_back(PathInst);
+        (Node, OpCode::BUILD_TYPE_OBJ, ID, Ids, Data, Memory);
+    Inst->L1 = !!Node->Extend; 
+    BC.Chunks[BC.currChunk]->Instructions.push_back(Inst);
+}
+
+// Compile Type Objects Definitions(Class)
+// Compila Definições de Objetos de Tipo(Classe).
+void CodeGenerator::CompileClassDecl(ClassDeclNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
+{
+    // Take Sym | Pega o Simbolo.
+    Symbol* Sym = CodeGenUtils::GetSym(Node, SARes);
+    if (!Sym)
+    {
+        OrbitLog::Error(
+            "codegen.cpp",
+            "Cannot Find Class Symbol: "+Node->Name,
+            true,
+            404
+        );
+        return;
+    } else if (Sym && Sym->read_count == 0 and Sym->write_count == 0 and !Node->export_decl)
+        return;
+
+    // State  Estado.
+    CodeGenState* SymState = GetStateForSym(Sym, State) ;
+    if (!Sym->LinkedScope)
+    {
+        OrbitLog::Error(
+            "codegen.cpp",
+            "Class Has No Linked Scope: "+Node->Name,
+            true,
+            404
+        );
+        return;
+    }
+
+    // Compile Struct Members | Compila os Membros de Structs.
+    State.DefinitionRecord.push_back({});
+    CompileNode(Node->Body, State, BC, SARes, Data, Memory, Sym);
+
+    // Set Members | Define os Membros.
+    ui32 ID = State.CreateLocal(Sym->Id);
+    vec<ui16> Ids = State.DefinitionRecord.back();
+    State.DefinitionRecord.pop_back();
+
+    // Inherith | Herança.
+    if (Node->Extend)
+    {
+        CompileNode(Node->Extend, State, BC, SARes, Data, Memory);
+        ByteInstruction* PathInst = CodeGenUtils::CreateInst
+            (Node, OpCode::SET_TPATH, 0, 0, Data, Memory);
+        BC.Chunks[BC.currChunk]->Instructions.push_back(PathInst);
+    }
+
+    // Set Inst | Define A Instrução.
+    ByteInstruction* Inst = CodeGenUtils::CreateInst
+        (Node, OpCode::BUILD_TYPE_OBJ, ID, Ids, Data, Memory);
+    Inst->L1 = !!Node->Extend;
     BC.Chunks[BC.currChunk]->Instructions.push_back(Inst);
 }
 

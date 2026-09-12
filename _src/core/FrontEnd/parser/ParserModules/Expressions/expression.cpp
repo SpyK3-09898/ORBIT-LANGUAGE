@@ -142,8 +142,37 @@ namespace ExprUtils {
         }
 
         // Check Identifier | Verifica Identifier
-        if (Member->Type != TokenType::IDENTIFIER)
+        if (Member->Type == TokenType::BUILD_RANGE)
         {
+            RangeBuildNode* Rb = 
+                ParserUtils::MakeNode<RangeBuildNode>(
+                    State,
+                    Res,
+                    Memory
+                );
+
+            Access->Member = Rb;
+            Token* E = Inst.Advance();
+            ParserUtils::UpdateStatePos(E, State);
+        } else if (Member->Type != TokenType::IDENTIFIER)
+        {
+            // Create Identifier Node | Cria o Nó Identifier
+            IdentifierNode* Id =
+                ParserUtils::MakeNode<IdentifierNode>(
+                    State,
+                    Res,
+                    Memory
+                );
+
+            Id->Name = str_view(
+                Data.source.data() + Member->pos.start,
+                Member->pos.len
+            );
+
+            Access->Member = Id;
+            Token* E = Inst.Advance();
+            ParserUtils::UpdateStatePos(E, State);
+        } else {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",
                 "Invalid <MEMBER_ACCESS>",
@@ -155,31 +184,12 @@ namespace ExprUtils {
 
             if (!Data.flags.debugMode)
                 OrbitLog::SyntaxLog::ThrowLog(Data);
-
             return ParserUtils::MakeNode<ErrorExprNode>(
                 State,
                 Res,
                 Memory
             );
         }
-
-        // Create Identifier Node | Cria o Nó Identifier
-        IdentifierNode* Id =
-            ParserUtils::MakeNode<IdentifierNode>(
-                State,
-                Res,
-                Memory
-            );
-
-        Id->Name = str_view(
-            Data.source.data() + Member->pos.start,
-            Member->pos.len
-        );
-
-        Access->Member = Id;
-
-        Token* E = Inst.Advance();
-        ParserUtils::UpdateStatePos(E, State);
 
         return Access;
     }
@@ -470,7 +480,6 @@ namespace ExprUtils {
                 Res,
                 Memory
             );
-
         while (true)
         {
             // Take Current Token | Pega o Token Atual.
@@ -663,6 +672,130 @@ namespace ExprUtils {
         );
     }
 
+    // TERNARY EXPRESSION | Expressão Ternaria.
+    ExpressionNode* ParseTernary(
+        ExpressionNode* L,
+        Instruction& Inst,
+        ParseState& State,
+        ParseResult& Res,
+        RunTimeData& Data,
+        Arena& Memory        
+    )
+    {
+        // CREATE NODE | CRIA NO.
+        TernaryNode* Node = ParserUtils::MakeNode<TernaryNode>
+            (State, Res, Memory);
+        Node->Condition = L;
+
+        // PARSE TRUE VALUE | PARSEIA VALOR VERDADEIRO.
+        Token* TrueStart = Inst.Peek();
+        if (!TrueStart)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing", 
+                "Expected expression after '?'", 
+                "Expected <EXPRESSION> In <TERNARY_TRUE>",
+                "Add an expression after <QUESTION>",
+                L->pos.line, L->pos.collumn
+            );
+
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorExprNode>
+                (State, Res, Memory);
+        }
+
+        if (TrueStart->Type == TokenType::BAR)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing", 
+                "Expected expression before '|'", 
+                "Expected <EXPRESSION> In <TERNARY_TRUE>",
+                "Add an expression before <PIPE>",
+                L->pos.line, L->pos.collumn
+            );
+
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorExprNode>
+                (State, Res, Memory);
+        }
+
+        Node->ValueIfTrue = ExpressionParser::ParseExpression(
+            Inst,
+            State,
+            Res,
+            Data,
+            Memory,
+            0
+        );
+
+        if (!Node->ValueIfTrue)
+            return nullptr;
+
+        // CHECK '|' | VERIFICA '|'.
+        Token* Bar = Inst.Peek();
+        if (!Bar)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing", 
+                "Expected '|'", 
+                "Expected <PIPE> In <TERNARY>",
+                "Add a <PIPE>",
+                L->pos.line, L->pos.collumn
+            );
+
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorExprNode>
+                (State, Res, Memory);
+        }
+        else if (Bar->Type != TokenType::PIPE)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing", 
+                "Expected '|'", 
+                "Expected <PIPE> In <TERNARY>, But Got: "+Bar->GetType(),
+                "Add a <PIPE>",
+                L->pos.line, L->pos.collumn
+            );
+
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorExprNode>
+                (State, Res, Memory);
+        }
+
+        // CONSUME '|' | CONSOME '|'.
+        Inst.Advance();
+        ParserUtils::UpdateStatePos(Bar, State);
+
+        // PARSE FALSE VALUE | PARSEIA VALOR FALSO.
+        Token* FalseStart = Inst.Peek();
+        if (!FalseStart)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing", 
+                "Expected expression after '|'", 
+                "Expected <EXPRESSION> In <TERNARY_FALSE>",
+                "Add an expression after <PIPE>",
+                L->pos.line, L->pos.collumn
+            );
+
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorExprNode>
+                (State, Res, Memory);
+        }
+
+        Node->ValueIfFalse = ExpressionParser::ParseExpression(
+            Inst,
+            State,
+            Res,
+            Data,
+            Memory,
+            0
+        );
+
+        if (!Node->ValueIfFalse)
+            return nullptr;
+        return Node;
+    }
 }
 
 // ======= CORE ======= //
@@ -682,6 +815,8 @@ pair<int, int> ExpressionParser::BindingPower(TokenType Type)
         case TokenType::EQMOD:
             return {10, 9};
 
+        case TokenType::QUEST:
+            return {15, 14};
         case TokenType::OR:
             return {20, 21};
 
@@ -932,7 +1067,7 @@ ExpressionNode* ExpressionParser::Nud(
     return nullptr;
 }
 
-// Led Denot | Denotação Esquerda
+// Left Denot | Denotação Esquerda
 ExpressionNode* ExpressionParser::Led(
     ExpressionNode* L,
     Token* OperatorToken,
@@ -992,7 +1127,7 @@ ExpressionNode* ExpressionParser::Led(
     // ===== POST-FIX!!! ===== //
     if (OperatorToken->Type == TokenType::LPARENT)
         return ExprUtils::ParseFOO(L, Inst, State, Res, Data, Memory);
-    if (OperatorToken->Type == TokenType::LBRACKET)
+    else if (OperatorToken->Type == TokenType::LBRACKET)
         return ExprUtils::ParseIndex(
             L,
             Inst,
@@ -1001,7 +1136,7 @@ ExpressionNode* ExpressionParser::Led(
             Data,
             Memory
         );
-    if (OperatorToken->Type == TokenType::DOT)
+    else if (OperatorToken->Type == TokenType::DOT)
         return ExprUtils::ParseAcess(
             L,
             Inst,
@@ -1010,6 +1145,16 @@ ExpressionNode* ExpressionParser::Led(
             Data,
             Memory
         );
+    else if (OperatorToken->Type == TokenType::QUEST)
+        return ExprUtils::ParseTernary(
+            L,
+            Inst,
+            State,
+            Res,
+            Data,
+            Memory
+        );
+
     // CONTINUE | CONTINUA.
     // Take the Curr Token and Op | Pega o Token Atual e o Operador.
     Operator Op = ExprUtils::GetOperator(OperatorToken->Type);
@@ -1160,7 +1305,6 @@ ExpressionNode* ExpressionParser::ParseImplMulti(
 }
 
 // ======= ENTRY-POINT ======= //
-
 ExpressionNode* ExpressionParser::ParseExpression(
     Instruction& Inst,
     ParseState& State,

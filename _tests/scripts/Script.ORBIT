@@ -1,13 +1,13 @@
 
 _library __MAIN__;
 
-struct Estrutura:
-
-    static public var y = 15;
-    static public func Oi():
-        return self.this.y;
-    end
+struct X:
+    var x = 15;
 end
 
-const obj E = new Estrutura;
-echo cout E.Oi();
+struct Y from X:
+
+end
+
+obj I = new Y();
+echo cout I.x;

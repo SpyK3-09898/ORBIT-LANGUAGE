@@ -1,3 +1,4 @@
+
 // ========== DECLARATION PARSER =========== //
 // Parse Token And Generate '_AST'(Abstract Syntax Tree).
 // Developed By: SpyK3(2026) | License: GitHub(MIT).
@@ -89,7 +90,6 @@ namespace DeclUtils
         Decl->InferType = LiteralTypes::MONO_STATE;
 
         Token* Next = Inst.Peek();
-
         if (Next != nullptr)
         {
             if (Next->Type == TokenType::EQUAL)
@@ -101,6 +101,20 @@ namespace DeclUtils
                     Inst.Peek()->Type == TokenType::CNTXT_KW &&
                     Inst.Peek()->Lexeme(Data) == "new")
                 {
+                    if (Entry->Lexeme(Data) != "obj")
+                    {
+                        OrbitLog::SyntaxLog::SyntaxError(
+                            "Parsing",
+                            "'new' Recived, But Dont Used 'obj'(Used '"+Entry->Lexeme(Data)+"')",
+                            "'new' Statement Build A <OBJECT>, Use 'obj' Statement",
+                            "Change 'var/list' to 'obj'",
+                            Decl->pos.line, Decl->pos.collumn
+                        );
+                        if (!Data.flags.debugMode)
+                            OrbitLog::SyntaxLog::ThrowLog(Data);
+                        return ParserUtils::MakeNode<ErrorDeclNode>
+                            (State, Res, Memory);                          
+                    }
                     Decl->probablyObj = true;
                     Inst.Advance();
                 }

@@ -22,11 +22,12 @@ struct Chunk;
 struct ByteCode;
 struct ByteInstruction;
 
-struct ByteArray;    // Array Repr     | Representação de Matrizes.
-struct ByteTable;    // Table Repr     | Representação de Tabelas.
-struct ByteFn;       // Functions Repr | Representação de Funções
-struct ByteIterator; // Iterador Repr  | Rerpesentação de Iteradores
-struct BytePackage;  // Package Repr   | Representação de Pacotes.
+struct ByteArray;    // Array Repr       | Representação de Matrizes.
+struct ByteTable;    // Table Repr       | Representação de Tabelas.
+struct ByteFn;       // Functions Repr   | Representação de Funções
+struct ByteIterator; // Iterador Repr    | Rerpesentação de Iteradores
+struct BytePackage;  // Package Repr     | Representação de Pacotes.
+struct ByteTypeObj;  // Type Object Repr | Representação de Objetos de Tipo.
 using  ByteValue = variant< // RunTime Value | Valor de RunTime.
     bool,
     float,
@@ -40,6 +41,7 @@ using  ByteValue = variant< // RunTime Value | Valor de RunTime.
     ByteFn*,
     ByteIterator*,
     BytePackage*,
+    ByteTypeObj*,
     nullptr_t
 >;
 
@@ -101,6 +103,7 @@ struct ByteObject
     // Object Description | Descrição do Objeto.
     public: ObjectDescr* Descr;
     bool acessible=false;
+    i64 ID;
 
     virtual ByteValue Acess
     (
@@ -153,12 +156,13 @@ enum TypeObjType
 struct ByteTypeObj : ByteObject
 {
     // DATA | DADOS
+    vec<ui16> Members;
+    vec<ByteTypeObj*> Parents;
     Chunk* Chunk;
     ByteTypeObj* Parent;
+    TypeObjType ObjType;
     ui8 chunkId=0;
     ui32 SymbolCount=0;
-    vec<ui16> Members;
-    TypeObjType ObjType;
 
     // CONSTRUCTOR & DESTRUCTOR | CONSTRUTOR E DESTRUTOR
     ~ByteTypeObj() = default;
@@ -167,6 +171,11 @@ struct ByteTypeObj : ByteObject
         ByteTypeObj* It = static_cast<ByteTypeObj*>(Ptr);
         It->~ByteTypeObj();
     }
+
+    // Member Acess | Acesso de Membros.
+    ByteValue Acess
+        (ByteValue& Val, ByteInstruction& CurrInst, ByteCode* BC, RunTimeData& Data) 
+        override;
 };
 
 // RunTime Orbit Package Repr | Representação de Pacotes Orbti em RunTime.
@@ -269,6 +278,7 @@ enum class OpCode: uint8_t
 
     LOAD_FN,
     LOAD_PACK,
+    LOAD_OBJ,
     LOAD_TYPE,
 
     // BUILDS | CONSTRUÇÕES.
@@ -324,6 +334,7 @@ struct ByteInstruction
 struct Chunk
 {
     vec<ByteInstruction*> Instructions;
+    vec<ByteObject*>LastObj;
     int ParamCount;
 };
 

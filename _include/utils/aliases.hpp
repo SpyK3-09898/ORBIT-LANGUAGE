@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <cctype>
 #include <optional>
+#include <functional>
 #include <algorithm>
 #include <memory>
 
@@ -71,6 +72,8 @@ template<typename... T>
 using variant=std::variant<T...>;
 template<typename T>
 using opt=std::optional<T>;
+template<typename T>
+using func=std::function<T>;
 
 // HELPERS
 

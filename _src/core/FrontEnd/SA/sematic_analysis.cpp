@@ -1,7 +1,4 @@
 
-
-
-
 // ============= SEMANTIC ANALIZER =========== //
 // Analyzes the Code for Semantic Errors | Analiza o Codigo em Busca de Erros Semanticos.
 // Developed By: SpyK3(2026) | License: GitHub(MIT).
@@ -128,7 +125,7 @@ namespace SAUtils
 
             if (Found)
             {
-                // Only Struct/Class Have Private/Static Rules | So Struct/Class Tem Regras De Private/Static.
+                // Only /Class Have Private/Static Rules | So Struct/Class Tem Regras De Private/Static.
                 if (Owner->Type == SymbolTypes::STRUCT || Owner->Type == SymbolTypes::CLASS)
                 {
                     if (isInstanceAccess)
@@ -337,7 +334,7 @@ bool TypesKindEqual(TypeKind L, TypeKind R)
 { return L == R; }
 
 // Get Expression Types | Pega o Tipo das Expressoes.
-TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory)
+TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, bool isPath=false)
 {
     // Err Prev | Prevenção de Erro.
     if (!Node)
@@ -427,7 +424,7 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
             // Take Object | Pega O Objeto
             MemberAccessNode& Ma = static_cast<MemberAccessNode&>(*Node);
             TypeInfo* ObjInfo = GetExpressionType
-            (Ma.Object, State, Res, Data, Memory);
+            (Ma.Object, State, Res, Data, Memory, isPath);
 
             // MonoState or Unknow | Estado Desconhecido ou Não-Definido.
             if (
@@ -442,7 +439,6 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
             // Take Object Data | Pega Os Dados Do Objeto.
             string ObjName = SAUtils::GetIValueName(Ma.Object);
             Symbol* ObjSym = ObjInfo ? ObjInfo->Father : nullptr;
-
             if (!ObjSym)
                 ObjSym = State.CurrScope ? State.CurrScope->FindSym(ObjName) : nullptr;
 
@@ -735,11 +731,15 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
         case NodeType::IDENTIFIER:
         {
             IdentifierNode& Id = static_cast<IdentifierNode&>(*Node);
-
             Symbol* Sym = State.CurrScope
                 ? State.CurrScope->FindSym(Id.Name)
                 : nullptr;
 
+            if (!Sym and isPath)
+            {
+                TInfo->Kind = TypeKind::PATH;
+                return TInfo;
+            }
             if (!Sym)
             {
                 OrbitLog::SyntaxLog::SyntaxError(
@@ -1105,6 +1105,43 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
             return &Res.ExpressionTypes[Node];
         }
 
+        case NodeType::TERNARY:
+        {
+            TernaryNode* Ter = static_cast<TernaryNode*>(Node);
+            if (
+                GetExpressionType(Ter->Condition, State, Res, Data, Memory)->Kind
+                !=
+                TypeKind::BOOL
+            )
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Semantic", 
+                    "Expected <BOOLEAN> Expression", 
+                    "Ternary Needs A <BOOLEAN> To Decide A Value", 
+                    "Add A Valid Type or Convert",
+                    Node->pos.line, Node->pos.collumn
+                );
+                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            }
+            else if (
+                GetExpressionType(Ter->Condition, State, Res, Data, Memory)->SubKind
+                == 
+                SubTypeKind::TRUE
+            ) TInfo = GetExpressionType(Ter->ValueIfTrue, State, Res, Data, Memory);
+            else if (
+                GetExpressionType(Ter->Condition, State, Res, Data, Memory)->SubKind
+                == 
+                SubTypeKind::FALSE
+            ) TInfo = GetExpressionType(Ter->ValueIfFalse, State, Res, Data, Memory);
+            break;
+        }
+
+        case NodeType::RANGE_BUILD:
+        {
+            TInfo->Kind = TypeKind::ITERATOR;
+            break;
+        }
+
         case NodeType::RANGE:
         {
             TInfo->Kind = TypeKind::ITERATOR;
@@ -1206,9 +1243,11 @@ Scope* LeaveScope(SAState& State, SAResult& Res, RunTimeData& Data)
 // LookUp A General Node | Olha Um Node Geral.
 void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner, ParseResult* PRes)
 {
+    // Log-System | Sistema de Logs.
     if (Data.flags.generateLog)
         State.NodesChecked.push_back({++State.logInd, &Node});
 
+    // Main Swicth | Switch Principal.
     switch (Node.Type)
     {
         // PROGRAM
@@ -1296,6 +1335,11 @@ void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, 
         case NodeType::BINARY:
             LookUpBinary
             (static_cast<BinaryNode&>(Node), State, Res, Data, Memory, Owner);
+            break;
+
+        case NodeType::TERNARY:
+            LookUpTernary
+            (static_cast<TernaryNode&>(Node), State, Res, Data, Memory);
             break;
 
         case NodeType::ASSIGNMENT:
@@ -1433,53 +1477,36 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
     }
 
     // Take Data | Pega os Dados.
-    string ImportName;
-
+    vec<string> ImportPath;
     if (!Node.Base)
         return;
 
-    if (Node.Base->Type == NodeType::IDENTIFIER)
-        ImportName = static_cast<IdentifierNode*>(Node.Base)->Name;
-    else if (Node.Base->Type == NodeType::MEMBER_ACCESS)
+    func<void(ASTNode*)> GetPath = [&](ASTNode* Current)
     {
-        MemberAccessNode* Member = static_cast<MemberAccessNode*>(Node.Base);
+        if (!Current)
+            return;
 
-        if (
-            !Member->Object ||
-            Member->Object->Type != NodeType::IDENTIFIER
-        )
+        if (Current->Type == NodeType::IDENTIFIER)
         {
-            OrbitLog::SyntaxLog::SyntaxError(
-                "Semantic",
-                "Invalid <IMPORT> Target",
-                "Cannot Resolve Library Name From Import",
-                "Use a Valid Library Name",
-                Node.pos.line, Node.pos.collumn
+            ImportPath.push_back(
+                static_cast<IdentifierNode*>(Current)->Name
             );
-
-            if (!Data.flags.debugMode)
-                OrbitLog::SyntaxLog::ThrowLog(Data);
-
             return;
         }
 
-        ImportName = static_cast<IdentifierNode*>(Member->Object)->Name;
-    }
-    else
-    {
-        OrbitLog::SyntaxLog::SyntaxError(
-            "Semantic",
-            "Invalid <IMPORT> Target",
-            "Expected <IDENTIFIER> Or <MEMBER_ACCESS>",
-            "Use a Valid Library Name",
-            Node.pos.line, Node.pos.collumn
-        );
+        if (Current->Type == NodeType::MEMBER_ACCESS)
+        {
+            MemberAccessNode* Member = static_cast<MemberAccessNode*>(Current);
 
-        if (!Data.flags.debugMode)
-            OrbitLog::SyntaxLog::ThrowLog(Data);
+            GetPath(Member->Object);
+            GetPath(Member->Member);
+        }
+    };
 
+    GetPath(Node.Base);
+
+    if (ImportPath.empty())
         return;
-    }
 
     // Already Import Warns | Avisos de 'Ja Importado'.
     for (ImportNode* N : Res.ImportRefs)
@@ -1487,34 +1514,41 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
         if (!N || N == &Node)
             continue;
 
-        string PreviousName;
-
         if (!N->Base)
             continue;
 
-        if (N->Base->Type == NodeType::IDENTIFIER)
-        {
-            PreviousName = static_cast<IdentifierNode*>(N->Base)->Name;
-        }
-        else if (N->Base->Type == NodeType::MEMBER_ACCESS)
-        {
-            MemberAccessNode* Member = static_cast<MemberAccessNode*>(N->Base);
+        vec<string> PreviousPath;
 
-            if (
-                Member->Object &&
-                Member->Object->Type == NodeType::IDENTIFIER
-            )
+        func<void(ASTNode*)> GetPreviousPath = [&](ASTNode* Current)
+        {
+            if (!Current)
+                return;
+
+            if (Current->Type == NodeType::IDENTIFIER)
             {
-                PreviousName = static_cast<IdentifierNode*>(Member->Object)->Name;
+                PreviousPath.push_back(
+                    static_cast<IdentifierNode*>(Current)->Name
+                );
+                return;
             }
-        }
 
-        if (PreviousName == ImportName)
+            if (Current->Type == NodeType::MEMBER_ACCESS)
+            {
+                MemberAccessNode* Member = static_cast<MemberAccessNode*>(Current);
+
+                GetPreviousPath(Member->Object);
+                GetPreviousPath(Member->Member);
+            }
+        };
+
+        GetPreviousPath(N->Base);
+
+        if (PreviousPath == ImportPath)
         {
             OrbitLog::SyntaxLog::SyntaxWarn(
                 "Semantic", 
                 "Lib Already Imported", 
-                "Lib: '"+ImportName+"' Already Have A Valid Reference In Import Data",
+                "Lib Already Have A Valid Reference In Import Data",
                 "Remove Import Statement", 
                 Node.pos.line, Node.pos.collumn
             );
@@ -1526,25 +1560,19 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
     Res.ImportRefs.push_back(&Node);
 
     // Try Find Library | Tenta Encontrar A biblioteca.
-    OrbitLibrary* FoundLib = nullptr;
-
-    for (OrbitLibrary* Lib : Data.Librarys)
-    {
-        if (!Lib)
-            continue;
-        if (Lib->Name == ImportName)
-        {
-            FoundLib = Lib;
-            break;
-        }
-    }
+    OrbitLibrary* FoundLib = LibManager().LoadLib(
+        ImportPath,
+        "ORBIT",
+        Data,
+        Memory
+    );
 
     if (!FoundLib)
     {
         OrbitLog::SyntaxLog::SyntaxError(
             "Semantic",
-            "Cannot Find: "+ImportName,
-            "Lib: "+ImportName+" Dont Exists Or Interpreter/Compiler Error",
+            "Cannot Find Library",
+            "Cannot Find Requested Library Path",
             "~",
             Node.pos.line,
             Node.pos.collumn
@@ -1562,14 +1590,14 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
         (
             Data.ImportStack.begin(), 
             Data.ImportStack.end(),
-            ImportName
+            FoundLib->Name
         ) != Data.ImportStack.end()
     )
     {
         OrbitLog::SyntaxLog::SyntaxError(
             "Semantic", 
             "Import Dependence Detected", 
-            "Import: "+ImportName+" Has Been Imported",
+            "Import: "+FoundLib->Name+" Has Been Imported",
             "Remove Import Or change The Project Architeture",
             Node.pos.line, Node.pos.collumn
         );
@@ -1581,7 +1609,7 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
     }
 
     // Set Data | Define os Dados.
-    Data.ImportStack.push_back(ImportName);
+    Data.ImportStack.push_back(FoundLib->Name);
 
     // Instantiate Steps | Instancia os Passos.
     Lexer            L;
@@ -1690,6 +1718,20 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
     State.Flags.importsDefined = true;
 
     // Define Symbols | Define os Simbolos.
+    TypeInfo* AliasTInfo = GetExpressionType(Node.Path, State, SARes, Data, Memory);
+    if (AliasTInfo->Kind != TypeKind::PATH && AliasTInfo->Kind != TypeKind::ITERATOR)
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic", 
+            "Invalid <PATH>", 
+            "<PATH> Expected, But Got: <NULL>", 
+            "Add A Valid Module Path",
+            Node.Bottom->pos.line, Node.Bottom->pos.collumn
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;
+    }
+
     Symbol* Sym = SAUtils::CreateSymbol(Node.Alias, Node, State, SARes, Memory);
     Sym->Type = Node.Base == Node.Bottom ? SymbolTypes::MODULE : SymbolTypes::LIBRARY;
     Sym->LinkedScope = Res.Contexts[LibraryName].second->GlobalScope;
@@ -1740,14 +1782,6 @@ void SemanticAnalizer::LookUpWhile(WhileNode& Node, SAState& State, SAResult& Re
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
         LookUpBody(*Node.Body, State, Res, Data, Memory);
         return;
-    } else if (TInfo->SubKind ==  SubTypeKind::TRUE) {
-
-        OrbitLog::SyntaxLog::SyntaxWarn(
-            "Semantic",
-            "Condition Maybe Always is <TRUE>",
-            "Semantic Analizer Check <TRUE> In All Ways, Skiping...",
-            "use 'do' Modifier Instead", Node.Cond->pos.line, Node.Cond->pos.collumn
-        );
     }
 
     LookUpBody(*Node.Body, State, Res, Data, Memory);
@@ -1776,13 +1810,7 @@ void SemanticAnalizer::LookUpElif(ElifNode& Node, SAState& State, SAResult& Res,
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
         LookUpBody(*Node.Body, State, Res, Data, Memory);
         return;
-    } else if (TInfo->SubKind ==  SubTypeKind::TRUE)
-        OrbitLog::SyntaxLog::SyntaxWarn(
-            "Semantic",
-            "Condition Maybe Always is <TRUE>",
-            "Semantic Analizer Check <TRUE> In All Ways, Skiping...",
-            "~", Node.Cond->pos.line, Node.Cond->pos.collumn
-        );
+    }
 
     LookUpBody(*Node.Body, State, Res, Data, Memory);
 }
@@ -1806,15 +1834,6 @@ void SemanticAnalizer::LookUpIf(IfNode& Node, SAState& State, SAResult& Res, Run
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
         LookUpBody(*Node.IfBody, State, Res, Data, Memory);
         return;
-    } else if (TInfo->SubKind ==  SubTypeKind::TRUE)
-    {
-        Node.alwaysTrue=true;
-        OrbitLog::SyntaxLog::SyntaxWarn(
-            "Semantic",
-            "Condition Maybe Always is <TRUE>",
-            "Semantic Analizer Check <TRUE> In All Ways, Skiping...",
-            "~", Node.Cond->pos.line, Node.Cond->pos.collumn
-        );
     }
 
     LookUpBody(*Node.IfBody, State, Res, Data, Memory);
@@ -2083,8 +2102,8 @@ void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult
         }
     }
     if (
-        (   ValTInfo->Kind == TypeKind::STRUCT 
-            or ValTInfo->Kind == TypeKind::CLASS 
+        (   ValTInfo->Kind == TypeKind::STRUCT
+            or ValTInfo->Kind == TypeKind::CLASS
             or
             ValTInfo->Kind == TypeKind::STRUCT_INST 
             or ValTInfo->Kind == TypeKind::CLASS_INST
@@ -2896,6 +2915,29 @@ void SemanticAnalizer::LookUpUnary(UnaryNode& Node, SAState& State, SAResult& Re
     }
 }
 
+// LookUp Ternary Nodes | Olha Um Ternary Node.
+void SemanticAnalizer::LookUpTernary(TernaryNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
+{
+    LookUpNode(*Node.Condition, State, Res, Data, Memory);
+    if (
+        GetExpressionType(Node.Condition, State, Res, Data, Memory)->Kind
+        !=
+        TypeKind::BOOL
+    )
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic", 
+            "Expected <BOOLEAN> Expression", 
+            "Ternary Needs A <BOOLEAN> To Decide A Value", 
+            "Add A Valid Type or Convert",
+            Node.pos.line, Node.pos.collumn
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+    }
+    LookUpNode(*Node.ValueIfTrue, State, Res, Data, Memory);
+    LookUpNode(*Node.ValueIfFalse, State, Res, Data, Memory);
+}
+
 // LookUp Assign Node | Olha um Assign Node.
 void SemanticAnalizer::LookUpAssignment(AssignmentNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
@@ -3064,6 +3106,41 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
 
     LookUpNode(*Node.Object, State, Res, Data, Memory, Owner);
     Symbol* Sym = nullptr;
+    vec<TypeKind> ValidTypes
+    {
+        TypeKind::UNK,
+        TypeKind::MONO_STATE,
+        TypeKind::TABLE_INT,
+        TypeKind::TABLE_FLOAT,
+        TypeKind::TABLE_STRING,
+        TypeKind::TABLE_BOOL,
+        TypeKind::TABLE_ANY,
+        TypeKind::TABLE_NULL,
+        TypeKind::TABLE_NONE,
+        TypeKind::STRUCT,
+        TypeKind::CLASS,
+        TypeKind::STRUCT_INST,
+        TypeKind::CLASS_INST,
+        TypeKind::SELF,
+        TypeKind::NAMESPACE,
+        TypeKind::MODULE,
+        TypeKind::LIBRARIE,
+        TypeKind::ITERATOR,
+        TypeKind::FN
+    };
+
+    if (std::find(ValidTypes.begin(), ValidTypes.end(), GetExpressionType(Node.Member, State, Res, Data, Memory)->Kind) != ValidTypes.end())
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic", 
+            "Trying to Acess A INVALID <MEMBER>", 
+            "This Type Makes No Sense In Any Possible Case", 
+            "Add A Valid Acess",
+            Node.Member->pos.line, Node.Member->pos.collumn
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;
+    }
 
     // ERR PREV | PREVENÇÃO DE ERROS:
     if (Node.Object->SymbolId != 0)
@@ -3076,7 +3153,6 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
     if (!Sym)
     {
         string N = SAUtils::GetIValueName(Node.Object);
-
         if (N == "UNKNOW")
             return;
         if (Owner && Owner->LinkedScope)
@@ -3105,7 +3181,6 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
     if (Res.Symbols.find(Sym->Id) == Res.Symbols.end())
         Res.Symbols[Sym->Id] = Sym;
 
-    // Resolve mold for instances (VAR whose type is STRUCT/CLASS or INST)
     Symbol* MoldSym = Sym;
     if (Sym->TInfo && Sym->TInfo->Father)
     {
@@ -3264,6 +3339,8 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
             return;
         }
     }
+    LookUpNode(*Node.Member, State, Res, Data, Memory);
+    return;
 }
 
 // LookUp IndexAcessNode | Olha um IndexAcessNode.
@@ -3430,10 +3507,9 @@ void SemanticAnalizer::LookUpFunctionCall(FunctionCall& Node, SAState& State, SA
 {
     LookUpNode(*Node.Callee, State, Res, Data, Memory);
     for (ExpressionNode* Arg : Node.Args)
-    {
         if (Arg)
             LookUpNode(*Arg, State, Res, Data, Memory);
-    }
+    
 }
 
 // LookUp Array Values | Olha um ArrayValue.

@@ -453,14 +453,12 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
     Data.LogDir = p;
     fstream file(p, std::ios::out | std::ios::trunc); 
     if (not file.is_open())
-        {
-            OrbitLog::Error(
-                "Lexer.cpp",
-                "Cannot Open File! Why: "+string(std::strerror(errno)), 
-                true,
-                errno
-            ); 
-        }
+        OrbitLog::Error(
+            "Lexer.cpp",
+            "Cannot Open File! Why: "+string(std::strerror(errno)), 
+            true,
+            errno
+        );    
 
     file << "\nOrbit Execution Log File. .. ...\n"
             "Log of ALL Execution Steps, Used for Devs and Debug\n"
@@ -490,7 +488,7 @@ void GenerateLexerLog(LexResult& Res, RunTimeData& Data)
 }
 
 // =========== ENTRY-POINT | PONTO DE ENTRADA ========== //
-// Entry Point OF Lex Program | Ponto de Partida Do Programa 
+// Entry Point OF Lex Program | Ponto de Partida Do Programa de Lexing.
 LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
 {
     // INIT | INICIO
@@ -553,7 +551,7 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
             else if (N == '*')
                 {
                     LexUtils::Advance(State, Data);
-                    MakeToken(Res, State, Data, TokenType::RANGE, Memory);
+                    MakeToken(Res, State, Data, TokenType::BUILD_RANGE, Memory);
                     continue;
                 }
         }
@@ -665,7 +663,10 @@ LexResult Lexer::InitL(fstream& file, RunTimeData& Data, Arena& Memory)
                 } else
                     MakeToken(Res, State, Data, TokenType::AMPERSAND, Memory);
                 continue;
-                
+            
+            case '?':
+                MakeToken(Res, State, Data, TokenType::QUEST, Memory);
+                continue;
             case '|':
                 if (N == '|')
                 {
