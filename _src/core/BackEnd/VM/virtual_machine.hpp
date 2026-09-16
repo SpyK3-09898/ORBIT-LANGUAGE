@@ -29,6 +29,7 @@ struct InstructionPointer
 struct VM_Frame
 {
     VM_Frame* Back;
+    ByteSelf* SelfRef = nullptr;
     InstructionPointer ReturnIP;
 
     unord_map<ui32, ByteValue> Locals;

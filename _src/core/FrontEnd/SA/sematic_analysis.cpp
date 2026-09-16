@@ -118,8 +118,11 @@ namespace SAUtils
     // Find A Symbol | Encontra Um Simbolo.
     pair<Symbol*, bool> FindSymbol(string Name, Symbol* Owner, SAState& State, RunTimeData& Data, bool isInstanceAccess = false)
     {
+        if ((Name == "this" or Name == "super") and !isInstanceAccess)
+            return { nullptr, false };
+
         // Prefer LinkedScope Of Owner First | Prefere O LinkedScope Do Owner Primeiro.
-        if (Owner && Owner->LinkedScope)
+        if (Owner and Owner->LinkedScope)
         {
             Symbol* Found = Owner->LinkedScope->FindSymLocal(Name);
 
@@ -158,7 +161,7 @@ namespace SAUtils
             }
 
             // Inheritance Via AST Extend (Only Struct/Class) | Heranca Via Extend Da AST (So Struct/Class).
-            if (Owner->Type == SymbolTypes::STRUCT && Owner->Owner)
+            if (Owner->Type == SymbolTypes::STRUCT and Owner->Owner)
             {
                 auto* Decl = static_cast<StructDeclNode*>(Owner->Owner);
                 if (Decl->Extend)
@@ -185,6 +188,18 @@ namespace SAUtils
             return { nullptr, false };
         }
 
+        if (Owner &&
+            (Owner->Type == SymbolTypes::STRUCT_INST ||
+            Owner->Type == SymbolTypes::CLASS_INST))
+        {
+            if (!Owner->TInfo || !Owner->TInfo->Father)
+                return { nullptr, false };
+
+            Symbol* Mold = Owner->TInfo->Father;
+
+            return FindSymbol(Name, Mold, State, Data, true);
+        }
+
         Scope* ObjScope = SAUtils::InObjScope(State);
 
         // Local Search Bounded By ObjScope | Busca Local Limitada Pelo ObjScope.
@@ -200,7 +215,7 @@ namespace SAUtils
         // Block Direct Struct/Class Member Access | Bloqueia Acesso Direto A Membros De Struct/Class.
         if (ObjScope &&
             (ObjScope->Type == BodyTypes::STRUCT ||
-             ObjScope->Type == BodyTypes::CLASS) &&
+            ObjScope->Type == BodyTypes::CLASS) &&
             !Owner &&
             ObjScope->FindSymLocal(Name))
             return { nullptr, false };
@@ -425,6 +440,16 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
             MemberAccessNode& Ma = static_cast<MemberAccessNode&>(*Node);
             TypeInfo* ObjInfo = GetExpressionType
             (Ma.Object, State, Res, Data, Memory, isPath);
+            if (
+                Ma.Member->Type == NodeType::RANGE_BUILD 
+            )
+            {
+                RangeBuildNode& Rb = static_cast<RangeBuildNode&>(*Ma.Member);
+                if (Rb.Parent == nullptr)
+                    return GetExpressionType(Ma.Object, State, Res, Data, Memory);
+                else TInfo->Kind = TypeKind::ITERATOR;
+                return TInfo;
+            }
 
             // MonoState or Unknow | Estado Desconhecido ou Não-Definido.
             if (
@@ -434,7 +459,6 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
                 TInfo->Kind = TypeKind::MONO_STATE;     
             else
                 TInfo->Kind = TypeKind::MONO_STATE;
-            
 
             // Take Object Data | Pega Os Dados Do Objeto.
             string ObjName = SAUtils::GetIValueName(Ma.Object);
@@ -1154,17 +1178,24 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
 
             // Resolve Callee | Resolve O Callee.
             TypeInfo* CalleeInfo = GetExpressionType(Call.Callee, State, Res, Data, Memory);
+            Symbol* CalleeSym = nullptr;
+            if (Call.Callee && Call.Callee->SymbolId != 0)
+            {
+                auto It = Res.Symbols.find(Call.Callee->SymbolId);
+                if (It != Res.Symbols.end())
+                    CalleeSym = It->second;
+            }
 
             // Calling A Mold Creates An Instance | Chamar Um Molde Cria Uma Instancia.
             if (CalleeInfo->Kind == TypeKind::STRUCT)
             {
                 TInfo->Kind = TypeKind::STRUCT_INST;
-                TInfo->Father = CalleeInfo->Father;
+                TInfo->Father = CalleeSym;
             }
             else if (CalleeInfo->Kind == TypeKind::CLASS)
             {
                 TInfo->Kind = TypeKind::CLASS_INST;
-                TInfo->Father = CalleeInfo->Father;
+                TInfo->Father = CalleeSym;
             }
             else // Normal Function -> Unknown Return | Funcao Normal -> Retorno Desconhecido.
                 TInfo->Kind = TypeKind::MONO_STATE;
@@ -1719,7 +1750,7 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
 
     // Define Symbols | Define os Simbolos.
     TypeInfo* AliasTInfo = GetExpressionType(Node.Path, State, SARes, Data, Memory);
-    if (AliasTInfo->Kind != TypeKind::PATH && AliasTInfo->Kind != TypeKind::ITERATOR)
+    if (AliasTInfo->Kind != TypeKind::ITERATOR)
     {
         OrbitLog::SyntaxLog::SyntaxError(
             "Semantic", 
@@ -2191,6 +2222,15 @@ void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult
 // LookUp Fn Decl Node | Olha um FunctionDeclNode.
 void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
+    Scope* C_Scope = State.CurrScope;
+    bool in_method=false;
+    while (C_Scope)
+    {
+        if (C_Scope->Type == BodyTypes::STRUCT or C_Scope->Type == BodyTypes::CLASS)
+            { in_method=true; break; }
+        if (C_Scope->Parent)
+            C_Scope = C_Scope->Parent;
+    }
     if (!State.CurrScope)
         return;
 
@@ -2210,12 +2250,13 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
 
     Symbol* FnSym = SAUtils::CreateSymbol(Node.Name, Node, State, Res, Memory);
     {
-        FnSym->Type = SymbolTypes::FN;
-        FnSym->TInfo->Kind = TypeKind::FN;
-        FnSym->TInfo->SubKind = SubTypeKind::NONE;
-        FnSym->InferType->Kind = TypeKind::FN;
+        FnSym->Type               = SymbolTypes::FN;
+        FnSym->TInfo->Kind        = TypeKind::FN;
+        FnSym->TInfo->SubKind     = SubTypeKind::NONE;
+        FnSym->InferType->Kind    = TypeKind::FN;
         FnSym->InferType->SubKind = SubTypeKind::NONE;
-        FnSym->inited = true;
+        FnSym->inited             = true;
+        FnSym->isMethod           = in_method;
         if (SAUtils::InObjScope(State))
             FnSym->LinkedScope = SAUtils::InObjScope(State);
     }
@@ -2408,12 +2449,13 @@ void SemanticAnalizer::LookUpStruct(StructDeclNode& Node, SAState& State, SAResu
     }
 
     // Resolve Inheritance | Resolve A Heranca.
+    Symbol* Base = nullptr;
     if (Node.Extend)
     {
             
         // Look Up Extend Expression | Olha A Expressao De Extensao.
         LookUpNode(*Node.Extend, State, Res, Data, Memory);
-        Symbol* Base = nullptr;
+        Base = nullptr;
 
         // Prefer SymbolId Filled By LookUp | Prefere O SymbolId Preenchido Pelo LookUp.
         if (Node.Extend->SymbolId != 0)
@@ -2455,7 +2497,9 @@ void SemanticAnalizer::LookUpStruct(StructDeclNode& Node, SAState& State, SAResu
     Sym->InferType->Kind    = TypeKind::STRUCT;
     Sym->InferType->SubKind = SubTypeKind::NONE;
     Sym->inited             = true;
-
+    if (Node.Extend)
+        Sym->TInfo->Father = Base;
+    
     // Create Scope for Struct | Cria Escopo do Struct.
     Scope* StructScope  = Memory.New<Scope>();
     StructScope->Parent = State.CurrScope;
@@ -2529,9 +2573,19 @@ void SemanticAnalizer::LookUpClass(ClassDeclNode& Node, SAState& State, SAResult
     }
 
     // Error Prevention | Prevenção de Erros.
+    Symbol* Base = nullptr;
     if (Node.Extend)
     {
         LookUpNode(*Node.Extend, State, Res, Data, Memory);
+
+        // Prefer SymbolId Filled By LookUp | Prefere O SymbolId Preenchido Pelo LookUp.
+        if (Node.Extend->SymbolId != 0)
+        {
+            auto It = Res.Symbols.find(Node.Extend->SymbolId);
+            if (It != Res.Symbols.end())
+                Base = It->second;
+        }
+
         TypeInfo* ExtInfo = GetExpressionType(Node.Extend, State, Res, Data, Memory);
         if (ExtInfo->Kind != TypeKind::CLASS)
         {
@@ -2557,6 +2611,8 @@ void SemanticAnalizer::LookUpClass(ClassDeclNode& Node, SAState& State, SAResult
     Sym->InferType->Kind    = TypeKind::CLASS;
     Sym->InferType->SubKind = SubTypeKind::NONE;
     Sym->inited             = true;
+    if (Node.Extend)
+        Sym->TInfo->Father = Base;
 
     // Create Scope for Class | Cria Escopo da Class.
     Scope* ClassScope  = Memory.New<Scope>();
@@ -3339,7 +3395,7 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
             return;
         }
     }
-    LookUpNode(*Node.Member, State, Res, Data, Memory);
+
     return;
 }
 
@@ -3450,7 +3506,33 @@ void SemanticAnalizer::LookUpIndexAccess(IndexAccessNode& Node, SAState& State, 
     }
 }
 
-// LookUp Range Nodes | Olha os RangeNodes.
+// LookUp Range Build Nodes | Olha um RangeBuildNode.
+void SemanticAnalizerLookUpRangeBuild(RangeBuildNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr)
+{
+    ExpressionNode* Parent = Node.Parent;
+    Node.Parent = nullptr;
+    TypeKind Kind = GetExpressionType(Parent, State, Res, Data, Memory)->Kind;
+    if (
+        Kind != TypeKind::NAMESPACE   or
+        Kind != TypeKind::STRUCT      or
+        Kind != TypeKind::STRUCT_INST or
+        Kind != TypeKind::CLASS       or
+        Kind != TypeKind::CLASS_INST
+    ) {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic", 
+            "Cannot Build Iterator For: "+SAUtils::GetStringOfKind(Kind),
+            "This Object Dont Have Valid Members", 
+            "Add A Valid Type or Convert",
+            Node.pos.line, Node.pos.collumn
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;
+    }
+    Node.Parent = Parent;
+}
+
+// LookUp Range Nodes | Olha um RangeNode.
 void SemanticAnalizer::LookUpRange(RangeNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     TypeInfo* BeginInfo = GetExpressionType
@@ -3508,8 +3590,7 @@ void SemanticAnalizer::LookUpFunctionCall(FunctionCall& Node, SAState& State, SA
     LookUpNode(*Node.Callee, State, Res, Data, Memory);
     for (ExpressionNode* Arg : Node.Args)
         if (Arg)
-            LookUpNode(*Arg, State, Res, Data, Memory);
-    
+            LookUpNode(*Arg, State, Res, Data, Memory);    
 }
 
 // LookUp Array Values | Olha um ArrayValue.

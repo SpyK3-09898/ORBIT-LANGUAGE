@@ -336,6 +336,7 @@ struct ASTNode
             case NodeType::ARRAY_VALUE:    return "<ARRAY_VALUE>";
 
             case NodeType::RANGE:          return "<RANGE>";
+            case NodeType::RANGE_BUILD:    return "<RANGE-BUILD>";
         }
 
         return "<UNKNOWN>";
@@ -515,6 +516,9 @@ struct IndexAccessNode : ExpressionNode
 // RANGE BUILDER | Constroi Um Construtor de Intervalo.
 struct RangeBuildNode : ExpressionNode
 {
+    // DATA | DADOS.
+    ExpressionNode* Parent;
+    
     // CONSTRUCTOR | CONSTRUTOR
     RangeBuildNode(NodePos P)
         : ExpressionNode(NodeType::RANGE, P) {};

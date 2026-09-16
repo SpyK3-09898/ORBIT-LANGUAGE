@@ -1,0 +1,52 @@
+
+# ==============================================================================
+# IDEs and Editors
+# ==============================================================================
+# Visual Studio Code settings
+/.vscode
+
+# JetBrains IDEs settings
+/.idea
+
+# ==============================================================================
+# Build and Output Directories
+# ==============================================================================
+# Special language build outputs
+/_build/
+
+# Keep specific build targets tracked in Git
+!_build/_prints/.gitkeep
+!_build/_target/.gitkeep
+
+# ==============================================================================
+# Caching and Configuration
+# ==============================================================================
+# Cache directories
+/.cache/
+
+# Keep configuration and specific cache data tracked in Git
+!/.cfg
+!/.cache/data/.gitkeep
+
+# ==============================================================================
+# Temporary and Object Files
+# ==============================================================================
+# Language specific temporary files
+.temp
+.obj
+
+# General compiler and editor temporary backups
+*.tmp
+*.bak
+*.swp
+*~
+
+# ==============================================================================
+# Logs and System Files
+# ==============================================================================
+# Execution and build logs
+*.log
+
+# Operating System files
+.DS_Store
+Thumbs.db

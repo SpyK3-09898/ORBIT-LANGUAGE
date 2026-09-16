@@ -116,7 +116,6 @@ namespace ExprUtils {
 
         // Set Object | Define o Objeto
         Access->Object = L;
-
         Token* Member = Inst.Peek();
 
         // Check if Have Member | Olha se tem o Membro
@@ -152,9 +151,11 @@ namespace ExprUtils {
                 );
 
             Access->Member = Rb;
+            Rb->Parent = Access;
+
             Token* E = Inst.Advance();
             ParserUtils::UpdateStatePos(E, State);
-        } else if (Member->Type != TokenType::IDENTIFIER)
+        } else if (Member->Type == TokenType::IDENTIFIER)
         {
             // Create Identifier Node | Cria o Nó Identifier
             IdentifierNode* Id =

@@ -2,7 +2,7 @@
 _library __MAIN__;
 
 struct X:
-    var x = 15;
+    public var x = 15;
 end
 
 struct Y from X:

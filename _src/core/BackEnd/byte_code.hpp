@@ -19,16 +19,20 @@
 
 // FORWARDS
 struct Chunk;
+struct VM_Frame;
 struct ByteCode;
 struct ByteInstruction;
 
-struct ByteArray;    // Array Repr       | Representação de Matrizes.
-struct ByteTable;    // Table Repr       | Representação de Tabelas.
-struct ByteFn;       // Functions Repr   | Representação de Funções
-struct ByteIterator; // Iterador Repr    | Rerpesentação de Iteradores
-struct BytePackage;  // Package Repr     | Representação de Pacotes.
-struct ByteTypeObj;  // Type Object Repr | Representação de Objetos de Tipo.
-using  ByteValue = variant< // RunTime Value | Valor de RunTime.
+struct ByteArray;    // Array Repr            | Representação de Matrizes.
+struct ByteTable;    // Table Repr            | Representação de Tabelas.
+struct ByteFn;       // Functions Repr        | Representação de Funções
+struct ByteIterator; // Iterador Repr         | Rerpesentação de Iteradores
+struct BytePackage;  // Package Repr          | Representação de Pacotes.
+struct ByteTypeObj;  // Type Object Repr      | Representação de Objetos de Tipo.
+struct ByteInstance; // Objects Instance Repr | Representação de Instancias de Objetos.
+struct ByteObject;   // Objects Repr          | Representação de Objetos em RunTime.
+struct ByteSelf;     // Self Repr             | Representação de Selfs.
+using  ByteValue = variant< // RunTime Value  | Valor de RunTime.
     bool,
     float,
     i64,
@@ -42,6 +46,9 @@ using  ByteValue = variant< // RunTime Value | Valor de RunTime.
     ByteIterator*,
     BytePackage*,
     ByteTypeObj*,
+    ByteInstance*,
+    ByteObject*,
+    ByteSelf*,
     nullptr_t
 >;
 
@@ -75,23 +82,20 @@ struct ObjectDescr
     }
 
     // Disconnect A Obj | Desconecta Um Obj.
-    void Unreference(ObjectDescr* Obj)
+    void UnReference(ObjectDescr* Obj)
     {
         auto It = std::find(References.begin(), References.end(), Obj);
-
         if (It == References.end())
             return;
 
         References.erase(It);
-
         auto RefIt = std::find(Obj->ReferencedBy.begin(), Obj->ReferencedBy.end(), this);
-
         if (RefIt != Obj->ReferencedBy.end())
             Obj->ReferencedBy.erase(RefIt);
 
         Obj->references--;
-        if (references == 0)
-            marked=false;
+        if (Obj->references == 0)
+            Obj->marked = false;
         changed = true;
     }
 };
@@ -102,7 +106,7 @@ struct ByteObject
 
     // Object Description | Descrição do Objeto.
     public: ObjectDescr* Descr;
-    bool acessible=false;
+    bool acessible=true;
     i64 ID;
 
     virtual ByteValue Acess
@@ -110,7 +114,8 @@ struct ByteObject
         ByteValue& Val,
         ByteInstruction& CurrInst,
         ByteCode* BC,
-        RunTimeData& Data
+        RunTimeData& Data,
+        VM_Frame* Frame=nullptr
     );
 };
 
@@ -147,12 +152,48 @@ struct ByteIterator : ByteObject
     }
 };
 
-// RunTime TypeObject Repr | Representação de Objetos de Tipo.
-enum TypeObjType
+// Typeof Objects | Tipo dos Objetos.
+enum class TypeObjType
 {
     STRUCT,
     CLASS
 };
+
+// Self Repr | Representação dos 'Self'.
+struct ByteSelf
+{
+    // DATA | DADOS.
+    ByteObject* This;
+    ByteSelf*   Super;
+};
+
+// RunTime Instance Repr | Representação de Instancias em RunTime.
+struct ByteInstance : ByteObject
+{
+    ByteTypeObj* Object;
+    ByteSelf* SelfRef;
+    vec<ByteInstance*> Parents;
+    unord_map<ui16, i64> Members;
+    
+    // CONSTRUCTOR & DESTRUCTOR | CONSTRUTOR E DESTRUTOR
+    ~ByteInstance() = default;
+    static void Destroy(void* Ptr, Arena& Memory)
+    {
+        //for (ui16 Member : Members)
+        {
+
+        }
+        ByteInstance* Inst = static_cast<ByteInstance*>(Ptr);
+        Inst->~ByteInstance();
+    }
+
+    // Member Acess | Acesso de Membros.
+    ByteValue Acess
+        (ByteValue& Val, ByteInstruction& CurrInst, ByteCode* BC, RunTimeData& Data, VM_Frame* Frame=nullptr) 
+        override;
+};
+
+// RunTime TypeObject Repr | Representação de Objetos de Tipo.
 struct ByteTypeObj : ByteObject
 {
     // DATA | DADOS
@@ -168,13 +209,13 @@ struct ByteTypeObj : ByteObject
     ~ByteTypeObj() = default;
     static void Destroy(void* Ptr, Arena& Memory)
     {
-        ByteTypeObj* It = static_cast<ByteTypeObj*>(Ptr);
-        It->~ByteTypeObj();
+        ByteTypeObj* Obj = static_cast<ByteTypeObj*>(Ptr);
+        Obj->~ByteTypeObj();
     }
 
     // Member Acess | Acesso de Membros.
     ByteValue Acess
-        (ByteValue& Val, ByteInstruction& CurrInst, ByteCode* BC, RunTimeData& Data) 
+        (ByteValue& Val, ByteInstruction& CurrInst, ByteCode* BC, RunTimeData& Data, VM_Frame* Frame=nullptr) 
         override;
 };
 
@@ -192,7 +233,7 @@ struct BytePackage : ByteObject
 
     // Member Acess | Acesso de Membros.
     ByteValue Acess
-        (ByteValue& Val, ByteInstruction& CurrInst, ByteCode* BC, RunTimeData& Data) 
+        (ByteValue& Val, ByteInstruction& CurrInst, ByteCode* BC, RunTimeData& Data, VM_Frame* Frame=nullptr) 
         override;
 
     // GC | CB
@@ -278,13 +319,14 @@ enum class OpCode: uint8_t
 
     LOAD_FN,
     LOAD_PACK,
-    LOAD_OBJ,
+    LOAD_INST,
     LOAD_TYPE,
 
     // BUILDS | CONSTRUÇÕES.
     BUILD_ARRAY,
     BUILD_TABLE,
     BUILD_RANGE,
+    BUILD_IT,
     BUILD_TYPE_OBJ,
     BUILD_PACKAGE,
 
@@ -292,6 +334,9 @@ enum class OpCode: uint8_t
     SET_TKEY,
     SET_TPATH,
 
+    // NEWS
+    NEW_OBJ,
+    
     // ITERS
     ITER_NEXT,
     ITER_HAS_NEXT,
@@ -334,16 +379,19 @@ struct ByteInstruction
 struct Chunk
 {
     vec<ByteInstruction*> Instructions;
-    vec<ByteObject*>LastObj;
+    vec<ByteObject*> LastObj;
+    ByteInstance* ChunkTypeObj;
+    bool inMethod=false;
     int ParamCount;
 };
 
 // ByteCode | ByteCode.
 struct ByteCode
 {
-    int currChunk=0;
     vec<Chunk*> Chunks;
     unord_map<string, ui8> Contexts;
     unord_map<ui8, unord_map<ui16, ui32>> ExportSlots;
     unord_map<ui8, unord_map<string, i64>> Functions;
+    vec<ByteInstance*> CurrentTypes;
+    int currChunk=0;
 };

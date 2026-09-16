@@ -355,7 +355,10 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
     // Resolve Type | Resolve o tipo:
     auto& S = Sym->Type;
     ByteInstruction* Inst;
-    if (S == SymbolTypes::IDENTIFIER or S == SymbolTypes::VAR or S == SymbolTypes::PARAM)
+    if (Sym->Name == "self")
+        Inst = CodeGenUtils::CreateInst
+            (Node, OpCode::LOAD_SELF, SymState->GetLocal(Sym->Id), Sym->packId, Data, Memory);
+    else if (S == SymbolTypes::IDENTIFIER or S == SymbolTypes::VAR or S == SymbolTypes::PARAM)
         Inst = CodeGenUtils::CreateInst
             (Node, OpCode::LOAD_LOCAL, SymState->GetLocal(Sym->Id), Sym->packId, Data, Memory);
     else if (S == SymbolTypes::FN)
@@ -380,7 +383,7 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
             (Node, OpCode::LOAD_TYPE, SymState->GetLocal(Sym->Id), Sym->packId, Data, Memory);
     else if (S == SymbolTypes::STRUCT_INST or S == SymbolTypes::CLASS_INST)
         Inst = CodeGenUtils::CreateInst
-            (Node, OpCode::LOAD_OBJ, SymState->GetLocal(Sym->Id), 0, Data, Memory);    
+            (Node, OpCode::LOAD_INST, SymState->GetLocal(Sym->Id), 0, Data, Memory);    
     else
     {
         OrbitLog::Error
@@ -623,9 +626,6 @@ void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& St
         else if (S == SymbolTypes::STRUCT or S == SymbolTypes::CLASS)
             Inst = CodeGenUtils::CreateInst
                 (Node, OpCode::LOAD_PACK, RuntimeSym->contextId, 0, Data, Memory);    
-        else if (S == SymbolTypes::STRUCT_INST or S == SymbolTypes::CLASS_INST)
-            Inst = CodeGenUtils::CreateInst
-                (Node, OpCode::LOAD_OBJ, (i64)MemberId, 0, Data, Memory);    
         else
         {
             OrbitLog::Error
@@ -660,6 +660,21 @@ void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& St
         return;
 
     IdentifierNode* MemberId = static_cast<IdentifierNode*>(Node->Member);
+    if ((O->Name == "self" or O->Name == "super") and MemberId->Name == "this")
+    {
+        // Load Member | Carrega o Membro.
+        ByteInstruction* Inst = CodeGenUtils::CreateInst
+            (Node, OpCode::GET_THIS, MemberId->Name, 0, Data, Memory);
+        BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+        return;
+    } else if ((O->Name == "self" or O->Name == "super") and MemberId->Name == "super") {
+
+        // Load Member | Carrega o Membro.
+        ByteInstruction* Inst = CodeGenUtils::CreateInst
+            (Node, OpCode::GET_SUPER, MemberId->Name, 0, Data, Memory);
+        BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+        return;
+    }
 
     // Load Member | Carrega o Membro.
     ByteInstruction* Inst = CodeGenUtils::CreateInst
@@ -734,6 +749,15 @@ void CodeGenerator::CompileArrayValue(ArrayValue* Node, CodeGenState& State, Byt
     ByteInstruction* Inst = 
         CodeGenUtils::CreateInst(Node, OpCode::BUILD_ARRAY, S, 0, Data, Memory);
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+}
+
+// Compile Range Build Expression | Compila Construções de Intervalo (Range)
+void CodeGenerator::CompileRangeBuild(RangeBuildNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
+{
+    // Generate Inst | Gera a Instrução.
+    ByteInstruction* Inst = 
+        CodeGenUtils::CreateInst(Node, OpCode::BUILD_IT, 0, 0, Data, Memory);
+    BC.Chunks[State.currChunk]->Instructions.push_back(Inst);   
 }
 
 // Compile Range Expression | Compila Expressão de Intervalo (Range)
@@ -849,7 +873,31 @@ void CodeGenerator::CompileVarDecl(VarDeclNode* Node, CodeGenState& State, ByteC
         return;
 
     // Compile | Compila:
-    CompileNode(Node->Val, State, BC, SARes, Data, Memory);
+    if (Node->probablyObj)
+    {
+        // Compile Object Type | Compila o tipo do objeto.
+        CompileNode(Node->Val, State, BC, SARes, Data, Memory);
+
+        // Compile Constructor Arguments | Compila os argumentos do construtor.
+        ui32 ArgCount = 0;
+        if (Node->Val and Node->Val->Type == NodeType::FN_CALL)
+        {
+            FunctionCall* Call = static_cast<FunctionCall*>(Node->Val);
+            ArgCount = Call->Args.size();
+            for (ExpressionNode* Arg : Call->Args)
+                CompileNode(Arg, State, BC, SARes, Data, Memory);
+        }
+
+        // Create Instance | Cria a instância.
+        ByteInstruction* NewInst = CodeGenUtils::
+            CreateInst(Node, OpCode::NEW_OBJ, ArgCount, 0, Data, Memory);
+        BC.Chunks[State.currChunk]->Instructions.push_back(NewInst);
+    }
+    else
+    {
+        CompileNode(Node->Val, State, BC, SARes, Data, Memory);
+    }
+
     ui32 ID = State.CreateLocal(Sym->Id);
     if (!State.DefinitionRecord.empty())
         State.DefinitionRecord.back().push_back(Sym->Id);
@@ -890,17 +938,38 @@ void CodeGenerator::CompileFnDecl(FnDecl* Node, CodeGenState& State, ByteCode& B
     }
 
     // Compile | Compila
+    BC.Chunks.back()->inMethod=Sym->isMethod;
     CompileNode(Node->Body, State, BC, SARes, Data, Memory);
 
+    // Default Return | Retorno Padrão.
+    Scope* CurrScope = Sym->DeclaredScope;
+    bool inObj=false;
+    while (CurrScope) {
+        if (CurrScope->Type == BodyTypes::STRUCT or CurrScope->Type == BodyTypes::CLASS)
+        {
+            inObj=true;
+            break;
+        }
+        CurrScope = CurrScope->Parent;
+    }
+
     // Gen Insts | Gera as Instruções.
-    ByteInstruction* RetValueInst =
-        CodeGenUtils::CreateInst(Node, OpCode::PUSH, NullLitVal{}, 0, Data, Memory);
-    ByteInstruction* ReturnInst =
+    if (!inObj)
+    {
+        ByteInstruction* RetValueInst =
+            CodeGenUtils::CreateInst(Node, OpCode::PUSH, NullLitVal{}, 0, Data, Memory);
+        BC.Chunks[State.currChunk]->Instructions.push_back(RetValueInst);
+    } else {
+        ByteInstruction* RetSelfInst = 
+            CodeGenUtils::CreateInst(Node, OpCode::LOAD_SELF, 0, 0, Data, Memory);
+        ByteInstruction* RetValueInst =
+            CodeGenUtils::CreateInst(Node, OpCode::GET_THIS, 0, 0, Data, Memory);
+        BC.Chunks[State.currChunk]->Instructions.push_back(RetSelfInst);
+        BC.Chunks[State.currChunk]->Instructions.push_back(RetValueInst);
+    }
+    ByteInstruction* ReturnInst   =
         CodeGenUtils::CreateInst(Node, OpCode::RETURN, 0, 0, Data, Memory);
-    
-    BC.Chunks[State.currChunk]->Instructions.push_back(RetValueInst);
     BC.Chunks[State.currChunk]->Instructions.push_back(ReturnInst);
-    
     State.currChunk = PrevC;
 }
 
@@ -964,6 +1033,7 @@ void CodeGenerator::CompileStructDecl(StructDeclNode* Node, CodeGenState& State,
     ByteInstruction* Inst = CodeGenUtils::CreateInst
         (Node, OpCode::BUILD_TYPE_OBJ, ID, Ids, Data, Memory);
     Inst->L1 = !!Node->Extend; 
+    Inst->L2 = 1;
     BC.Chunks[BC.currChunk]->Instructions.push_back(Inst);
 }
 
@@ -1020,6 +1090,7 @@ void CodeGenerator::CompileClassDecl(ClassDeclNode* Node, CodeGenState& State, B
     ByteInstruction* Inst = CodeGenUtils::CreateInst
         (Node, OpCode::BUILD_TYPE_OBJ, ID, Ids, Data, Memory);
     Inst->L1 = !!Node->Extend;
+    Inst->L2 = 2;
     BC.Chunks[BC.currChunk]->Instructions.push_back(Inst);
 }
 
@@ -1428,4 +1499,3 @@ ByteCode CodeGenerator::InitCG(ParseResult& PRes, SAResult& SARes, RunTimeData& 
 }
 
 // EOF.
- 

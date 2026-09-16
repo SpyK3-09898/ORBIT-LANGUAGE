@@ -997,9 +997,20 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
     {
         OrbitLibrary* Lib = nullptr;
         if (I->Base->Type == NodeType::IDENTIFIER)
-            Lib = LibMan->LoadLib(static_cast<IdentifierNode*>(I->Base)->Name, I->Origin, Data, Memory);
-        else Lib = LibMan->LoadLib(static_cast<IdentifierNode*>(static_cast<MemberAccessNode*>(I->Base)->Object)->Name, I->Origin, Data, Memory);
-        
+            Lib = LibMan->LoadLib(
+                vec<string>{static_cast<IdentifierNode*>(I->Base)->Name},
+                I->Origin,
+                Data,
+                Memory
+            );
+        else
+            Lib = LibMan->LoadLib(
+                vec<string>{static_cast<IdentifierNode*>(static_cast<MemberAccessNode*>(I->Base)->Object)->Name},
+                I->Origin,
+                Data,
+                Memory
+            );
+            
         Lib->DeclName = I->Alias;
         Data.Librarys.push_back(Lib);
     }

@@ -263,6 +263,15 @@ namespace VM_Utils {
                         Pos.line, Pos.collumn
                     );
                     OrbitLog::SyntaxLog::ThrowLog(Data);                     
+                } else if (holds_alt<ByteInstance*>(Val)) {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "RunTime", 
+                        "Non Viable Conversion In: <STRING>, To: <INSTANCE>", 
+                        "Cannot Cast Left And Right", 
+                        "Add A Valid Type",
+                        Pos.line, Pos.collumn
+                    );
+                    OrbitLog::SyntaxLog::ThrowLog(Data);                     
                 } else if (holds_alt<nullptr_t>(Val)) 
                     return "␀";
                 else {
@@ -356,7 +365,7 @@ namespace VM_Utils {
             {
                 ret += ConvertByteToString(Value);
 
-                if (i != static_cast<int>(Arr->size()))
+                if (i < static_cast<int>(Arr->size()) - 1)
                     ret += ", ";
                 i++;
             }
@@ -375,7 +384,7 @@ namespace VM_Utils {
                 ret += "\"" + Key + "\": ";
                 ret += ConvertByteToString(const_cast<ByteValue&>(Value));
 
-                if (i != static_cast<int>(Table->size()))
+                if (i < static_cast<int>(Table->size()) - 1)
                     ret += ", ";
                 i++;
             }
@@ -384,10 +393,11 @@ namespace VM_Utils {
             return ret;
         }
         else if (holds_alt<ByteIterator*>(Val)) return "Iterator";
-        else if (holds_alt<ByteFn*>(Val)) return "Function";
-        else if (holds_alt<BytePackage*>(Val)) return "Package";
-        else if (holds_alt<ByteTypeObj*>(Val)) return "TypeObject";
-        else if (holds_alt<nullptr_t>(Val)) return "<␀>";
+        else if (holds_alt<ByteFn*>(Val))       return "Function";
+        else if (holds_alt<BytePackage*>(Val))  return "Package";
+        else if (holds_alt<ByteTypeObj*>(Val))  return "TypeObject";
+        else if (holds_alt<ByteInstance*>(Val)) return "Instance";
+        else if (holds_alt<nullptr_t>(Val))     return "<␀>";
         else return "Unk";
     }
 
@@ -425,7 +435,7 @@ namespace VM_Utils {
 
                 return true;
             }
-            else if constexpr(std::is_same_v<T, ByteIterator>)
+            else if constexpr(std::is_same_v<T, ByteIterator*>)
             {
                 return false;
             }
@@ -449,16 +459,11 @@ void GarbageCollector::Update(ByteCode& BC, InstructionPointer& IP, SAResult& Re
     // Take Stack Objects | Pega os Objetos da Stack.
     vec<ObjectDescr*> StackObjs{};
     VM_Frame* CurrFrame = VM->CallStack->GetTop();
-
     while (CurrFrame)
     {
         for (ByteValue& Val : CurrFrame->Stack)
-        {
-            if (holds_alt<ByteFn*>(Val))
-                StackObjs.push_back(std::get<ByteFn*>(Val)->Descr);
-            else if (holds_alt<ByteIterator*>(Val))
-                StackObjs.push_back(std::get<ByteIterator*>(Val)->Descr);
-        }
+            if (VM_Utils::GetByteObject(Val))
+                Descriptions.push_back(VM_Utils::GetByteObject(Val)->Descr);
         CurrFrame = CurrFrame->Back;
     }
 
@@ -508,7 +513,8 @@ ByteValue ByteObject::Acess
     ByteValue& Val,
     ByteInstruction& CurrInst,
     ByteCode* BC,
-    RunTimeData& Data
+    RunTimeData& Data,
+    VM_Frame* Frame
 )
 {
     OrbitLog::SyntaxLog::SyntaxError
@@ -525,8 +531,8 @@ ByteValue ByteObject::Acess
 
 // PACKAGES:
 
-// Acess a Member of Package | Acessa o Membro do Pacote.
-ByteValue BytePackage::Acess(ByteValue& Val, ByteInstruction& CurrInst, ByteCode* BC, RunTimeData& Data)
+// Acess A Member of Package | Acessa o Membro do Pacote.
+ByteValue BytePackage::Acess(ByteValue& Val, ByteInstruction& CurrInst, ByteCode* BC, RunTimeData& Data, VM_Frame* Frame)
 {
     // Error Prev | Prevenção de Erros
     if (!holds_alt<i64>(Val))
@@ -559,12 +565,13 @@ ByteValue BytePackage::Acess(ByteValue& Val, ByteInstruction& CurrInst, ByteCode
 
 // TYPES:
 
-// Acess a Member of a Type | Acessa o Membro do Objeto de Tipo.
+// Acess A Member of a Type | Acessa o Membro do Objeto de Tipo.
 ByteValue ByteTypeObj::Acess(
     ByteValue& Val,
     ByteInstruction& CurrInst,
     ByteCode* BC,
-    RunTimeData& Data
+    RunTimeData& Data,
+    VM_Frame* Frame
 )
 {
     // Get Member ID | Pega o ID do Membro.
@@ -623,6 +630,52 @@ ByteValue ByteTypeObj::Acess(
 
     // Return Member | Retorna o Membro.
     return BC->Chunks[chunkId]->Instructions[Slot]->R1;
+}
+
+// Acess A Member of an Instance | Acessa o Membro da Instância.
+ByteValue ByteInstance::Acess(
+    ByteValue& Val,
+    ByteInstruction& CurrInst,
+    ByteCode* BC,
+    RunTimeData& Data,
+    VM_Frame* Frame
+)
+{
+    // Get Member ID | Pega o ID do Membro.
+    if (!holds_alt<i64>(Val))
+        OrbitLog::Error(
+            "virtual_machine.cpp",
+            "Expected <MEMBER-ID>, But Got: " +
+            VM_Utils::ConvertByteToString(Val),
+            true,
+            RUNTIME_ERROR
+        );
+
+    ui16 MemberID = static_cast<ui16>(std::get<i64>(Val));
+
+    // Find Member | Procura o Membro.
+    auto It = Members.find(MemberID);
+    if (It == Members.end())
+        OrbitLog::Error(
+            "virtual_machine.cpp",
+            "Member does not belong to Instance.",
+            true,
+            RUNTIME_ERROR
+        );
+
+    if (!Frame)
+        OrbitLog::Error(
+            "virtual_machine.cpp",
+            "Expected <FRAME> In Instance Member Acess",
+            true,
+            RUNTIME_ERROR
+        );
+
+    // Resolve Local Slot | Resolve o Slot do Local.
+    i64 LocalSlot = It->second;
+
+    // Return Value From Locals | Retorna o Valor dos Locals.
+    return Frame->Locals[static_cast<ui32>(LocalSlot)];
 }
 
 // =========== CORE =========== //
@@ -1140,7 +1193,6 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             case OpCode::PUSH: // Push A New Value to Sack | Coloca um Novo Valor na Pilha:
                 CallStack->GetTop()->PushBack(CurrInst->R1);
                 break;
-
             case OpCode::POP: // Remove Last Value of Stack | Remove o Ultimo Valor da Pilha:
                 CallStack->GetTop()->Pop();
                 break;
@@ -1182,7 +1234,6 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             }
             
             // STORES:
-
             case OpCode::STORE_LOCAL: // Store A New Local | Guarda Um Novo Local:
             {
                 ByteValue Val = CallStack->GetTop()->Pop();
@@ -1342,7 +1393,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 CallStack->GetTop()->PushBack(It->second);
                 break;
             }
-            case OpCode::LOAD_TYPE: // Load A Type Object
+            case OpCode::LOAD_TYPE: // Load A Type Object | Carrega Um Objeto De Tipo.
             {
                 ui32 Id = static_cast<ui32>(std::get<i64>(CurrInst->R1));
                 auto& Objs = CallStack->GetTop()->Objects;
@@ -1361,6 +1412,38 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 }
 
                 CallStack->GetTop()->PushBack(It->second);
+                break;
+            }
+            case OpCode::LOAD_SELF: // Load A 'Self' | Carrega O 'Self' do Objeto Atual
+            {
+                // Get Current Frame | Pega o Frame Atual.
+                VM_Frame* Frame = CallStack->GetTop();
+
+                // Generate Self | Gera o Self.
+                if (!Frame->SelfRef)
+                {
+                    // Get Current Instance | Pega a Instância Atual.
+                    ByteInstance* Instance = BC.CurrentTypes.back();
+
+                    // Create Self | Cria o Self.
+                    ByteSelf* Self = Memory.New<ByteSelf>();
+
+                    // Set This | Define o This.
+                    Self->This = Instance;
+
+                    // Set Super | Define o Super.
+                    Self->Super = nullptr;
+
+                    if (!Instance->Parents.empty())
+                        Self->Super = Instance->Parents.front()->SelfRef;
+
+                    // Cache Self | Coloca o Self em Cache.
+                    Instance->SelfRef = Self;
+                    Frame->SelfRef = Self;
+                }
+
+                // Push This | Coloca o This na Stack.
+                Frame->PushBack(Frame->SelfRef);
                 break;
             }
 
@@ -1490,7 +1573,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 // Inherith | Herança.
                 if (std::get<bool>(CurrInst->L1))
                 {
-                    if (CurrChunk->LastObj.empty())
+                    if (!CurrChunk->ChunkTypeObj)
                         OrbitLog::Error(
                             "virtual_machine.cpp",
                             "Type inheritance was requested, but no parent object was provided.",
@@ -1498,7 +1581,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                             RUNTIME_ERROR
                         );
 
-                    ByteObject* ParentObj = CurrChunk->LastObj.back();
+                    ByteObject* ParentObj = CurrChunk->ChunkTypeObj;
                     ByteTypeObj* Parent = static_cast<ByteTypeObj*>(ParentObj);
 
                     // Set Parent | Define o Pai.
@@ -1511,40 +1594,41 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                     // Inherit Members | Herda os Membros.
                     vec<ui16> OwnMembers = Obj->Members;
 
-                    Obj->Members = Parent->Members;
-                    Obj->Members.insert(
-                        Obj->Members.end(),
-                        OwnMembers.begin(),
-                        OwnMembers.end()
-                    );
-
-                    CurrChunk->LastObj.pop_back();
+                    Obj->Members = OwnMembers;
+                    for (ui16 mid : Parent->Members)
+                    {
+                        if (std::find(Obj->Members.begin(), Obj->Members.end(), mid) == Obj->Members.end())
+                            Obj->Members.push_back(mid);
+                    }
                 }
                 else
                 {
                     // Root Type | Tipo Raiz.
                     Obj->Parent = nullptr;
                     Obj->Parents.push_back(Obj);
+                } // fazer funcs de objetos retornarem o proprio objeto no lugar de null
+                switch (std::get<i64>(CurrInst->L2)) // Set Type | Define o Tipo:
+                {
+                    case 1: Obj->ObjType = TypeObjType::STRUCT; break;
+                    case 2: Obj->ObjType = TypeObjType::CLASS;  break;
                 }
 
                 // Define Symbol Count | Define a Quantidade de Simbolos.
                 Obj->SymbolCount = Obj->Members.size();
 
                 // Register Object | Registra o Objeto.
-                GC.Register(
+                Obj->Descr = GC.Register(
                     Obj,
                     ByteTypeObj::Destroy,
                     Memory
                 );
 
                 // Store Object | Armazena o Objeto.
-                CallStack->GetTop()->Locals[Obj->ID] = Obj;
                 CallStack->GetTop()->Objects[static_cast<ui32>(Obj->ID)] = Obj;
                 break;
             }
             
             // GETS:
-
             case OpCode::GET_MEMBER: // Get Value Member | Pega Um Membro de um Valor.
             {
                 // Take Member | Pega o Membro.
@@ -1582,7 +1666,14 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                     return 1;
                 }
 
-                ByteValue Result = Obj->Acess(Member, *CurrInst, &BC, Data);
+                // Pass Current Frame | Passa o Frame Atual.
+                ByteValue Result = Obj->Acess(
+                    Member,
+                    *CurrInst,
+                    &BC,
+                    Data,
+                    CallStack->GetTop()
+                );
                 CallStack->GetTop()->PushBack(Result);
                 
                 break;
@@ -1681,6 +1772,26 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 }
                 break;
             }
+            case OpCode::GET_THIS: // Get 'This' For A 'Self' | Consegue Um 'This' de Um 'Self'.
+            {
+                ByteValue Val = CallStack->GetTop()->Pop();
+                if (!holds_alt<ByteSelf*>(Val))
+                    OrbitLog::Error("virtual_machine.cpp", "Expected <SELF> Object In <STACK> On 'This' Get", true, RUNTIME_ERROR);
+                ByteSelf* Self = std::get<ByteSelf*>(Val);
+                CallStack->GetTop()->PushBack(Self->This);
+
+                break;
+            }
+            case OpCode::GET_SUPER: // Get 'Super' For A 'Self' | Consegue Um 'Super' de Um 'Self'.
+            {
+                ByteValue Val = CallStack->GetTop()->Pop();
+                if (!holds_alt<ByteSelf*>(Val))
+                    OrbitLog::Error("virtual_machine.cpp", "Expected <SELF> Object In <STACK> On 'This' Get", true, RUNTIME_ERROR);
+                ByteSelf* Self = std::get<ByteSelf*>(Val);
+                CallStack->GetTop()->PushBack(Self->Super);
+
+                break;
+            }           
 
             // SETS:
             // Set Table Keys | Define As Chaves de Tabela.
@@ -1712,6 +1823,93 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 break;
             }
 
+            // NEWS
+            // Create A New Instance | Cria Uma Nova Instancia.
+            case OpCode::NEW_OBJ:
+            {
+                // Take Data | Pega os Dados.
+                const i64 arg_count = std::get<i64>(CurrInst->R1);
+                VM_Frame* Frame = CallStack->GetTop();
+                const i64 typePos =
+                    static_cast<i64>(Frame->Stack.size())
+                    - arg_count - 1;
+                if (typePos < 0 || !holds_alt<ByteTypeObj*>(Frame->Stack[typePos]))
+                    OrbitLog::Error("virtual_machine.cpp", "Invalid Object Construction: Expected A Type Object", true, RUNTIME_ERROR);
+
+                // Take Object And Create Instance | Pega o Objeto e Cria a Instancia.
+                ByteTypeObj* TypeObj = std::get<ByteTypeObj*>(Frame->Stack[typePos]);
+                
+                ByteInstance* Instance = Memory.New<ByteInstance>();
+                Instance->Object = TypeObj;
+
+                // Initialize Instance Members | Inicializa os Membros da Instancia.
+                // Locals holds the value | Locals guarda o valor.
+                // Members only stores the slot | Members só guarda o slot.
+                for (ui16 MemberID : TypeObj->Members)
+                {
+                    i64 LocalSlot = static_cast<i64>(Frame->Locals.size());
+                    Frame->Locals[static_cast<ui32>(LocalSlot)] = NullLitVal{};
+                    Instance->Members[MemberID] = LocalSlot;
+                }
+
+                // Create Parent Instances | Cria as Instâncias dos Pais.
+                Instance->Parents.clear();
+                ByteTypeObj* CurrParent = TypeObj->Parent;
+                while (CurrParent)
+                {
+                    ByteInstance* ParentInst = Memory.New<ByteInstance>();
+                    ParentInst->Object = CurrParent;
+
+                    for (ui16 MemberID : CurrParent->Members)
+                    {
+                        i64 LocalSlot = static_cast<i64>(Frame->Locals.size());
+                        Frame->Locals[static_cast<ui32>(LocalSlot)] = NullLitVal{};
+                        ParentInst->Members[MemberID] = LocalSlot;
+                    }
+
+                    ParentInst->Descr = GC.Register(
+                        ParentInst,
+                        ByteInstance::Destroy,
+                        Memory
+                    );
+
+                    // Create Self | Cria o Self.
+                    ByteSelf* ParentSelf = Memory.New<ByteSelf>();
+                    ParentSelf->This = ParentInst;
+                    ParentSelf->Super = nullptr;
+                    ParentInst->SelfRef = ParentSelf;
+
+                    Instance->Parents.push_back(ParentInst);
+
+                    CurrParent = CurrParent->Parent;
+                }
+
+                // Link Super Chain | Liga a Cadeia de Super.
+                if (Instance->Parents.size() >= 2)
+                {
+                    for (size_t i = 0; i + 1 < Instance->Parents.size(); ++i)
+                    {
+                        Instance->Parents[i]->SelfRef->Super =
+                            Instance->Parents[i + 1]->SelfRef;
+                    }
+                }
+                
+                // Register Instance | Registra a Instância.
+                Instance->Descr = GC.Register(
+                    Instance,
+                    ByteInstance::Destroy,
+                    Memory
+                );
+
+                // Remove TypeObj And Args | Remove TypeObj e Args.
+                for (i64 i = 0; i < arg_count + 1; ++i)
+                    Frame->Pop();
+
+                Frame->PushBack(Instance);
+                BC.CurrentTypes.push_back(Instance);
+                break;
+            }
+            
             // ITERS:
             // Add '.InEnd()' Result in Stack | Adiciona o Resultado a Função: '.InEnd()' Na Stack.
             case OpCode::ITER_HAS_NEXT: 

@@ -135,6 +135,7 @@ struct Symbol
     bool inited      = false;
     bool isPrivated  = false;
     bool isStatic    = false;
+    bool isMethod    = false;
     bool isExported  = false;
 };
 
@@ -235,6 +236,7 @@ class SemanticAnalizer
         void LookUpMemberAccess(MemberAccessNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpIndexAccess(IndexAccessNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpRange(RangeNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
+        void LookUpRangeBuild(RangeBuildNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpFunctionCall(FunctionCall& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpTernary(TernaryNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpArray(ArrayValue& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
