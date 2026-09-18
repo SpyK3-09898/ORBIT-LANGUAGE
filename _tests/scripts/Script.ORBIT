@@ -2,12 +2,8 @@
 _library __MAIN__;
 
 struct X:
-    public var x = 15;
+    public var y = 15;
 end
 
-struct Y from X:
-
-end
-
-obj I = new Y();
-echo cout I.x;
+obj I = new X();
+echo cout I.y;

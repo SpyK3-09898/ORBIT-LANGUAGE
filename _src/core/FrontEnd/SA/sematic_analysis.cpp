@@ -3162,40 +3162,22 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
 
     LookUpNode(*Node.Object, State, Res, Data, Memory, Owner);
     Symbol* Sym = nullptr;
-    vec<TypeKind> ValidTypes
-    {
-        TypeKind::UNK,
-        TypeKind::MONO_STATE,
-        TypeKind::TABLE_INT,
-        TypeKind::TABLE_FLOAT,
-        TypeKind::TABLE_STRING,
-        TypeKind::TABLE_BOOL,
-        TypeKind::TABLE_ANY,
-        TypeKind::TABLE_NULL,
-        TypeKind::TABLE_NONE,
-        TypeKind::STRUCT,
-        TypeKind::CLASS,
-        TypeKind::STRUCT_INST,
-        TypeKind::CLASS_INST,
-        TypeKind::SELF,
-        TypeKind::NAMESPACE,
-        TypeKind::MODULE,
-        TypeKind::LIBRARIE,
-        TypeKind::ITERATOR,
-        TypeKind::FN
-    };
 
-    if (std::find(ValidTypes.begin(), ValidTypes.end(), GetExpressionType(Node.Member, State, Res, Data, Memory)->Kind) != ValidTypes.end())
+    if (Node.Member)
     {
-        OrbitLog::SyntaxLog::SyntaxError(
-            "Semantic", 
-            "Trying to Acess A INVALID <MEMBER>", 
-            "This Type Makes No Sense In Any Possible Case", 
-            "Add A Valid Acess",
-            Node.Member->pos.line, Node.Member->pos.collumn
-        );
-        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-        return;
+        NodeType MT = Node.Member->Type;
+        if (MT != NodeType::IDENTIFIER && MT != NodeType::MEMBER_ACCESS)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic", 
+                "Trying to Acess A INVALID <MEMBER>", 
+                "This Type Makes No Sense In Any Possible Case", 
+                "Add A Valid Acess",
+                Node.Member->pos.line, Node.Member->pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return;
+        }
     }
 
     // ERR PREV | PREVENÇÃO DE ERROS:
@@ -3230,7 +3212,7 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
         return;
     }
 
-    // Set Data
+    // Set Data | Define os Dados
     Sym->read_count++;
     if (Node.Object->SymbolId == 0)
         Node.Object->SymbolId = Sym->Id;
@@ -3250,7 +3232,6 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
     // Main Switch | Switch Principal.
     switch (Sym->Type) 
     {
-    
         case SymbolTypes::NAMESPACE:
         case SymbolTypes::MODULE:
         case SymbolTypes::LIBRARY:
@@ -3304,25 +3285,56 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
                 break;
             }
 
-            // Continue Chain | Continua A Cadeia.
-            LookUpNode(*Node.Member, State, Res, Data, Memory, Sym);
-
-            if (Node.Member && Node.Member->SymbolId != 0)
-                Node.SymbolId = Node.Member->SymbolId;
-            else
-                Node.SymbolId = MemberSym->Id;
+            if (Node.Member)
+            {
+                Node.Member->SymbolId = MemberSym->Id;
+                if (Res.Symbols.find(MemberSym->Id) == Res.Symbols.end())
+                    Res.Symbols[MemberSym->Id] = MemberSym;
+            }
+            Node.SymbolId = MemberSym->Id;
+            MemberSym->read_count++;
             break;
         }
-        
+
+        case SymbolTypes::STRUCT_INST:
+        case SymbolTypes::CLASS_INST:
         case SymbolTypes::SELF:
         {
+            if (!Node.Member)
+                break;
+
             string MemberName = SAUtils::GetIValueName(Node.Member);
-            if (MemberName != "this" and MemberName != "super")
+
+            if (MemberName == "this" || MemberName == "super")
+            {
+                Symbol* Target = (MemberName == "this") ? Sym->This : Sym->Super;
+                if (!Target)
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "Semantic",
+                        "Invalid <SELF> Access",
+                        MemberName == "super"
+                            ? "Struct/Class Has No <EXTEND>, So 'super' Is Unavailable"
+                            : "Cannot Resolve 'this'",
+                        "~", Node.pos.line, Node.pos.collumn
+                    );
+                    if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+                    break;
+                }
+
+                Node.SymbolId = Target->Id;
+                if (Res.Symbols.find(Target->Id) == Res.Symbols.end())
+                    Res.Symbols[Target->Id] = Target;
+                break;
+            }
+
+            auto [MemberSym, found] = SAUtils::FindSymbol(MemberName, MoldSym ? MoldSym : Sym, State, Data, true);
+            if (!found or !MemberSym)
             {
                 OrbitLog::SyntaxLog::SyntaxError(
                     "Semantic",
                     "Trying To Acess A Undeclared Member",
-                    "Member '" + MemberName + "' Not Found in Object '" + Sym->Name + "'",
+                    "Member '" + MemberName + "' Not Found in Object '" + (MoldSym ? MoldSym->Name : Sym->Name) + "'",
                     "Check the Name or Declare-It",
                     Node.pos.line, Node.pos.collumn
                 );
@@ -3330,24 +3342,14 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
                 break;
             }
 
-            Symbol* Target = (MemberName == "this") ? Sym->This : Sym->Super;
-            if (!Target)
+            if (Node.Member)
             {
-                OrbitLog::SyntaxLog::SyntaxError(
-                    "Semantic",
-                    "Invalid <SELF> Access",
-                    MemberName == "super"
-                        ? "Struct/Class Has No <EXTEND>, So 'super' Is Unavailable"
-                        : "Cannot Resolve 'this'",
-                    "~", Node.pos.line, Node.pos.collumn
-                );
-                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-                break;
+                Node.Member->SymbolId = MemberSym->Id;
+                if (Res.Symbols.find(MemberSym->Id) == Res.Symbols.end())
+                    Res.Symbols[MemberSym->Id] = MemberSym;
             }
-
-            Node.SymbolId = Target->Id;
-            if (Res.Symbols.find(Target->Id) == Res.Symbols.end())
-                Res.Symbols[Target->Id] = Target;
+            Node.SymbolId = MemberSym->Id;
+            MemberSym->read_count++;
             break;
         }
         
@@ -3381,6 +3383,7 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
                         Res.Symbols[MemberSym->Id] = MemberSym;
                 }
                 Node.SymbolId = MemberSym->Id;
+                MemberSym->read_count++;
                 break;
             }
 
@@ -3389,7 +3392,7 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
                 "Trying to Acess A Non-Object", 
                 "<OBJECT>: "+Node.Object->GetNodeType()+" Cannot Be Acessed, Because  Dont Have Members",
                 "Use A Valid <OBJECT>",
-                Node.pos.line, Node.pos.collumn
+                Node.Object->pos.line, Node.Object->pos.collumn
             );
             if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
             return;
@@ -3702,6 +3705,8 @@ void GenerateSALog(SAState& State, SAResult& Res, RunTimeData& Data)
 
     string t2 = "\n// ========== ENDOF: 'SEMANTIC ANALYSIS' ========= //\n";
     file << t2;
+    
+    file.flush();
     file.close();
 }
 

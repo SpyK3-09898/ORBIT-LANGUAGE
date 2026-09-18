@@ -173,8 +173,9 @@ struct ByteInstance : ByteObject
     ByteTypeObj* Object;
     ByteSelf* SelfRef;
     vec<ByteInstance*> Parents;
-    unord_map<ui16, i64> Members;
-    
+    unord_map<ui32, ByteValue> Slots;
+    unord_map<ui16, ui32> Members;   
+
     // CONSTRUCTOR & DESTRUCTOR | CONSTRUTOR E DESTRUTOR
     ~ByteInstance() = default;
     static void Destroy(void* Ptr, Arena& Memory)
@@ -198,10 +199,14 @@ struct ByteTypeObj : ByteObject
 {
     // DATA | DADOS
     vec<ui16> Members;
+    unord_map<ui16, ByteValue> Defaults;
+
     vec<ByteTypeObj*> Parents;
     Chunk* Chunk;
+    
     ByteTypeObj* Parent;
     TypeObjType ObjType;
+    
     ui8 chunkId=0;
     ui32 SymbolCount=0;
 

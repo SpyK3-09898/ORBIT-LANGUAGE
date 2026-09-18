@@ -585,14 +585,8 @@ ByteValue ByteTypeObj::Acess(
         );
     ui16 MemberID = static_cast<ui16>(std::get<i64>(Val));
 
-    // Find Member | Procura o Membro.
-    auto It = std::find(
-        Members.begin(),
-        Members.end(),
-        MemberID
-    );
-
-    if (It == Members.end())
+    auto it = Defaults.find(MemberID);
+    if (it == Defaults.end())
         OrbitLog::Error(
             "virtual_machine.cpp",
             "Member does not belong to TypeObject.",
@@ -600,36 +594,7 @@ ByteValue ByteTypeObj::Acess(
             RUNTIME_ERROR
         );
 
-    // Get Member ID | Pega o ID do Membro.
-    ui16 ID = *It;
-
-    // Get Member Slot | Pega o Slot do Membro.
-    ui32 Slot = 0;
-
-    if (BC->ExportSlots.contains(chunkId))
-    {
-        auto& Slots = BC->ExportSlots.at(chunkId);
-
-        if (Slots.contains(ID))
-            Slot = Slots.at(ID);
-        else
-            OrbitLog::Error(
-                "virtual_machine.cpp",
-                "Cannot Resolve Member Slot.",
-                true,
-                RUNTIME_ERROR
-            );
-    }
-    else
-        OrbitLog::Error(
-            "virtual_machine.cpp",
-            "Cannot Resolve TypeObject Chunk Context.",
-            true,
-            RUNTIME_ERROR
-        );
-
-    // Return Member | Retorna o Membro.
-    return BC->Chunks[chunkId]->Instructions[Slot]->R1;
+    return it->second;
 }
 
 // Acess A Member of an Instance | Acessa o Membro da Instância.
@@ -663,19 +628,21 @@ ByteValue ByteInstance::Acess(
             RUNTIME_ERROR
         );
 
-    if (!Frame)
+    // Get Instance Slot | Pega o Slot da Instância.
+    ui32 Slot = It->second;
+
+    // Find Slot | Procura o Slot.
+    auto SlotIt = Slots.find(Slot);
+    if (SlotIt == Slots.end())
         OrbitLog::Error(
             "virtual_machine.cpp",
-            "Expected <FRAME> In Instance Member Acess",
+            "Cannot Resolve Instance Member Slot.",
             true,
             RUNTIME_ERROR
         );
 
-    // Resolve Local Slot | Resolve o Slot do Local.
-    i64 LocalSlot = It->second;
-
-    // Return Value From Locals | Retorna o Valor dos Locals.
-    return Frame->Locals[static_cast<ui32>(LocalSlot)];
+    // Return Value From Instance Slot | Retorna o Valor do Slot da Instância.
+    return SlotIt->second;
 }
 
 // =========== CORE =========== //
@@ -1570,10 +1537,21 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 Obj->Chunk   = CurrChunk;
                 Obj->chunkId = BC.currChunk;
 
+                // Captura valores padrão dos locais
+                VM_Frame* Frame = CallStack->GetTop();
+                for (ui16 mid : Obj->Members)
+                {
+                    auto it = Frame->Locals.find(mid);
+                    if (it != Frame->Locals.end())
+                        Obj->Defaults[mid] = it->second;
+                    else
+                        Obj->Defaults[mid] = NullLitVal{};
+                }
+
                 // Inherith | Herança.
                 if (std::get<bool>(CurrInst->L1))
                 {
-                    if (!CurrChunk->ChunkTypeObj)
+                    if (CurrChunk->LastObj.empty())
                         OrbitLog::Error(
                             "virtual_machine.cpp",
                             "Type inheritance was requested, but no parent object was provided.",
@@ -1581,7 +1559,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                             RUNTIME_ERROR
                         );
 
-                    ByteObject* ParentObj = CurrChunk->ChunkTypeObj;
+                    ByteObject* ParentObj = CurrChunk->LastObj.back();
                     ByteTypeObj* Parent = static_cast<ByteTypeObj*>(ParentObj);
 
                     // Set Parent | Define o Pai.
@@ -1591,10 +1569,14 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                     Obj->Parents = Parent->Parents;
                     Obj->Parents.push_back(Obj);
 
-                    // Inherit Members | Herda os Membros.
-                    vec<ui16> OwnMembers = Obj->Members;
+                    // Inherit Defaults | Herda os valores padrão.
+                    for (auto& [mid, val] : Parent->Defaults)
+                    {
+                        if (Obj->Defaults.find(mid) == Obj->Defaults.end())
+                            Obj->Defaults[mid] = val;
+                    }
 
-                    Obj->Members = OwnMembers;
+                    // Inherit Members | Herda os Membros.
                     for (ui16 mid : Parent->Members)
                     {
                         if (std::find(Obj->Members.begin(), Obj->Members.end(), mid) == Obj->Members.end())
@@ -1606,7 +1588,8 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                     // Root Type | Tipo Raiz.
                     Obj->Parent = nullptr;
                     Obj->Parents.push_back(Obj);
-                } // fazer funcs de objetos retornarem o proprio objeto no lugar de null
+                }
+
                 switch (std::get<i64>(CurrInst->L2)) // Set Type | Define o Tipo:
                 {
                     case 1: Obj->ObjType = TypeObjType::STRUCT; break;
@@ -1833,23 +1816,29 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 const i64 typePos =
                     static_cast<i64>(Frame->Stack.size())
                     - arg_count - 1;
+
                 if (typePos < 0 || !holds_alt<ByteTypeObj*>(Frame->Stack[typePos]))
-                    OrbitLog::Error("virtual_machine.cpp", "Invalid Object Construction: Expected A Type Object", true, RUNTIME_ERROR);
+                    OrbitLog::Error(
+                        "virtual_machine.cpp",
+                        "Invalid Object Construction: Expected A Type Object",
+                        true,
+                        RUNTIME_ERROR
+                    );
 
                 // Take Object And Create Instance | Pega o Objeto e Cria a Instancia.
                 ByteTypeObj* TypeObj = std::get<ByteTypeObj*>(Frame->Stack[typePos]);
-                
                 ByteInstance* Instance = Memory.New<ByteInstance>();
                 Instance->Object = TypeObj;
 
                 // Initialize Instance Members | Inicializa os Membros da Instancia.
-                // Locals holds the value | Locals guarda o valor.
-                // Members only stores the slot | Members só guarda o slot.
                 for (ui16 MemberID : TypeObj->Members)
                 {
-                    i64 LocalSlot = static_cast<i64>(Frame->Locals.size());
-                    Frame->Locals[static_cast<ui32>(LocalSlot)] = NullLitVal{};
-                    Instance->Members[MemberID] = LocalSlot;
+                    // Create Instance Slot | Cria o Slot da Instância.
+                    ui32 Slot = static_cast<ui32>(Instance->Slots.size());
+                    Instance->Slots[Slot] = TypeObj->Defaults[MemberID];
+
+                    // Store Member Slot | Armazena o Slot do Membro.
+                    Instance->Members[MemberID] = Slot;
                 }
 
                 // Create Parent Instances | Cria as Instâncias dos Pais.
@@ -1860,11 +1849,15 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                     ByteInstance* ParentInst = Memory.New<ByteInstance>();
                     ParentInst->Object = CurrParent;
 
+                    // Initialize Parent Members | Inicializa os Membros do Pai.
                     for (ui16 MemberID : CurrParent->Members)
                     {
-                        i64 LocalSlot = static_cast<i64>(Frame->Locals.size());
-                        Frame->Locals[static_cast<ui32>(LocalSlot)] = NullLitVal{};
-                        ParentInst->Members[MemberID] = LocalSlot;
+                        // Create Parent Instance Slot | Cria o Slot da Instância do Pai.
+                        ui32 Slot = static_cast<ui32>(ParentInst->Slots.size());
+                        ParentInst->Slots[Slot] = CurrParent->Defaults[MemberID];
+
+                        // Store Parent Member Slot | Armazena o Slot do Membro do Pai.
+                        ParentInst->Members[MemberID] = Slot;
                     }
 
                     ParentInst->Descr = GC.Register(
@@ -1880,7 +1873,6 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                     ParentInst->SelfRef = ParentSelf;
 
                     Instance->Parents.push_back(ParentInst);
-
                     CurrParent = CurrParent->Parent;
                 }
 
@@ -1893,7 +1885,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                             Instance->Parents[i + 1]->SelfRef;
                     }
                 }
-                
+
                 // Register Instance | Registra a Instância.
                 Instance->Descr = GC.Register(
                     Instance,

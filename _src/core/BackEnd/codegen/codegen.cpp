@@ -552,7 +552,6 @@ void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& St
 {
     // NameSpace Shortcut | Atalho de NameSpace.
     Symbol* NsSym = nullptr;
-
     if (Node->Object)
     {
         if (Node->Object->Type == NodeType::IDENTIFIER)
@@ -611,21 +610,16 @@ void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& St
 
         if (S == SymbolTypes::IDENTIFIER or S == SymbolTypes::VAR or S == SymbolTypes::PARAM)
             Inst = CodeGenUtils::CreateInst
-                (Node, OpCode::LOAD_LOCAL, State.GetLocal(RuntimeSym->Id), 0, Data, Memory);
-        else if (S == SymbolTypes::FN)
-        {
-            i64 id = BC.Functions.at(RuntimeSym->packId).at(RuntimeSym->Name);
-            Inst = CodeGenUtils::CreateInst
-                (Node, OpCode::LOAD_FN, id, BC.Chunks[id]->ParamCount, Data, Memory);
-        } else if (S == SymbolTypes::NAMESPACE)
+                (Node, OpCode::LOAD_LOCAL, static_cast<i64>(State.GetLocal(RuntimeSym->Id)), static_cast<i64>(0), Data, Memory);
+        else if (S == SymbolTypes::NAMESPACE)
             // NameSpaces are only a shortcut | NameSpaces são apenas um atalho.
             return;
         else if (S == SymbolTypes::LIBRARY or S == SymbolTypes::MODULE)
             Inst = CodeGenUtils::CreateInst
-                (Node, OpCode::LOAD_PACK, RuntimeSym->contextId, 0, Data, Memory);
+                (Node, OpCode::LOAD_PACK, static_cast<i64>(RuntimeSym->contextId), static_cast<i64>(0), Data, Memory);
         else if (S == SymbolTypes::STRUCT or S == SymbolTypes::CLASS)
             Inst = CodeGenUtils::CreateInst
-                (Node, OpCode::LOAD_PACK, RuntimeSym->contextId, 0, Data, Memory);    
+                (Node, OpCode::LOAD_PACK, static_cast<i64>(RuntimeSym->contextId), static_cast<i64>(0), Data, Memory);    
         else
         {
             OrbitLog::Error
@@ -638,21 +632,24 @@ void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& St
 
         // Load Member | Carrega o Membro.
         Inst = CodeGenUtils::CreateInst
-            (Node, OpCode::LOAD_MEMBER, MemberSym->Id, 0, Data, Memory);
+            (Node, OpCode::LOAD_MEMBER, static_cast<i64>(MemberSym->Id), static_cast<i64>(0), Data, Memory);
 
         BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 
         // Generate Inst | Gera a Instrução.
         Inst =
-            CodeGenUtils::CreateInst(Node, OpCode::GET_MEMBER, 0, 0, Data, Memory);
+            CodeGenUtils::CreateInst(Node, OpCode::GET_MEMBER, static_cast<i64>(0), static_cast<i64>(0), Data, Memory);
 
         BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
         return;
     }
 
     // Compile Object | Compila o Objeto.
-    TypeInfo &T = SARes.ExpressionTypes[Node->Object];
-    Symbol* O = T.Father;
+    Symbol* O = nullptr;
+    auto It = SARes.ExpressionTypes.find(Node->Object);
+    if (It != SARes.ExpressionTypes.end())
+        O = It->second.Father;
+
     CompileNode(Node->Object, State, BC, SARes, Data, Memory, O);
 
     // Compile Member | Compila o Membro.
@@ -660,30 +657,37 @@ void CodeGenerator::CompileMemberAccess(MemberAccessNode* Node, CodeGenState& St
         return;
 
     IdentifierNode* MemberId = static_cast<IdentifierNode*>(Node->Member);
-    if ((O->Name == "self" or O->Name == "super") and MemberId->Name == "this")
+    if (O && (O->Name == "self" or O->Name == "super") and MemberId->Name == "this")
     {
         // Load Member | Carrega o Membro.
         ByteInstruction* Inst = CodeGenUtils::CreateInst
-            (Node, OpCode::GET_THIS, MemberId->Name, 0, Data, Memory);
+            (Node, OpCode::GET_THIS, MemberId->Name, static_cast<i64>(0), Data, Memory);
         BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
         return;
-    } else if ((O->Name == "self" or O->Name == "super") and MemberId->Name == "super") {
+    } else if (O && (O->Name == "self" or O->Name == "super") and MemberId->Name == "super") {
 
         // Load Member | Carrega o Membro.
         ByteInstruction* Inst = CodeGenUtils::CreateInst
-            (Node, OpCode::GET_SUPER, MemberId->Name, 0, Data, Memory);
+            (Node, OpCode::GET_SUPER, MemberId->Name, static_cast<i64>(0), Data, Memory);
         BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
+        return;
+    }
+
+    Symbol* MemberSym = CodeGenUtils::GetSym(MemberId, SARes);
+    if (!MemberSym)
+    {
+        OrbitLog::Error("codegen.cpp", "Cannot Find Member: "+MemberId->Name, true, 404);
         return;
     }
 
     // Load Member | Carrega o Membro.
     ByteInstruction* Inst = CodeGenUtils::CreateInst
-        (Node, OpCode::LOAD_MEMBER, MemberId->Name, 0, Data, Memory);
+        (Node, OpCode::LOAD_MEMBER, static_cast<i64>(MemberSym->Id), static_cast<i64>(0), Data, Memory);
 
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
     // Generate Inst | Gera a Instrução.
     Inst =
-        CodeGenUtils::CreateInst(Node, OpCode::GET_MEMBER, 0, 0, Data, Memory);
+        CodeGenUtils::CreateInst(Node, OpCode::GET_MEMBER, static_cast<i64>(0), static_cast<i64>(0), Data, Memory);
     BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 }
 
@@ -871,23 +875,23 @@ void CodeGenerator::CompileVarDecl(VarDeclNode* Node, CodeGenState& State, ByteC
     Symbol* Sym = CodeGenUtils::GetSym(Node, SARes);
     if (Sym && Sym->read_count == 0 and Sym->write_count == 0 and !Node->export_decl)
         return;
-
     // Compile | Compila:
     if (Node->probablyObj)
     {
         // Compile Object Type | Compila o tipo do objeto.
-        CompileNode(Node->Val, State, BC, SARes, Data, Memory);
-
-        // Compile Constructor Arguments | Compila os argumentos do construtor.
         ui32 ArgCount = 0;
         if (Node->Val and Node->Val->Type == NodeType::FN_CALL)
         {
             FunctionCall* Call = static_cast<FunctionCall*>(Node->Val);
+            CompileNode(Call->Callee, State, BC, SARes, Data, Memory);
+            
+            // Compile Constructor Arguments | Compila os argumentos do construtor.
             ArgCount = Call->Args.size();
             for (ExpressionNode* Arg : Call->Args)
                 CompileNode(Arg, State, BC, SARes, Data, Memory);
         }
-
+        else
+            CompileNode(Node->Val, State, BC, SARes, Data, Memory);
         // Create Instance | Cria a instância.
         ByteInstruction* NewInst = CodeGenUtils::
             CreateInst(Node, OpCode::NEW_OBJ, ArgCount, 0, Data, Memory);
