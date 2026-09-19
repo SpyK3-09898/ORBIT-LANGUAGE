@@ -1033,6 +1033,18 @@ void CodeGenerator::CompileStructDecl(StructDeclNode* Node, CodeGenState& State,
         BC.Chunks[BC.currChunk]->Instructions.push_back(PathInst);
     }
 
+    // Empilha os valores padrão (na ordem dos Members)
+    for (ui16 id : Ids)
+    {
+        if (!State.HasLocal(id))
+            continue;
+
+        ui32 slot = State.GetLocal(id);
+        ByteInstruction* Load = CodeGenUtils::CreateInst(
+            Node, OpCode::LOAD_LOCAL, static_cast<i64>(slot), 0, Data, Memory);
+        BC.Chunks[State.currChunk]->Instructions.push_back(Load);
+    }
+
     // Set Inst | Define A Instrução.
     ByteInstruction* Inst = CodeGenUtils::CreateInst
         (Node, OpCode::BUILD_TYPE_OBJ, ID, Ids, Data, Memory);
@@ -1088,6 +1100,18 @@ void CodeGenerator::CompileClassDecl(ClassDeclNode* Node, CodeGenState& State, B
         ByteInstruction* PathInst = CodeGenUtils::CreateInst
             (Node, OpCode::SET_TPATH, 0, 0, Data, Memory);
         BC.Chunks[BC.currChunk]->Instructions.push_back(PathInst);
+    }
+
+    // Empilha os valores padrão (na ordem dos Members)
+    for (ui16 id : Ids)
+    {
+        if (!State.HasLocal(id))
+            continue;
+
+        ui32 slot = State.GetLocal(id);
+        ByteInstruction* Load = CodeGenUtils::CreateInst(
+            Node, OpCode::LOAD_LOCAL, static_cast<i64>(slot), 0, Data, Memory);
+        BC.Chunks[State.currChunk]->Instructions.push_back(Load);
     }
 
     // Set Inst | Define A Instrução.

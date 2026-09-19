@@ -1537,13 +1537,13 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 Obj->Chunk   = CurrChunk;
                 Obj->chunkId = BC.currChunk;
 
-                // Captura valores padrão dos locais
+                // Captura valores padrão da stack (ordem inversa: topo = último membro)
                 VM_Frame* Frame = CallStack->GetTop();
-                for (ui16 mid : Obj->Members)
+                for (int i = static_cast<int>(Obj->Members.size()) - 1; i >= 0; --i)
                 {
-                    auto it = Frame->Locals.find(mid);
-                    if (it != Frame->Locals.end())
-                        Obj->Defaults[mid] = it->second;
+                    ui16 mid = Obj->Members[i];
+                    if (!Frame->Stack.empty())
+                        Obj->Defaults[mid] = Frame->Pop();
                     else
                         Obj->Defaults[mid] = NullLitVal{};
                 }
@@ -1571,17 +1571,12 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
 
                     // Inherit Defaults | Herda os valores padrão.
                     for (auto& [mid, val] : Parent->Defaults)
-                    {
                         if (Obj->Defaults.find(mid) == Obj->Defaults.end())
                             Obj->Defaults[mid] = val;
-                    }
-
                     // Inherit Members | Herda os Membros.
                     for (ui16 mid : Parent->Members)
-                    {
                         if (std::find(Obj->Members.begin(), Obj->Members.end(), mid) == Obj->Members.end())
-                            Obj->Members.push_back(mid);
-                    }
+                            Obj->Members.push_back(mid);    
                 }
                 else
                 {
