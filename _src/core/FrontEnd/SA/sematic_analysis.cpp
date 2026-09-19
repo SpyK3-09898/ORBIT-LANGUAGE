@@ -808,6 +808,131 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
             TypeKind LKind = LInfo->Kind;
             TypeKind RKind = RInfo->Kind;
 
+            auto IsTypeObject = [](TypeKind Kind) -> bool
+            {
+                return (
+                    Kind == TypeKind::STRUCT ||
+                    Kind == TypeKind::CLASS ||
+                    Kind == TypeKind::STRUCT_INST ||
+                    Kind == TypeKind::CLASS_INST
+                );
+            };
+
+            auto GetOverloadName = [](Operator Op) -> string
+            {
+                switch (Op)
+                {
+                    case Operator::ADD: return "add";
+                    case Operator::SUB: return "sub";
+                    case Operator::MUL: return "mul";
+                    case Operator::DIV: return "div";
+                    case Operator::MOD: return "mod";
+                    case Operator::POWER: return "power";
+
+                    case Operator::EQUAL: return "equal";
+                    case Operator::NOT_EQUAL: return "not_equal";
+                    case Operator::LESS: return "less";
+                    case Operator::GREATER: return "greater";
+                    case Operator::LESS_EQUAL: return "less_equal";
+                    case Operator::GREATER_EQUAL: return "greater_equal";
+
+                    case Operator::AND: return "and";
+                    case Operator::OR: return "or";
+                    case Operator::NOT: return "not";
+
+                    case Operator::ASSIGN: return "assign";
+                    case Operator::ADD_ASSIGN: return "add_assign";
+                    case Operator::SUB_ASSIGN: return "sub_assign";
+                    case Operator::MUL_ASSIGN: return "mul_assign";
+                    case Operator::DIV_ASSIGN: return "div_assign";
+                    case Operator::MOD_ASSIGN: return "mod_assign";
+                    case Operator::POWER_ASSIGN: return "power_assign";
+
+                    default: return "";
+                }
+            };
+
+            auto GetOverload = [](TypeInfo* Info, string Name) -> FnDecl*
+            {
+                if (!Info || !Info->Father || !Info->Father->Owner)
+                    return nullptr;
+
+                if (Info->Father->Type == SymbolTypes::STRUCT)
+                {
+                    StructDeclNode* Struct =
+                        static_cast<StructDeclNode*>(Info->Father->Owner);
+
+                    if (!Struct)
+                        return nullptr;
+
+                    auto It = Struct->overloads.find(Name);
+
+                    if (It != Struct->overloads.end())
+                        return It->second;
+                }
+
+                if (Info->Father->Type == SymbolTypes::CLASS)
+                {
+                    ClassDeclNode* Class =
+                        static_cast<ClassDeclNode*>(Info->Father->Owner);
+
+                    if (!Class)
+                        return nullptr;
+
+                    auto It = Class->overloads.find(Name);
+
+                    if (It != Class->overloads.end())
+                        return It->second;
+                }
+
+                return nullptr;
+            };
+
+            auto IsComparison = [](Operator Op) -> bool
+            {
+                return (
+                    Op == Operator::EQUAL ||
+                    Op == Operator::NOT_EQUAL ||
+                    Op == Operator::LESS ||
+                    Op == Operator::GREATER ||
+                    Op == Operator::LESS_EQUAL ||
+                    Op == Operator::GREATER_EQUAL
+                );
+            };
+
+            string OverloadName = GetOverloadName(Binary.Op);
+
+            if (
+                OverloadName != "" &&
+                (IsTypeObject(LKind) || IsTypeObject(RKind))
+            )
+            {
+                FnDecl* Overload = nullptr;
+
+                if (IsTypeObject(LKind))
+                    Overload = GetOverload(LInfo, OverloadName);
+
+                if (!Overload && IsTypeObject(RKind))
+                    Overload = GetOverload(RInfo, OverloadName);
+
+                if (Overload)
+                {
+                    if (IsComparison(Binary.Op))
+                    {
+                        TInfo->Kind = TypeKind::BOOL;
+                        TInfo->SubKind = SubTypeKind::NONE;
+                    }
+                    else
+                    {
+                        TInfo->Kind = TypeKind::MONO_STATE;
+                        TInfo->SubKind = SubTypeKind::NONE;
+                    }
+
+                    Res.ExpressionTypes[Node] = *TInfo;
+                    return &Res.ExpressionTypes[Node];
+                }
+            }
+
             auto IsComparable = [](TypeKind Kind) -> bool
             {
                 return Kind != TypeKind::UNK &&
@@ -1087,6 +1212,62 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
 
             TypeInfo* OperandInfo = GetExpressionType
             (Un.Operand, State, Res, Data, Memory);
+
+            if (
+                Un.Operator == Operator::NOT &&
+                (
+                    OperandInfo->Kind == TypeKind::STRUCT ||
+                    OperandInfo->Kind == TypeKind::CLASS ||
+                    OperandInfo->Kind == TypeKind::STRUCT_INST ||
+                    OperandInfo->Kind == TypeKind::CLASS_INST
+                )
+            )
+            {
+                FnDecl* Overload = nullptr;
+
+                if (OperandInfo->Father && OperandInfo->Father->Owner)
+                {
+                    if (OperandInfo->Father->Type == SymbolTypes::STRUCT)
+                    {
+                        StructDeclNode* Struct =
+                            static_cast<StructDeclNode*>(OperandInfo->Father->Owner);
+
+                        if (Struct)
+                        {
+                            auto It = Struct->overloads.find("not");
+
+                            if (It != Struct->overloads.end())
+                                Overload = It->second;
+                        }
+                    }
+                    else if (OperandInfo->Father->Type == SymbolTypes::CLASS)
+                    {
+                        ClassDeclNode* Class =
+                            static_cast<ClassDeclNode*>(OperandInfo->Father->Owner);
+
+                        if (Class)
+                        {
+                            auto It = Class->overloads.find("not");
+
+                            if (It != Class->overloads.end())
+                                Overload = It->second;
+                        }
+                    }
+                }
+
+                if (Overload)
+                {
+                    TInfo->Kind = TypeKind::BOOL;
+                    TInfo->SubKind = SubTypeKind::NONE;
+                }
+                else
+                {
+                    TInfo->Kind = TypeKind::UNK;
+                }
+
+                Res.ExpressionTypes[Node] = *TInfo;
+                return &Res.ExpressionTypes[Node];
+            }
 
             switch (Un.Operator)
             {
@@ -2248,6 +2429,176 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
         return;
     }
 
+    if (Node.FType == FuncTypes::CONSTRUCTOR)
+    {
+        Scope* S = SAUtils::InObjScope(State);
+        if (!S or S->Type != BodyTypes::STRUCT or S->Type == BodyTypes::CLASS)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic", 
+                "Expected Type-Object", 
+                "Trying to Initialize A <CONSTRUCTOR> WhitOut A Object", 
+                "Move The <CONSTRUCTOR> To A Valid Scope",
+                Node.pos.line, Node.pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        }
+        if (S->Owner->Type == NodeType::STRUCT_DECL)
+        {
+            StructDeclNode* New = static_cast<StructDeclNode*>(S->Owner);
+            if (New->constructor)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Semantic", 
+                    "<CONSTRUCTOR> ReDefinition", 
+                    "Trying to Declare A <CONSTRUCTOR>, But AlReady Declared One In: "+std::to_string(New->constructor->pos.line)+":"+std::to_string(New->constructor->pos.collumn), 
+                    "Merge Both <CONSTRUCTOR>s",
+                    Node.pos.line, Node.pos.collumn
+                );
+                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);                
+            }
+        } else if (S->Owner->Type == NodeType::CLASS_DECL)
+        {
+            ClassDeclNode* New = static_cast<ClassDeclNode*>(S->Owner);
+            if (New->constructor)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Semantic", 
+                    "<CONSTRUCTOR> ReDefinition", 
+                    "Trying to Declare A <CONSTRUCTOR>, But AlReady Declared One In: "+std::to_string(New->constructor->pos.line)+":"+std::to_string(New->constructor->pos.collumn), 
+                    "Merge Both <CONSTRUCTOR>s",
+                    Node.pos.line, Node.pos.collumn
+                );
+                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);                
+            }
+        }
+    } else if (Node.FType == FuncTypes::DESTRUCTOR)
+    {
+        Scope* S = SAUtils::InObjScope(State);
+        if (!S or S->Type != BodyTypes::STRUCT or S->Type == BodyTypes::CLASS)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic", 
+                "Expected Type-Object", 
+                "Trying to Initialize A <DESTRUCTOR> WhitOut A Object", 
+                "Move The <DESTRUCTOR To A Valid Scope",
+                Node.pos.line, Node.pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        }
+        if (S->Owner->Type == NodeType::STRUCT_DECL)
+        {
+            StructDeclNode* New = static_cast<StructDeclNode*>(S->Owner);
+            if (New->destructor)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Semantic", 
+                    "<DESTRUCTOR> ReDefinition", 
+                    "Trying to Declare A <DESTRUCTOR>, But AlReady Declared One In: "+std::to_string(New->constructor->pos.line)+":"+std::to_string(New->constructor->pos.collumn), 
+                    "Merge Both <DESTRUCTOR>s",
+                    Node.pos.line, Node.pos.collumn
+                );
+                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);                
+            }
+        } else if (S->Owner->Type == NodeType::CLASS_DECL)
+        {
+            ClassDeclNode* New = static_cast<ClassDeclNode*>(S->Owner);
+            if (New->destructor)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Semantic", 
+                    "<DESTRUCTOR> ReDefinition", 
+                    "Trying to Declare A <DESTRUCTOR>, But AlReady Declared One In: "+std::to_string(New->constructor->pos.line)+std::to_string(New->constructor->pos.collumn), 
+                    "Merge Both <DESTRUCTOR>s",
+                    Node.pos.line, Node.pos.collumn
+                );
+                if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);                
+            }
+        }
+    } else if (Node.FType == FuncTypes::OVERLOAD) 
+    {
+
+        vec<string> Operators = {
+            "add",
+            "sub",
+            "mul",
+            "div",
+            "mod",
+            "power",
+
+            "equal",
+            "not_equal",
+            "less",
+            "greater",
+            "less_equal",
+            "greater_equal",
+
+            "and",
+            "or",
+            "not",
+
+            "assign",
+            "add_assign",
+            "sub_assign",
+            "mul_assign",
+            "div_assign",
+            "mod_assign",
+            "power_assign"
+        };
+        if (std::find(Operators.begin(), Operators.end(), Node.Name) == Operators.end())
+        {
+            OrbitLog::SyntaxLog::SyntaxWarn(
+                "Semantic", 
+                "Unknow OverLoad: "+Node.Name, 
+                "This Operator Does Not Exists",
+                "Check Name Or Add A Valid Name",
+                Node.pos.line, Node.pos.collumn
+            );
+        }
+
+        Scope* S = SAUtils::InObjScope(State);
+        if (!S or S->Type != BodyTypes::STRUCT or S->Type == BodyTypes::CLASS)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic", 
+                "Expected Type-Object", 
+                "Trying to Initialize A <OVERLOAD> WhitOut A Object", 
+                "Move The <OVERLOAD> To A Valid Scope",
+                Node.pos.line, Node.pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        }
+        if (S->Owner->Type == NodeType::STRUCT_DECL)
+        {
+            StructDeclNode* New = static_cast<StructDeclNode*>(S->Owner);
+            if (New->overloads.find(Node.Name) != New->overloads.end()) {
+                auto F = New->overloads.find(Node.Name)->second;
+                OrbitLog::SyntaxLog::SyntaxWarn(
+                    "Semantic", 
+                    "<OVERLOAD> ReWrited: "+Node.Name+" Of: "+New->Name, 
+                    "<OVERLOAD> AlReady Has Been Declared In: "+std::to_string(F->pos.line)+":"+std::to_string(F->pos.collumn),
+                    "Merge <OVERLOAD>s Whit Type Treatment",
+                    Node.pos.line, Node.pos.collumn
+                );
+            }
+            New->overloads[Node.Name] = &Node;
+        } else if (S->Owner->Type == NodeType::CLASS_DECL)
+        {
+            ClassDeclNode* New = static_cast<ClassDeclNode*>(S->Owner);
+            if (New->overloads.find(Node.Name) != New->overloads.end()) {
+                auto F = New->overloads.find(Node.Name)->second;
+                OrbitLog::SyntaxLog::SyntaxWarn(
+                    "Semantic", 
+                    "<OVERLOAD> ReWrited: "+Node.Name+" Of: "+New->Name, 
+                    "<OVERLOAD> AlReady Has Been Declared In: "+std::to_string(F->pos.line)+":"+std::to_string(F->pos.collumn),
+                    "Merge <OVERLOAD>s Whit Type Treatment",
+                    Node.pos.line, Node.pos.collumn
+                );
+            }
+            New->overloads[Node.Name] = &Node;
+        }       
+    }
+
     Symbol* FnSym = SAUtils::CreateSymbol(Node.Name, Node, State, Res, Memory);
     {
         FnSym->Type               = SymbolTypes::FN;
@@ -2726,10 +3077,52 @@ void SemanticAnalizer::LookUpBinary(BinaryNode& Node, SAState& State, SAResult& 
 
     auto IsComparable = [](TypeKind Kind) -> bool
     {
-        return Kind != TypeKind::UNK &&
+        if (
+            Kind != TypeKind::UNK &&
             Kind != TypeKind::MONO_STATE &&
             Kind != TypeKind::NONE &&
-            Kind != TypeKind::FN;
+            Kind != TypeKind::FN
+        ) return true;
+        return false;
+    };
+
+    auto IsTypeObject = [](TypeKind Kind) -> bool
+    {
+        return (
+            Kind == TypeKind::STRUCT ||
+            Kind == TypeKind::CLASS ||
+            Kind == TypeKind::STRUCT_INST ||
+            Kind == TypeKind::CLASS_INST
+        );
+    };
+
+    auto HasOverload = [](TypeInfo* Info, string Name) -> bool
+    {
+        if (!Info || !Info->Father) return false;
+
+        Symbol* Sym = Info->Father;
+
+        if (!Sym->Owner) return false;
+
+        if (Sym->Type == SymbolTypes::STRUCT)
+        {
+            StructDeclNode* Struct = static_cast<StructDeclNode*>(Sym->Owner);
+
+            if (!Struct) return false;
+
+            return Struct->overloads.find(Name) != Struct->overloads.end();
+        }
+
+        if (Sym->Type == SymbolTypes::CLASS)
+        {
+            ClassDeclNode* Class = static_cast<ClassDeclNode*>(Sym->Owner);
+
+            if (!Class) return false;
+
+            return Class->overloads.find(Name) != Class->overloads.end();
+        }
+
+        return false;
     };
 
     auto InvalidOperation = [&]()
@@ -2794,11 +3187,27 @@ void SemanticAnalizer::LookUpBinary(BinaryNode& Node, SAState& State, SAResult& 
         case Operator::EQUAL:
         case Operator::NOT_EQUAL:
         {
+            string OverloadName =
+                Node.Op == Operator::EQUAL
+                ? "equal"
+                : "not_equal";
+
             if (
                 LKind == TypeKind::MONO_STATE ||
-                RKind == TypeKind::MONO_STATE ||
-                (IsComparable(LKind) && IsComparable(RKind))
+                RKind == TypeKind::MONO_STATE
             ) {}
+            else if (IsTypeObject(LKind) || IsTypeObject(RKind))
+            {
+                if (
+                    (IsTypeObject(LKind) && !HasOverload(LInfo, OverloadName)) ||
+                    (IsTypeObject(RKind) && !HasOverload(RInfo, OverloadName))
+                )
+                {
+                    InvalidOperation();
+                    return;
+                }
+            }
+            else if (IsComparable(LKind) && IsComparable(RKind)) {}
             else
             {
                 InvalidOperation();
@@ -2931,8 +3340,88 @@ void SemanticAnalizer::LookUpUnary(UnaryNode& Node, SAState& State, SAResult& Re
 
         case Operator::NOT:
         {
-            TypeKind Kind = GetExpressionType
-            (Node.Operand, State, Res, Data, Memory)->Kind;
+            TypeInfo* Info = GetExpressionType
+            (Node.Operand, State, Res, Data, Memory);
+
+            TypeKind Kind = Info->Kind;
+
+            if (
+                Kind == TypeKind::STRUCT ||
+                Kind == TypeKind::CLASS ||
+                Kind == TypeKind::STRUCT_INST ||
+                Kind == TypeKind::CLASS_INST
+            )
+            {
+                if (
+                    !Info->Father ||
+                    !Info->Father->Owner
+                )
+                {
+                    OrbitLog::SyntaxLog::SyntaxError(
+                        "Semantic",
+                        "Invalid <UNAARY>",
+                        "<NOT> Operator ONLY Can Be In <BOOL> Operations",
+                        "Add a Valid Type or Convert",
+                        Node.pos.line, Node.pos.collumn
+                    );
+
+                    if (!Data.flags.debugMode)
+                        OrbitLog::SyntaxLog::ThrowLog(Data);
+
+                    return;
+                }
+
+                if (Info->Father->Type == SymbolTypes::STRUCT)
+                {
+                    StructDeclNode* Struct =
+                        static_cast<StructDeclNode*>(Info->Father->Owner);
+
+                    if (
+                        !Struct ||
+                        Struct->overloads.find("not") == Struct->overloads.end()
+                    )
+                    {
+                        OrbitLog::SyntaxLog::SyntaxError(
+                            "Semantic",
+                            "Invalid <UNAARY>",
+                            "<NOT> Operator ONLY Can Be In <BOOL> Operations",
+                            "Add a Valid Type or Convert",
+                            Node.pos.line, Node.pos.collumn
+                        );
+
+                        if (!Data.flags.debugMode)
+                            OrbitLog::SyntaxLog::ThrowLog(Data);
+
+                        return;
+                    }
+                }
+                else if (Info->Father->Type == SymbolTypes::CLASS)
+                {
+                    ClassDeclNode* Class =
+                        static_cast<ClassDeclNode*>(Info->Father->Owner);
+
+                    if (
+                        !Class ||
+                        Class->overloads.find("not") == Class->overloads.end()
+                    )
+                    {
+                        OrbitLog::SyntaxLog::SyntaxError(
+                            "Semantic",
+                            "Invalid <UNAARY>",
+                            "<NOT> Operator ONLY Can Be In <BOOL> Operations",
+                            "Add a Valid Type or Convert",
+                            Node.pos.line, Node.pos.collumn
+                        );
+
+                        if (!Data.flags.debugMode)
+                            OrbitLog::SyntaxLog::ThrowLog(Data);
+
+                        return;
+                    }
+                }
+
+                return;
+            }
 
             if (
                 Kind != TypeKind::BOOL &&
@@ -3590,6 +4079,45 @@ void SemanticAnalizer::LookUpRange(RangeNode& Node, SAState& State, SAResult& Re
 // LookUp Fn Call Node | Olha um FnCallNode.
 void SemanticAnalizer::LookUpFunctionCall(FunctionCall& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
+    string N = SAUtils::GetIValueName(Node.Callee);
+    vec<string> Operators = {
+        "add",
+        "sub",
+        "mul",
+        "div",
+        "mod",
+        "power",
+
+        "equal",
+        "not_equal",
+        "less",
+        "greater",
+        "less_equal",
+        "greater_equal",
+
+        "and",
+        "or",
+        "not",
+
+        "assign",
+        "add_assign",
+        "sub_assign",
+        "mul_assign",
+        "div_assign",
+        "mod_assign",
+        "power_assign"
+    };
+
+    if (N == "constructor" or N == "destructor" or std::find(Operators.begin(), Operators.end(), N) != Operators.end())
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic", 
+            "Trying To Call A Reserved Member", 
+            "Member: "+N+" Is Reserved In ORBIT, And Cannot Call Manually", 
+            "~", Node.pos.line, Node.pos.line
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+    }
     LookUpNode(*Node.Callee, State, Res, Data, Memory);
     for (ExpressionNode* Arg : Node.Args)
         if (Arg)

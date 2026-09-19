@@ -58,6 +58,7 @@ enum class BodyTypes : uint8_t;
 enum class LoopTypes : uint8_t;
 enum class MutableTypes : uint8_t;
 enum class LiteralTypes : uint8_t;
+enum class FuncTypes: uint8_t;
 
 enum class Operator : uint8_t;
 
@@ -227,6 +228,15 @@ enum class LiteralTypes: uint8_t
     TABLE_BOOL,
     TABLE_NONE,
     TABLE_NULL,   
+};
+
+// Function Types | Tipos de Função.
+enum class FuncTypes: uint8_t
+{
+    FUNCTION,
+    CONSTRUCTOR,
+    DESTRUCTOR,
+    OVERLOAD
 };
 
 // Math Operators | Operadores de Matematica.
@@ -611,10 +621,11 @@ struct VarDeclNode : DeclarationNode
 // Functions Decl | Declaração de Função.
 struct FnDecl : DeclarationNode
 {
-    bool haveReturn=false;
-    string Name;
-    BodyNode* Body;
     vec<ExpressionNode*> Params;
+    BodyNode* Body;
+    FuncTypes FType;
+    string Name;
+    bool haveReturn=false;
 
     // CONSTRUCTOR | CONSTRUTOR
     FnDecl(NodePos P)
@@ -640,6 +651,11 @@ struct StructDeclNode : DeclarationNode
     // DATA | DADOS.
     BodyNode* Body;
     ExpressionNode* Extend;
+
+    FnDecl* constructor;
+    FnDecl* destructor;
+    unord_map<string, FnDecl*> overloads;
+
     string Name;
 
     // CONSTRUCTOR | CONSTRUTOR
@@ -653,6 +669,11 @@ struct ClassDeclNode : DeclarationNode
     // DATA | DADOS.
     BodyNode* Body;
     ExpressionNode* Extend;
+    
+    FnDecl* constructor;
+    FnDecl* destructor;
+    unord_map<string, FnDecl*> overloads;
+    
     string Name;
 
     // CONSTRUCTOR | CONSTRUTOR

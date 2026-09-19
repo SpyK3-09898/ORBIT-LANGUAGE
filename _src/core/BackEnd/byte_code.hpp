@@ -8,7 +8,6 @@
 
 // INCLUDE HEADERS 'N DEPENDENCES
 #include "../FrontEnd/parser/AST/AST.hpp"
-
 #include "../FrontEnd/lexer/lexer.hpp"
 
 #include "utils/aliases.hpp"
@@ -18,6 +17,8 @@
 #include <cstdint>
 
 // FORWARDS
+class VirtualMachine;
+
 struct Chunk;
 struct VM_Frame;
 struct ByteCode;
@@ -66,7 +67,7 @@ struct ObjectDescr
 
     // Object | Objeto.
     void* Owner;
-	void (*Destroy)(void*, Arena& Memory);
+	void (*Destroy)(void*, Arena& Memory, VirtualMachine* VM);
 
     // UTILS
 
@@ -131,7 +132,7 @@ struct ByteIterator : ByteObject
     ByteIterator(i64 start, i64 end, i32 step)
         : Curr(start - step), End(end), Step(step) {}
     ~ByteIterator() = default;
-    static void Destroy(void* Ptr, Arena& Memory)
+    static void Destroy(void* Ptr, Arena& Memory, VirtualMachine* VM=nullptr)
     {
         ByteIterator* It = static_cast<ByteIterator*>(Ptr);
         It->~ByteIterator();
@@ -175,18 +176,12 @@ struct ByteInstance : ByteObject
     vec<ByteInstance*> Parents;
     unord_map<ui32, ByteValue> Slots;
     unord_map<ui16, ui32> Members;   
+    static i64 destructor_id;
 
     // CONSTRUCTOR & DESTRUCTOR | CONSTRUTOR E DESTRUTOR
     ~ByteInstance() = default;
-    static void Destroy(void* Ptr, Arena& Memory)
-    {
-        //for (ui16 Member : Members)
-        {
-
-        }
-        ByteInstance* Inst = static_cast<ByteInstance*>(Ptr);
-        Inst->~ByteInstance();
-    }
+    ByteInstance();
+    static void Destroy(void* Ptr, Arena& Memory, VirtualMachine* VM=nullptr);
 
     // Member Acess | Acesso de Membros.
     ByteValue Acess
@@ -212,7 +207,7 @@ struct ByteTypeObj : ByteObject
 
     // CONSTRUCTOR & DESTRUCTOR | CONSTRUTOR E DESTRUTOR
     ~ByteTypeObj() = default;
-    static void Destroy(void* Ptr, Arena& Memory)
+    static void Destroy(void* Ptr, Arena& Memory, VirtualMachine* VM=nullptr)
     {
         ByteTypeObj* Obj = static_cast<ByteTypeObj*>(Ptr);
         Obj->~ByteTypeObj();
@@ -243,7 +238,7 @@ struct BytePackage : ByteObject
 
     // GC | CB
     ~BytePackage() = default;
-    static void Destroy(void* Ptr, Arena& Memory)
+    static void Destroy(void* Ptr, Arena& Memory, VirtualMachine* VM=nullptr)
     {
         BytePackage* Pack = static_cast<BytePackage*>(Ptr);
         Pack->~BytePackage();
@@ -255,8 +250,9 @@ struct ByteFn : ByteObject
 {
     ui16 ID;
     ui8 ParamCount=0;
+    ByteSelf* Self=nullptr;
 
-    static void Destroy(void* Ptr, Arena& Memory)
+    static void Destroy(void* Ptr, Arena& Memory, VirtualMachine* VM=nullptr)
     {
         ByteFn* Fn = static_cast<ByteFn*>(Ptr);
         Memory.Delete(Fn);

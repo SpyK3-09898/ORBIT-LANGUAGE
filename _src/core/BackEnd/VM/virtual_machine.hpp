@@ -17,7 +17,6 @@
 #include "tools/console.hpp"
 #include "../../RunTimeData.hpp"
 #include <cstddef>
-class VirtualMachine;
 
 // STRUCTS
 
@@ -121,8 +120,8 @@ class GarbageCollector
         size_t curr_ipdt=0;
 
         VirtualMachine* VM;
-        void Update(ByteCode& BC, InstructionPointer& IP, SAResult& Res, RunTimeData& Data, Arena& Memory);
-        ObjectDescr* Register(void* Object, void (*Destroy)(void*, Arena&), Arena& Memory);
+        void Update(ByteCode& BC, InstructionPointer& IP, SAResult& Res, RunTimeData& Data, Arena& Memory, VirtualMachine* VM);
+        ObjectDescr* Register(void* Object, void (*Destroy)(void*, Arena&, VirtualMachine*), Arena& Memory);
 }; 
 
 // MAIN CLASS | CLASSE PRINCIPAL
@@ -143,6 +142,7 @@ class VirtualMachine
         int RunUnary(ByteValue& O, OpCode Op, ByteCode& BC, InstructionPointer& IP, SAResult& Res, RunTimeData& Data, Arena& Memory);
     public:
 
+        int curr_destructor=999;
         void InitVM(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& Memory);        
 };
 

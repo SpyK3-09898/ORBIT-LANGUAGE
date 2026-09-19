@@ -401,7 +401,7 @@ void CodeGenerator::CompileUnary(UnaryNode* Node, CodeGenState& State, ByteCode&
     // Compile
     CompileNode(Node->Operand, State, BC, SARes, Data, Memory);
 
-    // Main Switch | Switch Principal
+    // Main Switch | Switch Principal.
     OpCode op = OpCode::NEG;
     switch (Node->Operator) {
         case Operator::SUB:
@@ -409,8 +409,74 @@ void CodeGenerator::CompileUnary(UnaryNode* Node, CodeGenState& State, ByteCode&
             break;
 
         case Operator::NOT:
-            op = OpCode::NOT; 
+        {
+            string Name = "not";
+            FnDecl* Overload = nullptr;
+
+            auto It = SARes.ExpressionTypes.find(Node->Operand);
+            if (It != SARes.ExpressionTypes.end())
+            {
+                TypeInfo* Info = &It->second;
+
+                if (
+                    Info->Father &&
+                    Info->Father->Owner &&
+                    (Info->Kind == TypeKind::STRUCT_INST or Info->Kind == TypeKind::CLASS_INST)
+                )
+                {
+                    if (Info->Father->Owner->Type == NodeType::STRUCT_DECL)
+                    {
+                        StructDeclNode* Type = static_cast<StructDeclNode*>(Info->Father->Owner);
+                        auto O = Type->overloads.find(Name);
+
+                        if (O != Type->overloads.end())
+                            Overload = O->second;
+                    }
+                    else if (Info->Father->Owner->Type == NodeType::CLASS_DECL)
+                    {
+                        ClassDeclNode* Type = static_cast<ClassDeclNode*>(Info->Father->Owner);
+                        auto O = Type->overloads.find(Name);
+
+                        if (O != Type->overloads.end())
+                            Overload = O->second;
+                    }
+                }
+            }
+
+            if (Overload)
+            {
+                Symbol* FnSym = CodeGenUtils::GetSym(Overload, SARes);
+
+                ByteInstruction* LoadFn =
+                    CodeGenUtils::CreateInst(
+                        Node,
+                        OpCode::LOAD_FN,
+                        FnSym->Id,
+                        BC.Chunks[FnSym->packId]->ParamCount,
+                        Data,
+                        Memory
+                    );
+
+                BC.Chunks[State.currChunk]->Instructions.push_back(LoadFn);
+
+                ByteInstruction* Call =
+                    CodeGenUtils::CreateInst(
+                        Node,
+                        OpCode::CALL,
+                        0,
+                        0,
+                        Data,
+                        Memory
+                    );
+
+                BC.Chunks[State.currChunk]->Instructions.push_back(Call);
+
+                return;
+            }
+
+            op = OpCode::NOT;
             break;
+        }
 
         default:
             if (Data.flags.generateLog)
@@ -431,6 +497,122 @@ void CodeGenerator::CompileUnary(UnaryNode* Node, CodeGenState& State, ByteCode&
 // Compile Binary Operation | Compila Operação Binária
 void CodeGenerator::CompileBinary(BinaryNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
+    string OverloadName;
+
+    switch (Node->Op)
+    {
+        case Operator::ADD:           OverloadName = "add";           break;
+        case Operator::SUB:           OverloadName = "sub";           break;
+        case Operator::MUL:           OverloadName = "mul";           break;
+        case Operator::DIV:           OverloadName = "div";           break;
+        case Operator::MOD:           OverloadName = "mod";           break;
+        case Operator::POWER:         OverloadName = "power";         break;
+
+        case Operator::EQUAL:         OverloadName = "equal";         break;
+        case Operator::NOT_EQUAL:     OverloadName = "not_equal";     break;
+        case Operator::LESS:          OverloadName = "less";          break;
+        case Operator::GREATER:       OverloadName = "greater";       break;
+        case Operator::LESS_EQUAL:    OverloadName = "less_equal";    break;
+        case Operator::GREATER_EQUAL: OverloadName = "greater_equal"; break;
+
+        case Operator::AND:           OverloadName = "and";           break;
+        case Operator::OR:            OverloadName = "or";            break;
+
+        case Operator::ADD_ASSIGN:    OverloadName = "add_assign";    break;
+        case Operator::SUB_ASSIGN:    OverloadName = "sub_assign";    break;
+        case Operator::MUL_ASSIGN:    OverloadName = "mul_assign";    break;
+        case Operator::DIV_ASSIGN:    OverloadName = "div_assign";    break;
+        case Operator::MOD_ASSIGN:    OverloadName = "mod_assign";    break;
+        case Operator::POWER_ASSIGN:  OverloadName = "power_assign";  break;
+
+        default:
+            break;
+    }
+
+    if (!OverloadName.empty())
+    {
+        FnDecl* Overload = nullptr;
+
+        auto FindOverload = [&](ExpressionNode* Expr) -> FnDecl*
+        {
+            auto It = SARes.ExpressionTypes.find(Expr);
+            if (It == SARes.ExpressionTypes.end())
+                return nullptr;
+
+            TypeInfo* Info = &It->second;
+
+            if (
+                !Info->Father ||
+                !Info->Father->Owner ||
+                (Info->Kind != TypeKind::STRUCT_INST and Info->Kind != TypeKind::CLASS_INST)
+            )
+                return nullptr;
+
+            if (Info->Father->Owner->Type == NodeType::STRUCT_DECL)
+            {
+                StructDeclNode* Type = static_cast<StructDeclNode*>(Info->Father->Owner);
+                auto O = Type->overloads.find(OverloadName);
+
+                if (O != Type->overloads.end())
+                    return O->second;
+            }
+            else if (Info->Father->Owner->Type == NodeType::CLASS_DECL)
+            {
+                ClassDeclNode* Type = static_cast<ClassDeclNode*>(Info->Father->Owner);
+                auto O = Type->overloads.find(OverloadName);
+
+                if (O != Type->overloads.end())
+                    return O->second;
+            }
+
+            return nullptr;
+        };
+
+        // Left Object Overload | Sobrecarga Do Objeto Da Esquerda.
+        Overload = FindOverload(Node->L);
+
+        // Right Object Overload | Sobrecarga Do Objeto Da Direita.
+        if (!Overload)
+            Overload = FindOverload(Node->R);
+
+        if (Overload)
+        {
+            Symbol* FnSym = CodeGenUtils::GetSym(Overload, SARes);
+
+            ByteInstruction* LoadFn =
+                CodeGenUtils::CreateInst(
+                    Node,
+                    OpCode::LOAD_FN,
+                    FnSym->Id,
+                    BC.Chunks[FnSym->packId]->ParamCount,
+                    Data,
+                    Memory
+                );
+
+            BC.Chunks[State.currChunk]->Instructions.push_back(LoadFn);
+
+            // Use The Other Operand As Argument | Usa O Outro Operando Como Argumento.
+            if (FindOverload(Node->L) == Overload)
+                CompileNode(Node->R, State, BC, SARes, Data, Memory);
+            else
+                CompileNode(Node->L, State, BC, SARes, Data, Memory);
+
+            ByteInstruction* Call =
+                CodeGenUtils::CreateInst(
+                    Node,
+                    OpCode::CALL,
+                    1,
+                    0,
+                    Data,
+                    Memory
+                );
+
+            BC.Chunks[State.currChunk]->Instructions.push_back(Call);
+
+            return;
+        }
+    }
+
     if (Node->Op == Operator::AND)
     {
         CompileNode(Node->L, State, BC, SARes, Data, Memory);
@@ -468,6 +650,7 @@ void CodeGenerator::CompileBinary(BinaryNode* Node, CodeGenState& State, ByteCod
     }
 
     CompileNode(Node->L, State, BC, SARes, Data, Memory);
+
     CompileNode(Node->R, State, BC, SARes, Data, Memory);
 
     // Main Switch | Switch Principal.
@@ -1050,6 +1233,16 @@ void CodeGenerator::CompileStructDecl(StructDeclNode* Node, CodeGenState& State,
         (Node, OpCode::BUILD_TYPE_OBJ, ID, Ids, Data, Memory);
     Inst->L1 = !!Node->Extend; 
     Inst->L2 = 1;
+    Inst->LX1 = 999;
+    Inst->LX2 = 999;
+
+    auto It = BC.Functions[Sym->packId].find("constructor");
+    auto It2 = BC.Functions[Sym->packId].find("destructor");
+    if (It != BC.Functions[Sym->packId].end())
+        Inst->LX1 = It->second;
+    if (It2 != BC.Functions[Sym->packId].end())
+        Inst->LX2 = It2->second;
+
     BC.Chunks[BC.currChunk]->Instructions.push_back(Inst);
 }
 
@@ -1119,6 +1312,15 @@ void CodeGenerator::CompileClassDecl(ClassDeclNode* Node, CodeGenState& State, B
         (Node, OpCode::BUILD_TYPE_OBJ, ID, Ids, Data, Memory);
     Inst->L1 = !!Node->Extend;
     Inst->L2 = 2;
+    Inst->LX1 = 999;
+    Inst->LX2 = 999;
+
+    auto It = BC.Functions[Sym->packId].find("constructor");
+    auto It2 = BC.Functions[Sym->packId].find("destructor");
+    if (It != BC.Functions[Sym->packId].end())
+        Inst->LX1 = It->second;
+    if (It2 != BC.Functions[Sym->packId].end())
+        Inst->LX2 = It2->second;
     BC.Chunks[BC.currChunk]->Instructions.push_back(Inst);
 }
 

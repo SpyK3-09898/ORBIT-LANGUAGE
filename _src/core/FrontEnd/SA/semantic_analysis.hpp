@@ -124,8 +124,9 @@ struct Symbol
     string Name;
     CodePosition Pos;
 
-    SymbolTypes Type = SymbolTypes::UNK;
-    MutableTypes Mut = MutableTypes::MUT;
+    SymbolTypes  Type  = SymbolTypes::UNK;
+    MutableTypes Mut   = MutableTypes::MUT;
+    FuncTypes    FType = FuncTypes::FUNCTION;
 
     ui32 read_count  = 0;
     ui32 write_count = 0;

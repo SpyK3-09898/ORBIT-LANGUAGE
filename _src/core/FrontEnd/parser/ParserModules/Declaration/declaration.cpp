@@ -268,15 +268,19 @@ namespace DeclUtils
     )
     {
         // ERROR PREVENTIONS | PREVENÇÃO DE ERROS.
-        if (Inst.Tokens.size() == 1)
+        string EntryName = Entry->Lexeme(Data);
+
+        if (Inst.Tokens.size() == 0 &&
+            EntryName != "constructor" &&
+            EntryName != "destructor")
         {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",
                 "Expected <IDENTIFIER> After 'func'",
                 "Functions Need A Name to Call After",
                 "Complete <FUNCTION> Statement",
-                Inst.Tokens[0]->pos.line,
-                Inst.Tokens[0]->pos.collumn
+                Entry->pos.line,
+                Entry->pos.collumn
             );
             if (!Data.flags.debugMode)
                 OrbitLog::SyntaxLog::ThrowLog(Data);
@@ -284,44 +288,93 @@ namespace DeclUtils
                 ::MakeNode<ErrorDeclNode>(State, Res, Memory);
         }
 
-        Token* E = Inst.Advance();
-        ParserUtils::UpdateStatePos(E, State);
+        // FUNCTION TYPE | TIPO DA FUNÇÃO.
+        FuncTypes FType = FuncTypes::FUNCTION;
 
-        // ERROR PREVENTIONS | PREVENÇÃO DE ERROS.
-        if (!Inst.Peek() || Inst.Peek()->Type != TokenType::IDENTIFIER)
+        if (EntryName == "constructor")
+            FType = FuncTypes::CONSTRUCTOR;
+        else if (EntryName == "destructor")
+            FType = FuncTypes::DESTRUCTOR;
+        else if (EntryName == "overload")
+            FType = FuncTypes::OVERLOAD;
+
+        // PARSE FUNCTION NAME | PARSEIA O NOME DA FUNÇÃO.
+        Token* E = nullptr;
+        string Name;
+
+        if (FType == FuncTypes::CONSTRUCTOR || FType == FuncTypes::DESTRUCTOR)
         {
-            OrbitLog::SyntaxLog::SyntaxError(
-                "Parsing",
-                "Expected <IDENTIFIER> After 'func'",
-                "Functions Need A Name to Call After",
-                "Complete <FUNCTION> Statement",
-                Inst.Tokens[0]->pos.line,
-                Inst.Tokens[0]->pos.collumn
-            );
-            if (!Data.flags.debugMode)
-                OrbitLog::SyntaxLog::ThrowLog(Data);
-            return ParserUtils
-                ::MakeNode<ErrorDeclNode>(State, Res, Memory);
+            Name = FType == FuncTypes::CONSTRUCTOR
+                ? "construtor"
+                : "destrutor";
+
+            if (!Inst.Peek() || Inst.Peek()->Type != TokenType::LPARENT)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Parsing",
+                    "Expected '(' After Function Name",
+                    "Functions Need '(' After The Name",
+                    "Complete <FUNCTION> Statement",
+                    Entry->pos.line,
+                    Entry->pos.collumn
+                );
+                if (!Data.flags.debugMode)
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                return ParserUtils
+                    ::MakeNode<ErrorDeclNode>(State, Res, Memory);
+            }
         }
-
-        E = Inst.Advance();
-        ParserUtils::UpdateStatePos(E, State);
-        string Name = E->Lexeme(Data);
-
-        if (!Inst.Peek() || Inst.Peek()->Type != TokenType::LPARENT)
+        else
         {
-            OrbitLog::SyntaxLog::SyntaxError(
-                "Parsing",
-                "Expected '(' After Function Name",
-                "Functions Need '(' After The Name",
-                "Complete <FUNCTION> Statement",
-                E->pos.line,
-                E->pos.collumn
-            );
-            if (!Data.flags.debugMode)
-                OrbitLog::SyntaxLog::ThrowLog(Data);
-            return ParserUtils
-                ::MakeNode<ErrorDeclNode>(State, Res, Memory);
+            E = Inst.Advance();
+            ParserUtils::UpdateStatePos(E, State);
+
+            // ERROR PREVENTIONS | PREVENÇÃO DE ERROS.
+            if (!E || E->Type != TokenType::IDENTIFIER)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Parsing",
+                    "Expected <IDENTIFIER> After Function Type",
+                    "Functions Need A Name After 'func' Or 'overload'",
+                    "Complete <FUNCTION> Statement",
+                    Entry->pos.line,
+                    Entry->pos.collumn
+                );
+                if (!Data.flags.debugMode)
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                return ParserUtils
+                    ::MakeNode<ErrorDeclNode>(State, Res, Memory);
+            }
+
+            Name = E->Lexeme(Data);
+
+            if (Name == "constructor" || Name == "destructor")
+            {
+                OrbitLog::SyntaxLog::SyntaxWarn(
+                    "Parsing",
+                    "Use '" + Name + "()' Instead Of 'func " + Name + "()'",
+                    "Trying to Declare A Special Func In A Normal Func",
+                    "Special Functions Should Be Declared Directly",
+                    E->pos.line,
+                    E->pos.collumn
+                );
+            }
+
+            if (!Inst.Peek() || Inst.Peek()->Type != TokenType::LPARENT)
+            {
+                OrbitLog::SyntaxLog::SyntaxError(
+                    "Parsing",
+                    "Expected '(' After Function Name",
+                    "Functions Need '(' After The Name",
+                    "Complete <FUNCTION> Statement",
+                    E->pos.line,
+                    E->pos.collumn
+                );
+                if (!Data.flags.debugMode)
+                    OrbitLog::SyntaxLog::ThrowLog(Data);
+                return ParserUtils
+                    ::MakeNode<ErrorDeclNode>(State, Res, Memory);
+            }
         }
 
         E = Inst.Advance();
@@ -392,6 +445,9 @@ namespace DeclUtils
         ParseBasicDeclaration
         (*Decl, Inst, State, Res, Data, ExprParser, Memory); 
         
+        // SET FUNCTION TYPE | DEFINE O TIPO DA FUNÇÃO.
+        Decl->FType = FType;
+        
         if (!Cond.empty())
         {
             int level = 0;
@@ -437,7 +493,7 @@ namespace DeclUtils
                 i++;
             }
 
-            // Last Param (After Last Comma or Single Param) | Último Parâmetro (Depois da Última Vírgula ou Parâmetro Único).
+            // Last Param (After Last Comma or Single Param) | Último Parâmetro (Depois da Vírgula ou Parâmetro Único).
             if (start < (int)Cond.size())
             {
                 Instruction CondInst(
@@ -451,9 +507,7 @@ namespace DeclUtils
             }
         }
         else
-        {
             Decl->Params = {};
-        }
 
         // CREATE BODY | CRIA O BODY.
         BodyNode* Body = ParserUtils::MakeNode<BodyNode>(State, Res, Memory);
@@ -464,10 +518,8 @@ namespace DeclUtils
         Decl->Body = Body;
         Decl->Name = Name;
         for (Token* Mod : Inst.Modifiers)
-        {
             if (Mod->Lexeme(Data) == "export")
                 Decl->export_decl=true;
-        }
 
         // UPDATE STACK | ATUALIZA A PILHA
         State.consumedInst = true;
@@ -478,7 +530,7 @@ namespace DeclUtils
         // FINALIZE | FINALIZA.
         return Decl;
     }
-
+    
     // PARSE NAMESPACE DECLARATIONS | PARSEIA DECLARAÇÃO DE NAMESPACES
     DeclarationNode* ParseNamespace(
         Token* Entry,
@@ -1015,7 +1067,7 @@ DeclarationNode* DeclarationParser::ParseDeclaration(
 {
     Token* Entry = Inst.Tokens[0];
     string Lexeme = Entry->Lexeme(Data);
-    switch (Entry->Type) 
+    switch (Entry->Type) // Main Switch | Switch Principal:
     {
         case TokenType::KEYWORD:
             if (Lexeme == "var")
@@ -1051,7 +1103,7 @@ DeclarationNode* DeclarationParser::ParseDeclaration(
                     Memory,
                     2
                 );         
-            else if (Lexeme == "func" or Lexeme == "fn")
+            else if (Lexeme == "func" or Lexeme == "fn" or Lexeme == "constructor" or Lexeme == "destructor" or Lexeme == "overload")
                 return DeclUtils::ParseFnDecl(
                     Entry, 
                     Inst, 

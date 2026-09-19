@@ -451,7 +451,7 @@ namespace VM_Utils {
 // =========== GARBAGE-COLLECTOR ========== //
 
 // Update GC | Atualiza o GC.
-void GarbageCollector::Update(ByteCode& BC, InstructionPointer& IP, SAResult& Res, RunTimeData& Data, Arena& Memory)
+void GarbageCollector::Update(ByteCode& BC, InstructionPointer& IP, SAResult& Res, RunTimeData& Data, Arena& Memory, VirtualMachine* VM)
 {
     if (Data.fileSize <= _8KB or Memory.UsedMemory() <= _256KB)
         return;
@@ -484,7 +484,7 @@ void GarbageCollector::Update(ByteCode& BC, InstructionPointer& IP, SAResult& Re
             if (std::find(StackObjs.begin(), StackObjs.end(), Descr) == StackObjs.end())
             {
                 It = Descriptions.erase(It);
-                Descr->Destroy(Descr->Owner, Memory);
+                Descr->Destroy(Descr->Owner, Memory, VM);
                 continue;
             }
 
@@ -493,7 +493,7 @@ void GarbageCollector::Update(ByteCode& BC, InstructionPointer& IP, SAResult& Re
 }
 
 // Register A New Object | Regista Um Novo Objeto.
-ObjectDescr* GarbageCollector::Register(void* Object, void (*Destroy)(void*, Arena&), Arena& Memory)
+ObjectDescr* GarbageCollector::Register(void* Object, void (*Destroy)(void*, Arena&, VirtualMachine*), Arena& Memory)
 {
     ObjectDescr* Descr = Memory.New<ObjectDescr>();
 
@@ -643,6 +643,20 @@ ByteValue ByteInstance::Acess(
 
     // Return Value From Instance Slot | Retorna o Valor do Slot da Instância.
     return SlotIt->second;
+}
+
+// Byte Instance Constructor | Construtor De Instancias.
+i64 ByteInstance::destructor_id = 999;
+ByteInstance::ByteInstance()
+{ destructor_id = 999; }
+
+// Destroy The Instance | Destroi A Instanica
+void ByteInstance::Destroy(void* Ptr, Arena& Memory, VirtualMachine* VM)
+{
+    VM->curr_destructor = destructor_id;
+
+    ByteInstance* Inst = static_cast<ByteInstance*>(Ptr);
+    Inst->~ByteInstance();
 }
 
 // =========== CORE =========== //
@@ -1147,6 +1161,29 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                     PrintLn("  ["+std::to_string(i)+"]: ", VM_Utils::ConvertByteToString(Val), ",\n");
                 else PrintLn("  ["+std::to_string(i)+"]: ", VM_Utils::ConvertByteToString(Val), "\n");
             }
+        }
+
+        // Others | Outros:
+        if (curr_destructor != 999)
+        {
+            if (Data.flags.vmConsoleDebug)
+                PrintLn("CHANGING CHUNK(DESTRUCTOR-ID): ", curr_destructor);
+            VM_Frame* Frame = CallStack->GetTop();
+
+            VM_Frame* New = Memory.New<VM_Frame>();
+            New->Back = Frame;
+            New->retChunk = BC.currChunk;
+            New->SelfRef = Frame->SelfRef;
+
+            BC.currChunk = curr_destructor;
+            curr_destructor = 999;
+
+            CallStack->Push(New, &IP);
+
+            IP.Index = 0;
+            codeSize = BC.Chunks[BC.currChunk]->Instructions.size();
+
+            continue;
         }
 
         // Main Switch | Switch Principal:
@@ -1807,6 +1844,9 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             {
                 // Take Data | Pega os Dados.
                 const i64 arg_count = std::get<i64>(CurrInst->R1);
+                const i64 constructor_id = std::get<i64>(CurrInst->LX1);
+                const i64 destructor_id = std::get<i64>(CurrInst->LX2);
+    
                 VM_Frame* Frame = CallStack->GetTop();
                 const i64 typePos =
                     static_cast<i64>(Frame->Stack.size())
@@ -1823,6 +1863,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 // Take Object And Create Instance | Pega o Objeto e Cria a Instancia.
                 ByteTypeObj* TypeObj = std::get<ByteTypeObj*>(Frame->Stack[typePos]);
                 ByteInstance* Instance = Memory.New<ByteInstance>();
+                Instance->destructor_id = destructor_id;
                 Instance->Object = TypeObj;
 
                 // Initialize Instance Members | Inicializa os Membros da Instancia.
@@ -1847,7 +1888,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                     // Initialize Parent Members | Inicializa os Membros do Pai.
                     for (ui16 MemberID : CurrParent->Members)
                     {
-                        // Create Parent Instance Slot | Cria o Slot da Instância do Pai.
+                        // Create Parent Instance Slot | Cria o Slot do Membro do Pai.
                         ui32 Slot = static_cast<ui32>(ParentInst->Slots.size());
                         ParentInst->Slots[Slot] = CurrParent->Defaults[MemberID];
 
@@ -1872,14 +1913,20 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 }
 
                 // Link Super Chain | Liga a Cadeia de Super.
-                if (Instance->Parents.size() >= 2)
-                {
-                    for (size_t i = 0; i + 1 < Instance->Parents.size(); ++i)
-                    {
+                if (Instance->Parents.size() >= 2) 
+                    for (size_t i = 0; i + 1 < Instance->Parents.size(); ++i) 
                         Instance->Parents[i]->SelfRef->Super =
                             Instance->Parents[i + 1]->SelfRef;
-                    }
-                }
+
+                // Create Self | Cria o Self.
+                ByteSelf* Self = Memory.New<ByteSelf>();
+                Self->This = Instance;
+                Self->Super = nullptr;
+
+                if (!Instance->Parents.empty())
+                    Self->Super = Instance->Parents.front()->SelfRef;
+
+                Instance->SelfRef = Self;
 
                 // Register Instance | Registra a Instância.
                 Instance->Descr = GC.Register(
@@ -1888,15 +1935,42 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                     Memory
                 );
 
+                // Take Constructor Args | Pega os Argumentos do Construtor.
+                vec<ByteValue> ConstructorArgs;
+                for (i64 i = 0; i < arg_count; ++i)
+                    ConstructorArgs.push_back(Frame->Stack[typePos + 1 + i]);
                 // Remove TypeObj And Args | Remove TypeObj e Args.
                 for (i64 i = 0; i < arg_count + 1; ++i)
                     Frame->Pop();
 
+                // Store Instance | Armazena a Instância.
                 Frame->PushBack(Instance);
                 BC.CurrentTypes.push_back(Instance);
+
+                // Call Constructor | Chama o Construtor.
+                if (constructor_id != 999)
+                {
+                    VM_Frame* New = Memory.New<VM_Frame>();
+                    New->Back = Frame;
+                    New->retChunk = BC.currChunk;
+                    New->SelfRef = Instance->SelfRef;
+
+                    if (Data.flags.vmConsoleDebug)
+                        PrintLn("CHANGING CHUNK(CONSTRUCTOR-ID): ", constructor_id);
+                    for (i64 i = 0; i < arg_count; ++i)
+                        New->Locals[i] = ConstructorArgs[i];
+
+                    BC.currChunk = constructor_id;
+                    CallStack->Push(New, &IP);
+                    IP.Index = 0;
+                    codeSize = BC.Chunks[BC.currChunk]->Instructions.size();
+
+                    continue;
+                }
+
                 break;
             }
-            
+
             // ITERS:
             // Add '.InEnd()' Result in Stack | Adiciona o Resultado a Função: '.InEnd()' Na Stack.
             case OpCode::ITER_HAS_NEXT: 
@@ -1914,7 +1988,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 CallStack->GetTop()->PushBack(It->HasNext());
                 break;
             }
-            case OpCode::ITER_NEXT: // Advance Iterator | Avança o Iterador.
+            case OpCode::ITER_NEXT: // Advance Iterator | Avança o Iterador:
             {
                 ByteValue& Val = CallStack->GetTop()->Stack.back();
 
@@ -2034,12 +2108,14 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 i64 fnPos = static_cast<i64>(CallStack->GetTop()->Stack.size()) - argCount - 1;
                 
                 ByteFn* B_Fn = std::get<ByteFn*>(CallStack->GetTop()->Stack[fnPos]);
-                
+
                 // Create A New Frame | Cria um Novo Quadro.
                 VM_Frame* New = Memory.New<VM_Frame>();
                 New->Back = CallStack->GetTop();
                 New->retChunk = BC.currChunk;
 
+                if (Data.flags.vmConsoleDebug)
+                    PrintLn("CHANGING CHUNK(FN-POS): ", fnPos);
                 // Define Args | Define os Argumentos.
                 for (int i = 0; i < B_Fn->ParamCount; i++)
                 {
@@ -2053,14 +2129,13 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 for (int i = 0; i < argCount; i++)
                     CallStack->GetTop()->Pop();
 
-                // Remove a função da stack também
                 CallStack->GetTop()->Pop();
 
                 // Finalize | Finalize:
                 BC.currChunk = B_Fn->ID;
                 CallStack->Push(New, &IP);
 
-                IP.Index = 0; // começa do início da função
+                IP.Index = 0;
                 codeSize = BC.Chunks[BC.currChunk]->Instructions.size();
 
                 continue;
@@ -2101,7 +2176,7 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             auto Start = std::chrono::high_resolution_clock::now();
 
             GC.curr_ipdt = 0;
-            GC.Update(BC, IP, Res, Data, Memory);
+            GC.Update(BC, IP, Res, Data, Memory, this);
 
             if (calcExecTime)
             {

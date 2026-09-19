@@ -1024,7 +1024,7 @@ ParseResult Parser::InitP(LexResult& LRes, RunTimeData& Data, Arena& Memory)
             State.Bodys.back()->pos.line,
             State.Bodys.back()->pos.collumn
         );
-        if (Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
     }
 
     if (Data.flags.generateLog)
