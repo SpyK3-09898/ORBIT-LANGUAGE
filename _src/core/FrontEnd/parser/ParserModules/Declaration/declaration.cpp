@@ -305,8 +305,11 @@ namespace DeclUtils
         if (FType == FuncTypes::CONSTRUCTOR || FType == FuncTypes::DESTRUCTOR)
         {
             Name = FType == FuncTypes::CONSTRUCTOR
-                ? "construtor"
-                : "destrutor";
+                ? "constructor"
+                : "destructor";
+
+            Token* Kw = Inst.Advance();
+            ParserUtils::UpdateStatePos(Kw, State);
 
             if (!Inst.Peek() || Inst.Peek()->Type != TokenType::LPARENT)
             {
@@ -315,8 +318,8 @@ namespace DeclUtils
                     "Expected '(' After Function Name",
                     "Functions Need '(' After The Name",
                     "Complete <FUNCTION> Statement",
-                    Entry->pos.line,
-                    Entry->pos.collumn
+                    Kw->pos.line,
+                    Kw->pos.collumn
                 );
                 if (!Data.flags.debugMode)
                     OrbitLog::SyntaxLog::ThrowLog(Data);

@@ -1573,6 +1573,8 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                 Obj->Members = std::get<vec<ui16>>(CurrInst->R2);
                 Obj->Chunk   = CurrChunk;
                 Obj->chunkId = BC.currChunk;
+                Obj->constructor_id = std::get<i64>(CurrInst->LX1);
+                Obj->destructor_id  = std::get<i64>(CurrInst->LX2);
 
                 // Captura valores padrão da stack (ordem inversa: topo = último membro)
                 VM_Frame* Frame = CallStack->GetTop();
@@ -1844,8 +1846,6 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
             {
                 // Take Data | Pega os Dados.
                 const i64 arg_count = std::get<i64>(CurrInst->R1);
-                const i64 constructor_id = std::get<i64>(CurrInst->LX1);
-                const i64 destructor_id = std::get<i64>(CurrInst->LX2);
     
                 VM_Frame* Frame = CallStack->GetTop();
                 const i64 typePos =
@@ -1861,10 +1861,14 @@ int VirtualMachine::Run(ByteCode& BC, SAResult& Res, RunTimeData& Data, Arena& M
                     );
 
                 // Take Object And Create Instance | Pega o Objeto e Cria a Instancia.
-                ByteTypeObj* TypeObj = std::get<ByteTypeObj*>(Frame->Stack[typePos]);
-                ByteInstance* Instance = Memory.New<ByteInstance>();
+                ByteTypeObj* TypeObj    = std::get<ByteTypeObj*>(Frame->Stack[typePos]);
+                ByteInstance* Instance  = Memory.New<ByteInstance>();
+
+                const i64 constructor_id = TypeObj->constructor_id;
+                const i64 destructor_id  = TypeObj->destructor_id;
+
                 Instance->destructor_id = destructor_id;
-                Instance->Object = TypeObj;
+                Instance->Object        = TypeObj;
 
                 // Initialize Instance Members | Inicializa os Membros da Instancia.
                 for (ui16 MemberID : TypeObj->Members)

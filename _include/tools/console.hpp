@@ -187,7 +187,6 @@ namespace OrbitLog {
                 for (LogObj Obj : Logs)
                 {
                     if (Obj.type != LogTypes::TYPE) continue;
-
                     Type(Obj.origin, Obj.mess);
                 }
         }

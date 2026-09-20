@@ -182,7 +182,6 @@ struct ByteInstance : ByteObject
     ~ByteInstance() = default;
     ByteInstance();
     static void Destroy(void* Ptr, Arena& Memory, VirtualMachine* VM=nullptr);
-
     // Member Acess | Acesso de Membros.
     ByteValue Acess
         (ByteValue& Val, ByteInstruction& CurrInst, ByteCode* BC, RunTimeData& Data, VM_Frame* Frame=nullptr) 
@@ -201,6 +200,9 @@ struct ByteTypeObj : ByteObject
     
     ByteTypeObj* Parent;
     TypeObjType ObjType;
+
+    i64 constructor_id = 999;
+    i64 destructor_id = 999;
     
     ui8 chunkId=0;
     ui32 SymbolCount=0;
