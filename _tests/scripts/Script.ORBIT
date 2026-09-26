@@ -1,12 +1,2 @@
 
-_library __MAIN__;
-
-struct X:
-
-    public var y = 15;
-    constructor():
-        echo cout 10;
-    end
-end
-
-obj I = new X();
+_method Dual;

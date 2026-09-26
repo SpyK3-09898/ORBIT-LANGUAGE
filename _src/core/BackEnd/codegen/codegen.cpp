@@ -447,12 +447,14 @@ void CodeGenerator::CompileUnary(UnaryNode* Node, CodeGenState& State, ByteCode&
             {
                 Symbol* FnSym = CodeGenUtils::GetSym(Overload, SARes);
 
+                i64 fnId = BC.Functions.at(FnSym->packId).at(Overload->Name);
+
                 ByteInstruction* LoadFn =
                     CodeGenUtils::CreateInst(
                         Node,
                         OpCode::LOAD_FN,
-                        FnSym->Id,
-                        BC.Chunks[FnSym->packId]->ParamCount,
+                        fnId,
+                        BC.Chunks[fnId]->ParamCount,
                         Data,
                         Memory
                     );
@@ -463,7 +465,7 @@ void CodeGenerator::CompileUnary(UnaryNode* Node, CodeGenState& State, ByteCode&
                     CodeGenUtils::CreateInst(
                         Node,
                         OpCode::CALL,
-                        0,
+                        1,
                         0,
                         Data,
                         Memory
@@ -498,7 +500,6 @@ void CodeGenerator::CompileUnary(UnaryNode* Node, CodeGenState& State, ByteCode&
 void CodeGenerator::CompileBinary(BinaryNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
 {
     string OverloadName;
-
     switch (Node->Op)
     {
         case Operator::ADD:           OverloadName = "add";           break;
@@ -579,12 +580,14 @@ void CodeGenerator::CompileBinary(BinaryNode* Node, CodeGenState& State, ByteCod
         {
             Symbol* FnSym = CodeGenUtils::GetSym(Overload, SARes);
 
+            i64 fnId = BC.Functions.at(FnSym->packId).at(Overload->Name);
+
             ByteInstruction* LoadFn =
                 CodeGenUtils::CreateInst(
                     Node,
                     OpCode::LOAD_FN,
-                    FnSym->Id,
-                    BC.Chunks[FnSym->packId]->ParamCount,
+                    fnId,
+                    BC.Chunks[fnId]->ParamCount,
                     Data,
                     Memory
                 );
@@ -1108,7 +1111,10 @@ void CodeGenerator::CompileFnDecl(FnDecl* Node, CodeGenState& State, ByteCode& B
         OrbitLog::Error("codegen.cpp", "Cannot Find Function Symbol: "+Node->Name, true, 404);
         return;
     }
-    if (!State.DefinitionRecord.empty())
+    if (!State.DefinitionRecord.empty()
+        && Node->FType != FuncTypes::CONSTRUCTOR
+        && Node->FType != FuncTypes::DESTRUCTOR
+        && Node->FType != FuncTypes::OVERLOAD)
         State.DefinitionRecord.back().push_back(Sym->Id);
 
     // Create Chunk | Cria a Chunk
@@ -1213,10 +1219,9 @@ void CodeGenerator::CompileStructDecl(StructDeclNode* Node, CodeGenState& State,
         CompileNode(Node->Extend, State, BC, SARes, Data, Memory);
         ByteInstruction* PathInst = CodeGenUtils::CreateInst
             (Node, OpCode::SET_TPATH, 0, 0, Data, Memory);
-        BC.Chunks[BC.currChunk]->Instructions.push_back(PathInst);
+        BC.Chunks[State.currChunk]->Instructions.push_back(PathInst);
     }
 
-    // Empilha os valores padrão (na ordem dos Members)
     for (ui16 id : Ids)
     {
         if (!State.HasLocal(id))
@@ -1230,20 +1235,47 @@ void CodeGenerator::CompileStructDecl(StructDeclNode* Node, CodeGenState& State,
 
     // Set Inst | Define A Instrução.
     ByteInstruction* Inst = CodeGenUtils::CreateInst
-        (Node, OpCode::BUILD_TYPE_OBJ, ID, Ids, Data, Memory);
+        (Node, OpCode::BUILD_TYPE_OBJ, static_cast<i64>(ID), Ids, Data, Memory);
     Inst->L1 = !!Node->Extend; 
-    Inst->L2 = 1;
-    Inst->LX1 = 999;
-    Inst->LX2 = 999;
+    Inst->L2 = static_cast<i64>(1);
+    Inst->LX1 = static_cast<i64>(999);
+    Inst->LX2 = static_cast<i64>(999);
 
-    auto It = BC.Functions[Sym->packId].find("constructor");
-    auto It2 = BC.Functions[Sym->packId].find("destructor");
-    if (It != BC.Functions[Sym->packId].end())
-        Inst->LX1 = It->second;
-    if (It2 != BC.Functions[Sym->packId].end())
-        Inst->LX2 = It2->second;
+    if (Node->constructor)
+    {
+        Symbol* CtorSym = CodeGenUtils::GetSym(Node->constructor, SARes);
+        if (CtorSym)
+        {
+            auto It = BC.Functions[CtorSym->packId].find("constructor");
+            if (It != BC.Functions[CtorSym->packId].end())
+                Inst->LX1 = static_cast<i64>(It->second);
+        }
+    }
+    if (std::get<i64>(Inst->LX1) == 999)
+    {
+        auto It = BC.Functions[Sym->packId].find("constructor");
+        if (It != BC.Functions[Sym->packId].end())
+            Inst->LX1 = static_cast<i64>(It->second);
+    }
 
-    BC.Chunks[BC.currChunk]->Instructions.push_back(Inst);
+    if (Node->destructor)
+    {
+        Symbol* DtorSym = CodeGenUtils::GetSym(Node->destructor, SARes);
+        if (DtorSym)
+        {
+            auto It2 = BC.Functions[DtorSym->packId].find("destructor");
+            if (It2 != BC.Functions[DtorSym->packId].end())
+                Inst->LX2 = static_cast<i64>(It2->second);
+        }
+    }
+    if (std::get<i64>(Inst->LX2) == 999)
+    {
+        auto It2 = BC.Functions[Sym->packId].find("destructor");
+        if (It2 != BC.Functions[Sym->packId].end())
+            Inst->LX2 = static_cast<i64>(It2->second);
+    }
+
+    BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 }
 
 // Compile Type Objects Definitions(Class)
@@ -1292,10 +1324,9 @@ void CodeGenerator::CompileClassDecl(ClassDeclNode* Node, CodeGenState& State, B
         CompileNode(Node->Extend, State, BC, SARes, Data, Memory);
         ByteInstruction* PathInst = CodeGenUtils::CreateInst
             (Node, OpCode::SET_TPATH, 0, 0, Data, Memory);
-        BC.Chunks[BC.currChunk]->Instructions.push_back(PathInst);
+        BC.Chunks[State.currChunk]->Instructions.push_back(PathInst);
     }
 
-    // Empilha os valores padrão (na ordem dos Members)
     for (ui16 id : Ids)
     {
         if (!State.HasLocal(id))
@@ -1309,25 +1340,47 @@ void CodeGenerator::CompileClassDecl(ClassDeclNode* Node, CodeGenState& State, B
 
     // Set Inst | Define A Instrução.
     ByteInstruction* Inst = CodeGenUtils::CreateInst
-        (Node, OpCode::BUILD_TYPE_OBJ, ID, Ids, Data, Memory);
+        (Node, OpCode::BUILD_TYPE_OBJ, static_cast<i64>(ID), Ids, Data, Memory);
     Inst->L1 = !!Node->Extend;
-    Inst->L2 = 2;
-    Inst->LX1 = 999;
-    Inst->LX2 = 999;
+    Inst->L2 = static_cast<i64>(2);
+    Inst->LX1 = static_cast<i64>(999);
+    Inst->LX2 = static_cast<i64>(999);
 
-    auto It = BC.Functions[Sym->packId].find("constructor");
-    auto It2 = BC.Functions[Sym->packId].find("destructor");
-    if (It != BC.Functions[Sym->packId].end())
-        Inst->LX1 = It->second;
-    if (It2 != BC.Functions[Sym->packId].end())
-        Inst->LX2 = It2->second;
-    BC.Chunks[BC.currChunk]->Instructions.push_back(Inst);
-}
+    if (Node->constructor)
+    {
+        Symbol* CtorSym = CodeGenUtils::GetSym(Node->constructor, SARes);
+        if (CtorSym)
+        {
+            auto It = BC.Functions[CtorSym->packId].find("constructor");
+            if (It != BC.Functions[CtorSym->packId].end())
+                Inst->LX1 = static_cast<i64>(It->second);
+        }
+    }
+    if (std::get<i64>(Inst->LX1) == 999)
+    {
+        auto It = BC.Functions[Sym->packId].find("constructor");
+        if (It != BC.Functions[Sym->packId].end())
+            Inst->LX1 = static_cast<i64>(It->second);
+    }
 
-// Handle/Compile Declaration Errors | Manipula/Compila Erros em Declarações
-void CodeGenerator::CompileErrorDecl(ErrorDeclNode* Node, CodeGenState& State, ByteCode& BC, SAResult& SARes, RunTimeData& Data, Arena& Memory)
-{
+    if (Node->destructor)
+    {
+        Symbol* DtorSym = CodeGenUtils::GetSym(Node->destructor, SARes);
+        if (DtorSym)
+        {
+            auto It2 = BC.Functions[DtorSym->packId].find("destructor");
+            if (It2 != BC.Functions[DtorSym->packId].end())
+                Inst->LX2 = static_cast<i64>(It2->second);
+        }
+    }
+    if (std::get<i64>(Inst->LX2) == 999)
+    {
+        auto It2 = BC.Functions[Sym->packId].find("destructor");
+        if (It2 != BC.Functions[Sym->packId].end())
+            Inst->LX2 = static_cast<i64>(It2->second);
+    }
 
+    BC.Chunks[State.currChunk]->Instructions.push_back(Inst);
 }
 
 // CONTROL

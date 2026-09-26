@@ -58,7 +58,7 @@ LexResult& Tokenizer::InitT(LexResult& Res, RunTimeData& Data, Arena& Memory)
     };
     vec<string> LitTypes
     {
-        "Int", "Float", "Bool", "String", "Null", "None", "List", "Array"
+        "_Int", "_Float", "_Bool", "_String", "_Null", "_None", "_List", "_Array"
     };
     unord_map<string, TokenType> Others
     {

@@ -1017,7 +1017,7 @@ ExpressionNode* ExpressionParser::Nud(
         return Node;
         }
 
-        // ===== IDENTIFIERS ===== //
+        // ===== IDENTIFIERS & GENERAL ===== //
         case TokenType::IDENTIFIER:
         {
             IdentifierNode* Node = 
@@ -1027,6 +1027,13 @@ ExpressionNode* ExpressionParser::Nud(
                 Data.source.data() + Entry->pos.start,
                 Entry->pos.len
             );
+            return Node;
+        }
+        case TokenType::LIT_TYPE:
+        {
+            LiteralTypeNode* Node = 
+                ParserUtils::MakeNode<LiteralTypeNode>
+                    (State, Res, Memory);
             return Node;
         }
 

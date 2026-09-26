@@ -38,13 +38,15 @@ struct Instruction
             return nullptr;
         return Tokens[pos.curr++];
     }
-    Token* Peek() // Check The Next Token And Not Consumes | Olha o Proximo Token e Não Consome.
+    Token* Peek()   // Check The Next Token And Not Consumes | Olha o Proximo Token e Não Consome.
     {
         if (pos.curr >= Tokens.size())
             return nullptr;
 
         return Tokens[pos.curr];
     }
+    // Check If In End Of Instruction | Checa Se Esta No Fim Da Instrução.
+    bool InEnd() { return pos.curr == Tokens.size(); }
 };
 using InstVec = vec<Instruction>;
 
@@ -52,15 +54,17 @@ using InstVec = vec<Instruction>;
 
 // ENUMS
 
-enum class NodeType : uint8_t;
-enum class BodyTypes : uint8_t;
+enum class NodeType:       uint8_t;
+enum class BodyTypes:      uint8_t;
 
-enum class LoopTypes : uint8_t;
-enum class MutableTypes : uint8_t;
-enum class LiteralTypes : uint8_t;
-enum class FuncTypes: uint8_t;
+enum class LoopTypes:      uint8_t;
+enum class MutableTypes:   uint8_t;
+enum class LiteralTypes:   uint8_t;
+enum class FuncTypes:      uint8_t;
+enum class TypeDefTypes:   uint8_t;
+enum class MethodDefTypes: uint8_t;
 
-enum class Operator : uint8_t;
+enum class Operator :      uint8_t;
 
 // NODES
 
@@ -138,6 +142,7 @@ enum class NodeType : uint8_t
 
     // EXPRESSIONS
     LITERAL,
+    LIT_TYPE,
     IDENTIFIER,
 
     UNARY,
@@ -239,6 +244,22 @@ enum class FuncTypes: uint8_t
     OVERLOAD
 };
 
+// TypeDef Types | Tipos Das Definições de Tipo.
+enum class TypeDefTypes: uint8_t
+{
+    USING,
+    SHARED
+};
+
+// Method Definition Types | Tipos de Definições de Metodos.
+enum class MethodDefTypes: uint8_t
+{
+    IN,
+    OUT,
+    DUAL,
+    SHARED
+};
+
 // Math Operators | Operadores de Matematica.
 enum class Operator: uint8_t
 {
@@ -332,6 +353,7 @@ struct ASTNode
             case NodeType::CLASS_DECL:     return "<CLASS-DECL>";
 
             case NodeType::LITERAL:        return "<LITERAL>";
+            case NodeType::LIT_TYPE:       return "<LITERAL-TYPE>";
             case NodeType::IDENTIFIER:     return "<IDENTIFIER>";
 
             case NodeType::UNARY:          return "<UNARY>";
@@ -424,6 +446,7 @@ struct ExpressionNode : ASTNode
         : ASTNode(T, P) { Category = NodeCat::EXPRESSION; };
 };
 
+// LITERAL VALUE | Valor Literal.
 struct LiteralNode : ExpressionNode
 {
     // DATA
@@ -432,6 +455,14 @@ struct LiteralNode : ExpressionNode
     // CONSTRUCTOR | CONSTRUTOR
     LiteralNode(NodePos P)
         : ExpressionNode(NodeType::LITERAL, P) {};
+};
+
+// LITERAL TYPE | Tipo Literal.
+struct LiteralTypeNode : ExpressionNode
+{
+    // CONSTRUCTOR | CONSTRUTOR
+    LiteralTypeNode(NodePos P)
+        : ExpressionNode(NodeType::LIT_TYPE, P) {};   
 };
 
 // IDENTIFIER | Identificador
@@ -618,6 +649,19 @@ struct VarDeclNode : DeclarationNode
         : DeclarationNode(NodeType::VAR_DECL, P) {}
 };
 
+// Type Define Decls | Definições de Declarações de Tipo.
+struct TypeDefDeclNode : DeclarationNode
+{
+    // DATA
+    string Name;
+    ExpressionNode* TypeToDefine;
+    TypeDefTypes TypeDefType;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    TypeDefDeclNode(NodePos P)
+        : DeclarationNode(NodeType::TYPEDEF_DECL, P) {}    
+};
+
 // Functions Decl | Declaração de Função.
 struct FnDecl : DeclarationNode
 {
@@ -645,7 +689,7 @@ struct NameSpaceDecl : DeclarationNode
         : DeclarationNode(NodeType::NAMESPACE_DECL, P) {};
 };
 
-// Class Decl | Declarações de Classes.
+// Struct Decl | Declarações de Structs.
 struct StructDeclNode : DeclarationNode
 {
     // DATA | DADOS.
@@ -660,7 +704,12 @@ struct StructDeclNode : DeclarationNode
 
     // CONSTRUCTOR | CONSTRUTOR
     StructDeclNode(NodePos& P)
-        : DeclarationNode(NodeType::STRUCT_DECL, P) {};    
+        : DeclarationNode(NodeType::STRUCT_DECL, P),
+            Body(nullptr),
+            Extend(nullptr),
+            constructor(nullptr),
+            destructor(nullptr)
+        {}; 
 };
 
 // Class Decl | Declarações de Classes.
@@ -678,18 +727,12 @@ struct ClassDeclNode : DeclarationNode
 
     // CONSTRUCTOR | CONSTRUTOR
     ClassDeclNode(NodePos& P)
-        : DeclarationNode(NodeType::CLASS_DECL, P) {};    
-};
-
-// Aliases Decl | Declaração de Apelidos.
-struct TypeDefDeclNode : DeclarationNode
-{
-    // DATA
-    string Name;    
-
-    // CONSTRUCTOR | CONSTRUTOR
-    TypeDefDeclNode(NodePos& P)
-        : DeclarationNode(NodeType::TYPEDEF_DECL, P) {};
+        : DeclarationNode(NodeType::CLASS_DECL, P),
+            Body(nullptr),
+            Extend(nullptr),
+            constructor(nullptr),
+            destructor(nullptr)
+        {};   
 };
 
 // ERRORS | ERROS
@@ -864,12 +907,23 @@ struct SpecialNode : ASTNode
 // Library Defines | Definições de Bibliotecas.
 struct LibraryNode : SpecialNode
 {
-    // DATA
+    // DATA | DADOS
     string Name;
 
-    // CONSTRUCTOR
+    // CONSTRUCTOR | CONSTRUTOR
     LibraryNode(NodePos& Pos)
         : SpecialNode(NodeType::LIBRARY, Pos) {};
+};
+
+// Method Defines | Definições de Metodos.
+struct MethodNode : SpecialNode
+{
+    // DATA | DADOS
+    MethodDefTypes MethodType;
+
+    // CONSTRUCTOR | CONSTRUTOR
+    MethodNode(NodePos& Pos)
+        : SpecialNode(NodeType::METHOD, Pos) {};
 };
 
 // Import Defines MetaData | MetaDados de Definições de Importações.

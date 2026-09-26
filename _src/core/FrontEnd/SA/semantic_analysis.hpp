@@ -43,6 +43,7 @@ enum class SymbolTypes: ui8
     ENUM,       // 13
     MODULE,     // 14
     LIBRARY,    // 15
+    TYPEDEF     // 16.
 };
 
 // Kindof Types | kind dos Tipos.
@@ -115,9 +116,10 @@ struct Symbol
     TypeInfo* InferType;
     Scope* DeclaredScope;
     Scope* LinkedScope;
-    Symbol* This   = nullptr;
-    Symbol* Super  = nullptr;
-    ASTNode* Owner = nullptr;
+    Symbol* This     = nullptr;
+    Symbol* Super    = nullptr;
+    Symbol* TypeLink = nullptr;
+    ASTNode* Owner   = nullptr;
 
     vec<pair<string, TypeInfo*>> Objs;
 
@@ -210,11 +212,14 @@ struct SAState
 // Result of Semantic Program | Resultado do Programa de Analise.
 struct SAResult 
 {
-    Scope* GlobalScope = nullptr;
-    vec<Scope*> ScopeTable;
     unord_map<ASTNode*, TypeInfo> ExpressionTypes;
     unord_map<str_view, Symbol*> SymbolTable;
     unord_map<ui16, Symbol*> Symbols;
+
+    Scope* GlobalScope = nullptr;
+    vec<Scope*> ScopeTable;
+
+    MethodDefTypes Method = MethodDefTypes::IN;
 };
 
 // MAIN CLASS | CLASSE PRINCIPAL.
@@ -244,6 +249,7 @@ class SemanticAnalizer
         void LookUpTable(TableValue& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
 
         void LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
+        void LookUpTypeDefDecl(TypeDefDeclNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpFunction(FnDecl& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpNameSpace(NameSpaceDecl& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpStruct(StructDeclNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
@@ -260,6 +266,7 @@ class SemanticAnalizer
         void LookUpEcho(EchoNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         
         void LookUpLibraryDef(LibraryNode& Node, SAState& State, ParseResult& Res, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
+        void LookUpMethod(MethodNode& Node, SAState& State, ParseResult& Res, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
         void LookUpImport(ImportNode& Node, SAState& State, ParseResult& Res, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner=nullptr);
 };
 

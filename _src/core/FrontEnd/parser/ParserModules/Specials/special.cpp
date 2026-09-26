@@ -142,6 +142,62 @@ namespace SpecialUtils
         return Node;
     }
 
+    // Parse Method Defines | Parseia Definições de MEtodos.
+    SpecialNode* ParseMethod(
+        Instruction& Inst, 
+        ParseState& State, 
+        ParseResult& Res,
+        RunTimeData& Data, 
+        ControlParser& CntrlParser,
+        DeclarationParser& DeclParser,
+        ExpressionParser& ExprParser,
+        Arena& Memory
+    )
+    {
+        Token* E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+        
+        MethodDefTypes Type;
+        if (Inst.InEnd()) // Error Prev | Prevenção de Erros:
+            OrbitLog::SyntaxLog::SyntaxWarn(
+                "Parsing", 
+                "Expected <METHOD-TYPE>",
+                "'_method' Need A Method Definition", 
+                "Add A Valid <METHOD-TYPE>",
+                E->pos.line, E->pos.collumn
+            );
+        E = Inst.Advance();
+        string L = E->Lexeme(Data);
+        if (E->Type != TokenType::CNTXT_KW or L != "In" or L != "Out" or L != "Dual") // Error Prev | Prevenção de Erros:
+            OrbitLog::SyntaxLog::SyntaxWarn(
+                "Parsing", 
+                "Expected <METHOD-TYPE>",
+                "'_method' Need A Method Definition", 
+                "Add A Valid <METHOD-TYPE>",
+                E->pos.line, E->pos.collumn
+            );
+        if (L == "In")
+            Type = MethodDefTypes::IN;
+        else if (L == "Out")
+            Type = MethodDefTypes::OUT;
+        else Type = MethodDefTypes::DUAL;
+
+        MethodNode* Node = ParserUtils::
+            MakeNode<MethodNode>(State, Res, Memory);
+        Node->MethodType = Type;
+
+        // ExtraWarn | Aviso Extra
+        if (!Inst.InEnd())
+            OrbitLog::SyntaxLog::SyntaxWarn(
+                "Parsing", 
+                "Extra Tokens Will Be Ignored",
+                "Extra Tokens: "+std::to_string(Inst.Tokens.size()-2)+"/'"+Inst.Advance()->Lexeme(Data)+"'", 
+                "Add A ';' To Separate Instructions",
+                E->pos.line, E->pos.collumn
+            );
+        return Node;
+    }
+
     // Parse Library Defines | Parseia Definições de Bibliotecas.
     SpecialNode* ParseLibrary(
         Instruction& Inst, 

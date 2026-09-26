@@ -279,7 +279,7 @@ namespace SAUtils
     // Return String Version of Kind | Retorna a Versão de String do kind.
     string GetStringOfKind(TypeKind K)
     {
-        switch (K)
+        switch (K) // Main Switch | Switch Principal:
         {
             case TypeKind::UNK:             return "<UNK>";
             case TypeKind::MONO_STATE:      return "<MONO_STATE>";
@@ -304,6 +304,8 @@ namespace SAUtils
 
             case TypeKind::STRUCT:           return "<STRUCT>";
             case TypeKind::CLASS:            return "<CLASS>";
+            case TypeKind::STRUCT_INST:      return "<STRUCT_INST>";
+            case TypeKind::CLASS_INST:       return "<CLASS_INST>";
 
             case TypeKind::ITERATOR:         return "<ITERATOR>";
 
@@ -1356,9 +1358,8 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
         case NodeType::FN_CALL:
         {
             FunctionCall& Call = static_cast<FunctionCall&>(*Node);
+            TypeInfo CalleeInfo = *GetExpressionType(Call.Callee, State, Res, Data, Memory);
 
-            // Resolve Callee | Resolve O Callee.
-            TypeInfo* CalleeInfo = GetExpressionType(Call.Callee, State, Res, Data, Memory);
             Symbol* CalleeSym = nullptr;
             if (Call.Callee && Call.Callee->SymbolId != 0)
             {
@@ -1368,18 +1369,19 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
             }
 
             // Calling A Mold Creates An Instance | Chamar Um Molde Cria Uma Instancia.
-            if (CalleeInfo->Kind == TypeKind::STRUCT)
+            if (CalleeInfo.Kind == TypeKind::STRUCT)
             {
                 TInfo->Kind = TypeKind::STRUCT_INST;
                 TInfo->Father = CalleeSym;
             }
-            else if (CalleeInfo->Kind == TypeKind::CLASS)
+            else if (CalleeInfo.Kind == TypeKind::CLASS)
             {
                 TInfo->Kind = TypeKind::CLASS_INST;
                 TInfo->Father = CalleeSym;
             }
             else // Normal Function -> Unknown Return | Funcao Normal -> Retorno Desconhecido.
                 TInfo->Kind = TypeKind::MONO_STATE;
+
             Res.ExpressionTypes[Node] = *TInfo;
             return &Res.ExpressionTypes[Node];
         }
@@ -1650,7 +1652,6 @@ void SemanticAnalizer::LookUpLibraryDef(LibraryNode& Node, SAState& State, Parse
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
         return;        
     }
-
     if (State.Flags.importsDefined or State.Flags.methodDefined)
     {
         OrbitLog::SyntaxLog::SyntaxError(
@@ -1658,6 +1659,18 @@ void SemanticAnalizer::LookUpLibraryDef(LibraryNode& Node, SAState& State, Parse
             "<LIBRARY>'s Already Defined After <IMPORT> Statement", 
             "<LIBRARY> Statement CAN ONLY Stay BEFORE <IMPORT> Statement", 
             "Move <LIBRARY> Definition To A Valid Place",
+            Node.pos.line, Node.pos.collumn
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;
+    }
+    if (SARes.Method == MethodDefTypes::IN)
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic", 
+            "Trying To Export A Package In A <METHOD-IN>", 
+            "Method Declared Whit A '_method In', But Trying To Export Source", 
+            "Change <METHOD>",
             Node.pos.line, Node.pos.collumn
         );
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
@@ -1671,6 +1684,26 @@ void SemanticAnalizer::LookUpLibraryDef(LibraryNode& Node, SAState& State, Parse
     State.Flags.libraryDefined = true;
 }
 
+// LookUp Method Definitions Nodes | Olha Um Nó de Definição de Metodo.]
+void SemanticAnalizer::LookUpMethod(MethodNode& Node, SAState& State, ParseResult& Res, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner)
+{
+    // Error Prev | Prevenção de Erros.
+    if (!State.CurrScope || State.CurrScope->Type != BodyTypes::PROGRAM)
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic", 
+            "Method Statement WithOut <PROGRAM> Node", 
+            "Method ONLY  Can Say In <GLOBAL-SCOPE>",
+            "Move <METHOD> Statement To A Valid Place",
+            Node.pos.line, Node.pos.collumn 
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;
+    }
+
+    SARes.Method = Node.MethodType;
+}
+
 // LookUp Importation Nodes | Olha Um Nó de Importações.
 void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResult& Res, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
@@ -1682,10 +1715,22 @@ void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResul
             "Import Statement WithOut <PROGRAM> Node", 
             "Imports ONLY  Can Say In <GLOBAL-SCOPE>",
             "Move <IMPORT> Statement To A Valid Place",
-            Node.pos.line, Node.Path->pos.collumn 
+            Node.pos.line, Node.pos.collumn 
         );
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
         return;
+    }
+    if (SARes.Method != MethodDefTypes::IN or SARes.Method != MethodDefTypes::DUAL)
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic", 
+            "Trying To Import In A Close Source", 
+            "Source As Defined Whit 'IN'",
+            "Change <METHOD>",
+            Node.pos.line, Node.pos.collumn 
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;       
     }
 
     // Take Data | Pega os Dados.
@@ -2117,11 +2162,9 @@ void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult
     // ERROR PREV | PREVENÇÃO DE ERROS.
     if (Node.Val)
         LookUpNode(*Node.Val, State, Res, Data, Memory);
-
     TypeInfo* ValTInfo = Node.Val
         ? GetExpressionType(Node.Val, State, Res, Data, Memory)
         : nullptr;
-
     {
         auto err = [&]()
         {
@@ -2313,7 +2356,10 @@ void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult
             }
         }
     }
+
+    // Probably Objects | Provavelmente Um Objeto.
     if (
+        ValTInfo and
         (   ValTInfo->Kind == TypeKind::STRUCT
             or ValTInfo->Kind == TypeKind::CLASS
             or
@@ -2332,6 +2378,7 @@ void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult
         if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
         return;
     } else if (
+        ValTInfo and
         Node.probablyObj 
         and(ValTInfo->Kind != TypeKind::STRUCT and 
             ValTInfo->Kind != TypeKind::CLASS and
@@ -2354,17 +2401,17 @@ void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult
 
     // Symbol | Simbolo.
     Symbol* Sym = SAUtils::CreateSymbol(Node.Name, Node, State, Res, Memory);
-    
+
     // Set Access Flags (Only On Struct/Class) | Define As Flags De Acesso (So Em Struct/Class).
     if (State.CurrScope and
     (State.CurrScope->Type == BodyTypes::STRUCT or State.CurrScope->Type == BodyTypes::CLASS))
         Sym->isPrivated = (Node.AcessType == AcessTypes::PRIVATE);
 
     Sym->Mut = Node.MutType;
-    Sym->Type = SymbolTypes::VAR;
+    Sym->Type = SymbolTypes::TYPEDEF;
     TypeInfo* InferType = SAUtils::GetKindOfLiteral(Node.InferType);
 
-    // Take Kind
+    // Take Kind | Pega o Simbolo.
     Sym->InferType->Kind = InferType->Kind;
     Sym->InferType->SubKind = InferType->SubKind;
     if (SAUtils::InObjScope(State))
@@ -2396,6 +2443,107 @@ void SemanticAnalizer::LookUpVarDecl(VarDeclNode& Node, SAState& State, SAResult
     {
         Sym->TInfo->Kind = Sym->InferType->Kind;
         Sym->TInfo->SubKind = Sym->InferType->SubKind;
+        Sym->inited = true;
+    }
+
+    // Constructor & Destructor | Construtor e Destrutor.
+    if (Node.probablyObj and Sym->TInfo->Father)
+    {
+        Symbol* Mold = Sym->TInfo->Father;
+        bool hasCtorOrDtor = false;
+
+        while (Mold)
+        {
+            if (Mold->Type == SymbolTypes::STRUCT && Mold->Owner)
+            {
+                auto* D = static_cast<StructDeclNode*>(Mold->Owner);
+                if (D->constructor || D->destructor)
+                {
+                    hasCtorOrDtor = true;
+                    break;
+                }
+            }
+            else if (Mold->Type == SymbolTypes::CLASS && Mold->Owner)
+            {
+                auto* D = static_cast<ClassDeclNode*>(Mold->Owner);
+                if (D->constructor || D->destructor)
+                {
+                    hasCtorOrDtor = true;
+                    break;
+                }
+            }
+            else break;
+
+            Symbol* Next = Mold->TInfo ? Mold->TInfo->Father : nullptr;
+            if (!Next or Next == Mold)
+                break;
+            Mold = Next;
+        }
+        if (hasCtorOrDtor)
+            Sym->read_count++;
+    }
+}
+
+// LookUp TypeDef Node | Olha Um TypeDefNode.
+void SemanticAnalizer::LookUpTypeDefDecl(TypeDefDeclNode& Node, SAState& State, SAResult& Res, RunTimeData& Data, Arena& Memory, Symbol* Owner)
+{
+    // Shadowing Error Prev | Prevenção de Erros de Sombreamento.
+    if (!State.CurrScope)
+        return;
+
+    // Error Prev | Prevenção de Erros.
+    if (State.CurrScope->FindSymLocal(Node.Name))
+    {
+        try {
+
+            int i = Node.Name.back() - '0';
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                Node.Name+" Already Exists",
+                "Shadowing Is ONLY Allowed In Diff Scopes",
+                "Change Name, Ex: "+Node.Name+std::to_string(++i),
+                Node.pos.line, Node.pos.collumn
+            );
+        } catch (...) {
+            OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic",
+            Node.Name+" Already Exists",
+            "Shadowing Is ONLY Allowed In Diff Scopes",
+            "Change Name, Ex: "+Node.Name+"2",
+            Node.pos.line, Node.pos.collumn
+            );
+        }
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;
+    }
+
+    // ERROR PREV | PREVENÇÃO DE ERROS.
+    if (Node.TypeToDefine)
+        LookUpNode(*Node.TypeToDefine, State, Res, Data, Memory);
+    TypeInfo* ValTInfo = Node.TypeToDefine
+        ? GetExpressionType(Node.TypeToDefine, State, Res, Data, Memory)
+        : nullptr;
+
+    // Symbol | Simbolo.
+    Symbol* Sym = SAUtils::CreateSymbol(Node.Name, Node, State, Res, Memory);
+    if (SAUtils::InObjScope(State))
+        Sym->LinkedScope = SAUtils::InObjScope(State);
+
+    // Type / Value | Tipo / Valor.
+    if (!Node.TypeToDefine)
+    {
+        Sym->TInfo->Kind = TypeKind::_NULL;
+        Sym->TInfo->SubKind = SubTypeKind::NONE;
+        Sym->inited = false;
+    }
+    else
+    {
+        Sym->TInfo->Kind = ValTInfo->Kind;
+        Sym->TInfo->SubKind = ValTInfo->SubKind;
+
+        if (ValTInfo->Father)
+            Sym->TInfo->Father = ValTInfo->Father;
+
         Sym->inited = true;
     }
 }
@@ -2432,7 +2580,7 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
     if (Node.FType == FuncTypes::CONSTRUCTOR)
     {
         Scope* S = SAUtils::InObjScope(State);
-        if (!S or S->Type != BodyTypes::STRUCT or S->Type == BodyTypes::CLASS)
+        if (!S or (S->Type != BodyTypes::STRUCT and S->Type != BodyTypes::CLASS))
         {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Semantic", 
@@ -2443,7 +2591,7 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
             );
             if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
         }
-        if (S->Owner->Type == NodeType::STRUCT_DECL)
+        else if (S->Owner->Type == NodeType::STRUCT_DECL)
         {
             StructDeclNode* New = static_cast<StructDeclNode*>(S->Owner);
             if (New->constructor)
@@ -2457,7 +2605,9 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
                 );
                 if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);                
             }
-        } else if (S->Owner->Type == NodeType::CLASS_DECL)
+            New->constructor = &Node;
+        }
+        else if (S->Owner->Type == NodeType::CLASS_DECL)
         {
             ClassDeclNode* New = static_cast<ClassDeclNode*>(S->Owner);
             if (New->constructor)
@@ -2471,11 +2621,13 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
                 );
                 if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);                
             }
+            New->constructor = &Node;
         }
-    } else if (Node.FType == FuncTypes::DESTRUCTOR)
+    }
+    else if (Node.FType == FuncTypes::DESTRUCTOR)
     {
         Scope* S = SAUtils::InObjScope(State);
-        if (!S or S->Type != BodyTypes::STRUCT or S->Type == BodyTypes::CLASS)
+        if (!S or (S->Type != BodyTypes::STRUCT and S->Type != BodyTypes::CLASS))
         {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Semantic", 
@@ -2486,7 +2638,7 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
             );
             if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
         }
-        if (S->Owner->Type == NodeType::STRUCT_DECL)
+        else if (S->Owner->Type == NodeType::STRUCT_DECL)
         {
             StructDeclNode* New = static_cast<StructDeclNode*>(S->Owner);
             if (New->destructor)
@@ -2494,13 +2646,15 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
                 OrbitLog::SyntaxLog::SyntaxError(
                     "Semantic", 
                     "<DESTRUCTOR> ReDefinition", 
-                    "Trying to Declare A <DESTRUCTOR>, But AlReady Declared One In: "+std::to_string(New->constructor->pos.line)+":"+std::to_string(New->constructor->pos.collumn), 
+                    "Trying to Declare A <DESTRUCTOR>, But AlReady Declared One In: "+std::to_string(New->destructor->pos.line)+":"+std::to_string(New->destructor->pos.collumn), 
                     "Merge Both <DESTRUCTOR>s",
                     Node.pos.line, Node.pos.collumn
                 );
                 if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);                
             }
-        } else if (S->Owner->Type == NodeType::CLASS_DECL)
+            New->destructor = &Node;
+        }
+        else if (S->Owner->Type == NodeType::CLASS_DECL)
         {
             ClassDeclNode* New = static_cast<ClassDeclNode*>(S->Owner);
             if (New->destructor)
@@ -2508,14 +2662,16 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
                 OrbitLog::SyntaxLog::SyntaxError(
                     "Semantic", 
                     "<DESTRUCTOR> ReDefinition", 
-                    "Trying to Declare A <DESTRUCTOR>, But AlReady Declared One In: "+std::to_string(New->constructor->pos.line)+std::to_string(New->constructor->pos.collumn), 
+                    "Trying to Declare A <DESTRUCTOR>, But AlReady Declared One In: "+std::to_string(New->destructor->pos.line)+":"+std::to_string(New->destructor->pos.collumn), 
                     "Merge Both <DESTRUCTOR>s",
                     Node.pos.line, Node.pos.collumn
                 );
                 if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);                
             }
+            New->destructor = &Node;
         }
-    } else if (Node.FType == FuncTypes::OVERLOAD) 
+    }
+    else if (Node.FType == FuncTypes::OVERLOAD) 
     {
 
         vec<string> Operators = {
@@ -2557,7 +2713,7 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
         }
 
         Scope* S = SAUtils::InObjScope(State);
-        if (!S or S->Type != BodyTypes::STRUCT or S->Type == BodyTypes::CLASS)
+        if (!S or (S->Type != BodyTypes::STRUCT and S->Type != BodyTypes::CLASS))
         {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Semantic", 
@@ -2568,7 +2724,7 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
             );
             if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
         }
-        if (S->Owner->Type == NodeType::STRUCT_DECL)
+        else if (S->Owner->Type == NodeType::STRUCT_DECL)
         {
             StructDeclNode* New = static_cast<StructDeclNode*>(S->Owner);
             if (New->overloads.find(Node.Name) != New->overloads.end()) {
@@ -2582,7 +2738,8 @@ void SemanticAnalizer::LookUpFunction(FnDecl& Node, SAState& State, SAResult& Re
                 );
             }
             New->overloads[Node.Name] = &Node;
-        } else if (S->Owner->Type == NodeType::CLASS_DECL)
+        }
+        else if (S->Owner->Type == NodeType::CLASS_DECL)
         {
             ClassDeclNode* New = static_cast<ClassDeclNode*>(S->Owner);
             if (New->overloads.find(Node.Name) != New->overloads.end()) {
@@ -2868,7 +3025,9 @@ void SemanticAnalizer::LookUpStruct(StructDeclNode& Node, SAState& State, SAResu
     {
         for (ASTNode* N : Node.Body->Data)
         {
-            if(N->Category != NodeCat::DECLARATION)
+            if (!N)
+                continue;
+            if (N->Category != NodeCat::DECLARATION)
             {
                 OrbitLog::SyntaxLog::SyntaxError(
                     "Parsing", 
@@ -3086,6 +3245,7 @@ void SemanticAnalizer::LookUpBinary(BinaryNode& Node, SAState& State, SAResult& 
         return false;
     };
 
+    // LAMBDAS
     auto IsTypeObject = [](TypeKind Kind) -> bool
     {
         return (
@@ -3150,6 +3310,17 @@ void SemanticAnalizer::LookUpBinary(BinaryNode& Node, SAState& State, SAResult& 
                 LKind == TypeKind::MONO_STATE ||
                 RKind == TypeKind::MONO_STATE
             ) {}
+            else if (
+                LKind == TypeKind::STRUCT_INST ||
+                LKind == TypeKind::CLASS_INST
+            )
+            {
+                if (!HasOverload(LInfo, "add"))
+                {
+                    InvalidOperation();
+                    return;
+                }
+            }
             else if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) {}
             else if (LKind == TypeKind::STRING && RKind == TypeKind::STRING) {}
             else if (LKind == TypeKind::NUMBER && RKind == TypeKind::STRING) {}
@@ -3164,16 +3335,131 @@ void SemanticAnalizer::LookUpBinary(BinaryNode& Node, SAState& State, SAResult& 
         }
 
         case Operator::SUB:
+        {
+            if (
+                LKind == TypeKind::MONO_STATE ||
+                RKind == TypeKind::MONO_STATE
+            ) {}
+            else if (
+                LKind == TypeKind::STRUCT_INST ||
+                LKind == TypeKind::CLASS_INST
+            )
+            {
+                if (!HasOverload(LInfo, "sub"))
+                {
+                    InvalidOperation();
+                    return;
+                }
+            }
+            else if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) {}
+            else
+            {
+                InvalidOperation();
+                return;
+            }
+
+            break;
+        }
+
         case Operator::MUL:
+        {
+            if (
+                LKind == TypeKind::MONO_STATE ||
+                RKind == TypeKind::MONO_STATE
+            ) {}
+            else if (
+                LKind == TypeKind::STRUCT_INST ||
+                LKind == TypeKind::CLASS_INST
+            )
+            {
+                if (!HasOverload(LInfo, "mul"))
+                {
+                    InvalidOperation();
+                    return;
+                }
+            }
+            else if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) {}
+            else
+            {
+                InvalidOperation();
+                return;
+            }
+
+            break;
+        }
+
         case Operator::DIV:
+        {
+            if (
+                LKind == TypeKind::MONO_STATE ||
+                RKind == TypeKind::MONO_STATE
+            ) {}
+            else if (
+                LKind == TypeKind::STRUCT_INST ||
+                LKind == TypeKind::CLASS_INST
+            )
+            {
+                if (!HasOverload(LInfo, "div"))
+                {
+                    InvalidOperation();
+                    return;
+                }
+            }
+            else if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) {}
+            else
+            {
+                InvalidOperation();
+                return;
+            }
+
+            break;
+        }
+
         case Operator::MOD:
+        {
+            if (
+                LKind == TypeKind::MONO_STATE ||
+                RKind == TypeKind::MONO_STATE
+            ) {}
+            else if (
+                LKind == TypeKind::STRUCT_INST ||
+                LKind == TypeKind::CLASS_INST
+            )
+            {
+                if (!HasOverload(LInfo, "mod"))
+                {
+                    InvalidOperation();
+                    return;
+                }
+            }
+            else if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) {}
+            else
+            {
+                InvalidOperation();
+                return;
+            }
+
+            break;
+        }
+
         case Operator::POWER:
         {
             if (
                 LKind == TypeKind::MONO_STATE ||
-                RKind == TypeKind::MONO_STATE ||
-                (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER)
+                RKind == TypeKind::MONO_STATE
             ) {}
+            else if (
+                LKind == TypeKind::STRUCT_INST ||
+                LKind == TypeKind::CLASS_INST
+            )
+            {
+                if (!HasOverload(LInfo, "power"))
+                {
+                    InvalidOperation();
+                    return;
+                }
+            }
+            else if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) {}
             else
             {
                 InvalidOperation();
@@ -3222,11 +3508,33 @@ void SemanticAnalizer::LookUpBinary(BinaryNode& Node, SAState& State, SAResult& 
         case Operator::LESS_EQUAL:
         case Operator::GREATER_EQUAL:
         {
+            string OverloadName;
+
+            if (Node.Op == Operator::LESS)
+                OverloadName = "less";
+            else if (Node.Op == Operator::GREATER)
+                OverloadName = "greater";
+            else if (Node.Op == Operator::LESS_EQUAL)
+                OverloadName = "less_equal";
+            else
+                OverloadName = "greater_equal";
+
             if (
                 LKind == TypeKind::MONO_STATE ||
-                RKind == TypeKind::MONO_STATE ||
-                (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER)
+                RKind == TypeKind::MONO_STATE
             ) {}
+            else if (
+                LKind == TypeKind::STRUCT_INST ||
+                LKind == TypeKind::CLASS_INST
+            )
+            {
+                if (!HasOverload(LInfo, OverloadName))
+                {
+                    InvalidOperation();
+                    return;
+                }
+            }
+            else if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) {}
             else
             {
                 InvalidOperation();
@@ -3240,11 +3548,27 @@ void SemanticAnalizer::LookUpBinary(BinaryNode& Node, SAState& State, SAResult& 
         case Operator::AND:
         case Operator::OR:
         {
+            string OverloadName =
+                Node.Op == Operator::AND
+                ? "and"
+                : "or";
+
             if (
                 LKind == TypeKind::MONO_STATE ||
-                RKind == TypeKind::MONO_STATE ||
-                (LKind == TypeKind::BOOL && RKind == TypeKind::BOOL)
+                RKind == TypeKind::MONO_STATE
             ) {}
+            else if (
+                LKind == TypeKind::STRUCT_INST ||
+                LKind == TypeKind::CLASS_INST
+            )
+            {
+                if (!HasOverload(LInfo, OverloadName))
+                {
+                    InvalidOperation();
+                    return;
+                }
+            }
+            else if (LKind == TypeKind::BOOL && RKind == TypeKind::BOOL) {}
             else
             {
                 InvalidOperation();
@@ -3257,9 +3581,20 @@ void SemanticAnalizer::LookUpBinary(BinaryNode& Node, SAState& State, SAResult& 
         case Operator::NOT:
         {
             if (
-                LKind == TypeKind::MONO_STATE ||
-                LKind == TypeKind::BOOL
+                LKind == TypeKind::MONO_STATE
             ) {}
+            else if (
+                LKind == TypeKind::STRUCT_INST ||
+                LKind == TypeKind::CLASS_INST
+            )
+            {
+                if (!HasOverload(LInfo, "not"))
+                {
+                    InvalidOperation();
+                    return;
+                }
+            }
+            else if (LKind == TypeKind::BOOL) {}
             else
             {
                 InvalidOperation();
@@ -3274,9 +3609,23 @@ void SemanticAnalizer::LookUpBinary(BinaryNode& Node, SAState& State, SAResult& 
         {
             if (
                 LKind == TypeKind::MONO_STATE ||
-                RKind == TypeKind::MONO_STATE ||
-                TypesEqual(*LInfo, *RInfo)
+                RKind == TypeKind::MONO_STATE
             ) {}
+            else if (
+                LKind == TypeKind::STRUCT_INST ||
+                LKind == TypeKind::CLASS_INST
+            )
+            {
+                if (!HasOverload(LInfo, "assign"))
+                {
+                    if (!TypesEqual(*LInfo, *RInfo))
+                    {
+                        InvalidOperation();
+                        return;
+                    }
+                }
+            }
+            else if (TypesEqual(*LInfo, *RInfo)) {}
             else
             {
                 InvalidOperation();
@@ -3290,10 +3639,21 @@ void SemanticAnalizer::LookUpBinary(BinaryNode& Node, SAState& State, SAResult& 
         {
             if (
                 LKind == TypeKind::MONO_STATE ||
-                RKind == TypeKind::MONO_STATE ||
-                (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) ||
-                (LKind == TypeKind::STRING && RKind == TypeKind::STRING)
+                RKind == TypeKind::MONO_STATE
             ) {}
+            else if (
+                LKind == TypeKind::STRUCT_INST ||
+                LKind == TypeKind::CLASS_INST
+            )
+            {
+                if (!HasOverload(LInfo, "add_assign"))
+                {
+                    InvalidOperation();
+                    return;
+                }
+            }
+            else if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) {}
+            else if (LKind == TypeKind::STRING && RKind == TypeKind::STRING) {}
             else
             {
                 InvalidOperation();
@@ -3309,11 +3669,35 @@ void SemanticAnalizer::LookUpBinary(BinaryNode& Node, SAState& State, SAResult& 
         case Operator::MOD_ASSIGN:
         case Operator::POWER_ASSIGN:
         {
+            string OverloadName;
+
+            if (Node.Op == Operator::SUB_ASSIGN)
+                OverloadName = "sub_assign";
+            else if (Node.Op == Operator::MUL_ASSIGN)
+                OverloadName = "mul_assign";
+            else if (Node.Op == Operator::DIV_ASSIGN)
+                OverloadName = "div_assign";
+            else if (Node.Op == Operator::MOD_ASSIGN)
+                OverloadName = "mod_assign";
+            else
+                OverloadName = "power_assign";
+
             if (
                 LKind == TypeKind::MONO_STATE ||
-                RKind == TypeKind::MONO_STATE ||
-                (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER)
+                RKind == TypeKind::MONO_STATE
             ) {}
+            else if (
+                LKind == TypeKind::STRUCT_INST ||
+                LKind == TypeKind::CLASS_INST
+            )
+            {
+                if (!HasOverload(LInfo, OverloadName))
+                {
+                    InvalidOperation();
+                    return;
+                }
+            }
+            else if (LKind == TypeKind::NUMBER && RKind == TypeKind::NUMBER) {}
             else
             {
                 InvalidOperation();
@@ -4264,6 +4648,24 @@ SAResult SemanticAnalizer::InitSA(ParseResult& PRes, RunTimeData& Data, Arena& M
     }
 
     // LookUp | Olha
+    bool haveExport=false;
+    for (ASTNode* N : static_cast<ProgramNode*>(PRes.AST)->Node->Data)
+    {
+        if (N->Type == NodeType::METHOD)
+            LookUpMethod(static_cast<MethodNode&>(*N), State, PRes, Res, Data, Memory, nullptr);
+        else if (N->Type == NodeType::IMPORT)
+            haveExport=true;
+    }
+    if (!haveExport and Res.Method == MethodDefTypes::DUAL)
+    {
+        OrbitLog::SyntaxLog::SyntaxWarn(
+            "Semantic", 
+            "Used A <DUAL> Method, But No Imports Detected", 
+            "<DUAL> Just Serve ONLY To Imports and Exports",
+            "Use <OUT> Instead", 
+            0,0
+        );
+    }
     LookUpNode(*PRes.AST, State, Res, Data, Memory, nullptr, &PRes);
 
     // Symbol Final Tratament | Tratamento Final dos Simbolos.
@@ -4308,4 +4710,4 @@ SAResult SemanticAnalizer::InitSA(ParseResult& PRes, RunTimeData& Data, Arena& M
     return Res;
 }
 
-// EOF
+// EOF.

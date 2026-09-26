@@ -48,7 +48,7 @@ namespace DeclUtils
         {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",
-                "Invalid <VARR_DECL>",
+                "Invalid <VAR_DECL>",
                 "Expected Identifier After <VAR_DECL>",
                 "Add a Valid Identifier After 'var' Command",
                 Entry->pos.line,
@@ -256,6 +256,188 @@ namespace DeclUtils
         return Decl;
     }
 
+    // PARSE TYPE-DEF DECLS | PARSEIA DECLARÇÕES DE TIPO.
+    DeclarationNode* ParseTypeDef(
+        Token* Entry,
+        Instruction& Inst,
+        ParseState& State,
+        ParseResult& Res,
+        RunTimeData& Data,
+        ExpressionParser& ExprParser,
+        Arena& Memory
+    )
+    {
+        // Check if Have Type | Verifica se um Tipo foi Passado.
+        if (Inst.Tokens.size() == 1)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Invalid <TYPE-DEF>",
+                "Expected <USING> After <TYPE-DEF>",
+                "Add a Valid Using After '_typedef' Command",
+                Entry->pos.line,
+                Entry->pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>(
+                State,
+                Res,
+                Memory
+            );
+        }
+
+        // Init | Inicio
+        Token* E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+        Token* TypeToken = Inst.Advance();
+        ParserUtils::UpdateStatePos(TypeToken, State);
+        if (TypeToken->Type != TokenType::CNTXT_KW)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Invalid <TYPE-DEF> Type",
+                "Expected <USING> After <TYPE-DEF>",
+                "Add a Valid Type After '_typedef' Command",
+                Entry->pos.line,
+                Entry->pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>(
+                State,
+                Res,
+                Memory
+            );
+        }
+
+        // Node | Nó
+        TypeDefDeclNode* Decl = ParserUtils::MakeNode<TypeDefDeclNode>
+        (State, Res, Memory);
+
+        // Type | Tipo
+        string TypeLexeme = TypeToken->Lexeme(Data);
+        if (TypeLexeme == "using")
+            Decl->TypeDefType = TypeDefTypes::USING;
+        else if (TypeLexeme == "shared")
+            Decl->TypeDefType = TypeDefTypes::SHARED;
+        else {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "Unknow <TYPE-DEF> Type",
+                "TypeDef ONLY Accept 'using' or 'shared'', But Got: "+TypeLexeme,
+                "Add a Valid Type",
+                Entry->pos.line,
+                Entry->pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>(
+                State,
+                Res,
+                Memory
+            );            
+        }
+        if (Inst.InEnd())
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "<IDENTIFIER> Expected",
+                "TypeDef Need A Name To Define",
+                "Add a Valid <IDENTIFIER>",
+                Entry->pos.line,
+                Entry->pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>(
+                State,
+                Res,
+                Memory
+            );            
+        }
+
+        // Parse | Parseia
+        Token* Name = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State); // Error Prev | Prevenções De Erros:
+        if (Name->Type != TokenType::IDENTIFIER)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "<IDENTIFIER> Expected",
+                "TypeDef Need A Name To Define, But Got: "+Name->GetType(),
+                "Add a Valid <IDENTIFIER>",
+                Entry->pos.line,
+                Entry->pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>(
+                State,
+                Res,
+                Memory
+            );                
+        }
+
+        Decl->Name = Name->Lexeme(Data);
+        if (Inst.InEnd())
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "<EQUAL> Expected",
+                "TypeDef Need A Equal To Semantic",
+                "Add a Valid <EQUAL>",
+                Entry->pos.line,
+                Entry->pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>(
+                State,
+                Res,
+                Memory
+            );   
+        }
+
+        // Equal | Igual.
+        E = Inst.Advance();
+        ParserUtils::UpdateStatePos(E, State);
+        if (E->Type != TokenType::EQUAL)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Parsing",
+                "<EQUAL> Expected",
+                "TypeDef Need A Equal To Semantic, But Got: "+E->GetType(),
+                "Add a Valid <EQUAL>",
+                Entry->pos.line,
+                Entry->pos.collumn
+            );
+
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return ParserUtils::MakeNode<ErrorDeclNode>(
+                State,
+                Res,
+                Memory
+            );   
+        }
+
+        // Parse New Instruction | Parseria A Nova Instrução.
+        Instruction ExprInst;
+        while (!Inst.InEnd()) 
+            ExprInst.Tokens.push_back(Inst.Advance());
+        ExprInst.Modifiers = Inst.Modifiers;
+        Decl->TypeToDefine = ExprParser.ParseExpression(ExprInst, State, Res, Data, Memory);
+
+        return Decl;
+    }
+
     // PARSE FN DECLS | PARSEIA DECLARAÇÕES DE FUNÇÕES.
     DeclarationNode* ParseFnDecl(
         Token* Entry,
@@ -269,7 +451,6 @@ namespace DeclUtils
     {
         // ERROR PREVENTIONS | PREVENÇÃO DE ERROS.
         string EntryName = Entry->Lexeme(Data);
-
         if (Inst.Tokens.size() == 0 &&
             EntryName != "constructor" &&
             EntryName != "destructor")
@@ -290,13 +471,16 @@ namespace DeclUtils
 
         // FUNCTION TYPE | TIPO DA FUNÇÃO.
         FuncTypes FType = FuncTypes::FUNCTION;
-
         if (EntryName == "constructor")
             FType = FuncTypes::CONSTRUCTOR;
         else if (EntryName == "destructor")
             FType = FuncTypes::DESTRUCTOR;
         else if (EntryName == "overload")
             FType = FuncTypes::OVERLOAD;
+
+        // Consome o keyword (mesmo padrão de ParseVarDecl)
+        Token* Kw = Inst.Advance();
+        ParserUtils::UpdateStatePos(Kw, State);
 
         // PARSE FUNCTION NAME | PARSEIA O NOME DA FUNÇÃO.
         Token* E = nullptr;
@@ -308,9 +492,6 @@ namespace DeclUtils
                 ? "constructor"
                 : "destructor";
 
-            Token* Kw = Inst.Advance();
-            ParserUtils::UpdateStatePos(Kw, State);
-
             if (!Inst.Peek() || Inst.Peek()->Type != TokenType::LPARENT)
             {
                 OrbitLog::SyntaxLog::SyntaxError(
@@ -318,8 +499,8 @@ namespace DeclUtils
                     "Expected '(' After Function Name",
                     "Functions Need '(' After The Name",
                     "Complete <FUNCTION> Statement",
-                    Kw->pos.line,
-                    Kw->pos.collumn
+                    Entry->pos.line,
+                    Entry->pos.collumn
                 );
                 if (!Data.flags.debugMode)
                     OrbitLog::SyntaxLog::ThrowLog(Data);
@@ -350,7 +531,6 @@ namespace DeclUtils
             }
 
             Name = E->Lexeme(Data);
-
             if (Name == "constructor" || Name == "destructor")
             {
                 OrbitLog::SyntaxLog::SyntaxWarn(
@@ -385,64 +565,55 @@ namespace DeclUtils
 
         // COND LOOP | LOOP DE CONDIÇÃO
         vec<Token*> Cond;
+        int level = 1;
         while (true)
         {
-            Token* Tok = Inst.Advance();
-
+            Token* Tok = Inst.Peek();
             if (!Tok)
                 break;
 
-            ParserUtils::UpdateStatePos(Tok, State);
-            Cond.push_back(Tok);
+            if (Tok->Type == TokenType::LPARENT or
+                Tok->Type == TokenType::LBRACE or
+                Tok->Type == TokenType::LBRACKET) level++;
+            else if (
+                    Tok->Type == TokenType::RPARENT or
+                    Tok->Type == TokenType::RBRACE or
+                    Tok->Type == TokenType::RBRACKET
+                )
+            {
+                level--;
+                if (level == 0 and Tok->Type == TokenType::RPARENT)
+                {
+                    Inst.Advance();
+                    ParserUtils::UpdateStatePos(Tok, State);
+                    break;
+                }
+            }
+
+            Cond.push_back(Inst.Advance());
+            ParserUtils::UpdateStatePos(Cond.back(), State);
         }
 
         // ERROR PREV | PREVENÇÃO DE ERRO.
-        if (Cond.size() < 2)
-        {
-            OrbitLog::SyntaxLog::SyntaxError(
-                "Parsing",
-                "Expected '):'",
-                "Expected ')' Followed By ':' After Function Arguments",
-                "Finalize Function Declaration",
-                Inst.Tokens.back()->pos.line,
-                Inst.Tokens.back()->pos.collumn
-            );
-            if (!Data.flags.debugMode)
-                OrbitLog::SyntaxLog::ThrowLog(Data);
-            return ParserUtils::MakeNode<ErrorDeclNode>(State, Res, Memory);
-        }
-        if (Cond[Cond.size() - 2]->Type != TokenType::RPARENT)
-        {
-            OrbitLog::SyntaxLog::SyntaxError(
-                "Parsing",
-                "Expected ')'",
-                "Expected ')' Before ':', But Got: "+Cond[Cond.size() - 2]->GetType(),
-                "Close Function Arguments",
-                Cond[Cond.size() - 2]->pos.line,
-                Cond[Cond.size() - 2]->pos.collumn
-            );
-            if (!Data.flags.debugMode)
-                OrbitLog::SyntaxLog::ThrowLog(Data);
-            return ParserUtils::MakeNode<ErrorDeclNode>(State, Res, Memory);
-        }
-        if (Cond.back()->Type != TokenType::COLON)
+        Token* ColonTok = Inst.Peek();
+        if (!ColonTok or ColonTok->Type != TokenType::COLON)
         {
             OrbitLog::SyntaxLog::SyntaxError(
                 "Parsing",
                 "Expected ':'",
-                "Expected ':' After ')', But Got: "+Cond.back()->GetType(),
+                "Expected ':' After ')', But Got: " +
+                    (ColonTok ? ColonTok->GetType() : string("EOF")),
                 "Finalize Function Declaration",
-                Cond.back()->pos.line,
-                Cond.back()->pos.collumn
+                ColonTok ? ColonTok->pos.line : Entry->pos.line,
+                ColonTok ? ColonTok->pos.collumn : Entry->pos.collumn
             );
             if (!Data.flags.debugMode)
                 OrbitLog::SyntaxLog::ThrowLog(Data);
             return ParserUtils::MakeNode<ErrorDeclNode>(State, Res, Memory);
         }
 
-        // REMOVE THE '):' | REMOVE O '):'.
-        Cond.pop_back(); // )
-        Cond.pop_back(); // :
+        Inst.Advance();
+        ParserUtils::UpdateStatePos(ColonTok, State);
 
         FnDecl* Decl = ParserUtils::MakeNode<FnDecl>(State, Res, Memory);
         ParseBasicDeclaration
@@ -450,13 +621,11 @@ namespace DeclUtils
         
         // SET FUNCTION TYPE | DEFINE O TIPO DA FUNÇÃO.
         Decl->FType = FType;
-        
         if (!Cond.empty())
         {
             int level = 0;
-            int start = 0;          // Start of Current Param | Início do Parâmetro Atual.
+            int start = 0;
             int i = 0;
-
             for (Token* Tok : Cond)
             {
                 switch (Tok->Type)
@@ -1105,7 +1274,17 @@ DeclarationNode* DeclarationParser::ParseDeclaration(
                     ExprParser,
                     Memory,
                     2
-                );         
+                );
+            else if (Lexeme == "_typedef")
+                return DeclUtils::ParseTypeDef(
+                    Entry, 
+                    Inst, 
+                    State, 
+                    Res,
+                    Data, 
+                    ExprParser,
+                    Memory
+                );
             else if (Lexeme == "func" or Lexeme == "fn" or Lexeme == "constructor" or Lexeme == "destructor" or Lexeme == "overload")
                 return DeclUtils::ParseFnDecl(
                     Entry, 
