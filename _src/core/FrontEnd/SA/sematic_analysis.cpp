@@ -14,7 +14,7 @@
 
 #include "utils/aliases.hpp"
 #include "tools/console.hpp"
-#include "../../RunTimeData.hpp"
+#include "../../RunTimeData.hpp" // LIBRARIES | BIBLIOTECAS:
 #include <algorithm>
 #include <cstddef>
 #include <cstdlib>
@@ -129,7 +129,7 @@ namespace SAUtils
             if (Found)
             {
                 // Only /Class Have Private/Static Rules | So Struct/Class Tem Regras De Private/Static.
-                if (Owner->Type == SymbolTypes::STRUCT || Owner->Type == SymbolTypes::CLASS)
+                if (Owner->Type == SymbolTypes::STRUCT or Owner->Type == SymbolTypes::CLASS)
                 {
                     if (isInstanceAccess)
                     {
@@ -140,13 +140,13 @@ namespace SAUtils
                     else
                     {
                         // Mold → Only Static (And Not Private) | Molde → So Static (E Nao Private).
-                        bool isMold = (Owner->TInfo &&
-                                    (Owner->TInfo->Kind == TypeKind::STRUCT ||
+                        bool isMold = (Owner->TInfo and
+                                    (Owner->TInfo->Kind == TypeKind::STRUCT or
                                     Owner->TInfo->Kind == TypeKind::CLASS));
 
                         if (isMold)
                         {
-                            if (!Found->isStatic || Found->isPrivated)
+                            if (!Found->isStatic or Found->isPrivated)
                                 return { nullptr, false };
                         }
                         else
@@ -168,19 +168,69 @@ namespace SAUtils
                 {
                     string BaseName = SAUtils::GetIValueName(Decl->Extend);
                     auto [BaseSym, ok] = FindSymbol(BaseName, nullptr, State, Data, isInstanceAccess);
-                    if (ok && BaseSym)
+                    if (ok and BaseSym)
                         return FindSymbol(Name, BaseSym, State, Data, isInstanceAccess);
                 }
             }
-            else if (Owner->Type == SymbolTypes::CLASS && Owner->Owner)
+            else if (Owner->Type == SymbolTypes::CLASS and Owner->Owner)
             {
                 auto* Decl = static_cast<ClassDeclNode*>(Owner->Owner);
                 if (Decl->Extend)
                 {
                     string BaseName = SAUtils::GetIValueName(Decl->Extend);
                     auto [BaseSym, ok] = FindSymbol(BaseName, nullptr, State, Data, isInstanceAccess);
-                    if (ok && BaseSym)
+                    if (ok and BaseSym)
                         return FindSymbol(Name, BaseSym, State, Data, isInstanceAccess);
+                }
+            }
+
+            if (Owner->Type == SymbolTypes::TYPEDEF and !Owner->SharedLinks.empty())
+            {
+                for (Symbol* Link : Owner->SharedLinks)
+                {
+                    if (!Link)
+                        continue;
+                    auto [Found2, ok2] = FindSymbol(Name, Link, State, Data, isInstanceAccess);
+                    if (ok2 and Found2)
+                        return { Found2, true };
+                }
+            }
+
+            if (Owner->TInfo)
+            {
+                TypeKind WantKind = Owner->TInfo->Kind;
+                SubTypeKind WantSub = Owner->TInfo->SubKind;
+                Scope* Sc = State.CurrScope;
+                while (Sc)
+                {
+                    for (auto& P : Sc->Symbols)
+                    {
+                        Symbol* Cand = P.second;
+                        if (!Cand or Cand->Type != SymbolTypes::TYPEDEF or !Cand->isShared)
+                            continue;
+                        if (!Cand->TInfo or Cand->TInfo->Kind != WantKind)
+                            continue;
+                        if (WantKind == TypeKind::NUMBER
+                            and Cand->TInfo->SubKind != WantSub
+                            and Cand->TInfo->SubKind != SubTypeKind::NONE
+                            and WantSub != SubTypeKind::NONE)
+                            continue;
+                        if (Cand->LinkedScope)
+                        {
+                            Symbol* M = Cand->LinkedScope->FindSymLocal(Name);
+                            if (M)
+                                return { M, true };
+                        }
+                        for (Symbol* Link : Cand->SharedLinks)
+                        {
+                            if (!Link)
+                                continue;
+                            auto [Found3, ok3] = FindSymbol(Name, Link, State, Data, isInstanceAccess);
+                            if (ok3 and Found3)
+                                return { Found3, true };
+                        }
+                    }
+                    Sc = Sc->Parent;
                 }
             }
 
@@ -188,11 +238,63 @@ namespace SAUtils
             return { nullptr, false };
         }
 
-        if (Owner &&
-            (Owner->Type == SymbolTypes::STRUCT_INST ||
+        if (Owner
+            and Owner->Type == SymbolTypes::TYPEDEF
+            and !Owner->SharedLinks.empty())
+        {
+            for (Symbol* Link : Owner->SharedLinks)
+            {
+                if (!Link)
+                    continue;
+                auto [Found, ok] = FindSymbol(Name, Link, State, Data, isInstanceAccess);
+                if (ok and Found)
+                    return { Found, true };
+            }
+        }
+
+        if (Owner and Owner->TInfo)
+        {
+            TypeKind WantKind = Owner->TInfo->Kind;
+            SubTypeKind WantSub = Owner->TInfo->SubKind;
+            Scope* Sc = State.CurrScope;
+            while (Sc)
+            {
+                for (auto& P : Sc->Symbols)
+                {
+                    Symbol* Cand = P.second;
+                    if (!Cand or Cand->Type != SymbolTypes::TYPEDEF or !Cand->isShared)
+                        continue;
+                    if (!Cand->TInfo or Cand->TInfo->Kind != WantKind)
+                        continue;
+                    if (WantKind == TypeKind::NUMBER
+                        and Cand->TInfo->SubKind != WantSub
+                        and Cand->TInfo->SubKind != SubTypeKind::NONE
+                        and WantSub != SubTypeKind::NONE)
+                        continue;
+                    if (Cand->LinkedScope)
+                    {
+                        Symbol* M = Cand->LinkedScope->FindSymLocal(Name);
+                        if (M)
+                            return { M, true };
+                    }
+                    for (Symbol* Link : Cand->SharedLinks)
+                    {
+                        if (!Link)
+                            continue;
+                        auto [Found, ok] = FindSymbol(Name, Link, State, Data, isInstanceAccess);
+                        if (ok and Found)
+                            return { Found, true };
+                    }
+                }
+                Sc = Sc->Parent;
+            }
+        }
+
+        if (Owner and
+            (Owner->Type == SymbolTypes::STRUCT_INST or
             Owner->Type == SymbolTypes::CLASS_INST))
         {
-            if (!Owner->TInfo || !Owner->TInfo->Father)
+            if (!Owner->TInfo or !Owner->TInfo->Father)
                 return { nullptr, false };
 
             Symbol* Mold = Owner->TInfo->Father;
@@ -204,19 +306,28 @@ namespace SAUtils
 
         // Local Search Bounded By ObjScope | Busca Local Limitada Pelo ObjScope.
         Scope* S = State.CurrScope;
-        while (S && S != ObjScope)
+        while (S and S != ObjScope)
         {
             Symbol* LocalSym = S->FindSymLocal(Name);
             if (LocalSym)
-                return { LocalSym, true };
+            {
+                Symbol* Cur = LocalSym;
+                for (int i = 0; i < 64; ++i)
+                {
+                    if (Cur->Type != SymbolTypes::TYPEDEF or !Cur->TypeLink)
+                        break;
+                    Cur = Cur->TypeLink;
+                }
+                return { Cur, true };
+            }
             S = S->Parent;
         }
 
         // Block Direct Struct/Class Member Access | Bloqueia Acesso Direto A Membros De Struct/Class.
-        if (ObjScope &&
-            (ObjScope->Type == BodyTypes::STRUCT ||
-            ObjScope->Type == BodyTypes::CLASS) &&
-            !Owner &&
+        if (ObjScope and
+            (ObjScope->Type == BodyTypes::STRUCT or
+            ObjScope->Type == BodyTypes::CLASS) and
+            !Owner and
             ObjScope->FindSymLocal(Name))
             return { nullptr, false };
 
@@ -225,7 +336,16 @@ namespace SAUtils
         {
             Symbol* Sym = State.CurrScope->FindSym(Name);
             if (Sym)
-                return { Sym, true };
+            {
+                Symbol* Cur = Sym;
+                for (int i = 0; i < 64; ++i)
+                {
+                    if (Cur->Type != SymbolTypes::TYPEDEF or !Cur->TypeLink)
+                        break;
+                    Cur = Cur->TypeLink;
+                }
+                return { Cur, true };
+            }
         }
         return { nullptr, false };
     }
@@ -465,9 +585,12 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
             // Take Object Data | Pega Os Dados Do Objeto.
             string ObjName = SAUtils::GetIValueName(Ma.Object);
             Symbol* ObjSym = ObjInfo ? ObjInfo->Father : nullptr;
-            if (!ObjSym)
-                ObjSym = State.CurrScope ? State.CurrScope->FindSym(ObjName) : nullptr;
-
+            if (!ObjSym and State.CurrScope)
+            {
+                auto [Found, ok] = SAUtils::FindSymbol(ObjName, nullptr, State, Data, false);
+                if (ok)
+                    ObjSym = Found;
+            }
             // Undeclared Object | Objeto Não Declarado.
             if (!ObjSym)
             {
@@ -757,9 +880,13 @@ TypeInfo* GetExpressionType(ExpressionNode* Node, SAState& State, SAResult& Res,
         case NodeType::IDENTIFIER:
         {
             IdentifierNode& Id = static_cast<IdentifierNode&>(*Node);
-            Symbol* Sym = State.CurrScope
-                ? State.CurrScope->FindSym(Id.Name)
-                : nullptr;
+            Symbol* Sym = nullptr;
+            if (State.CurrScope)
+            {
+                auto [Found, ok] = SAUtils::FindSymbol(Id.Name, nullptr, State, Data, false);
+                if (ok)
+                    Sym = Found;
+            }
 
             if (!Sym and isPath)
             {
@@ -1461,8 +1588,20 @@ void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, 
     if (Data.flags.generateLog)
         State.NodesChecked.push_back({++State.logInd, &Node});
 
-    // Main Swicth | Switch Principal.
-    switch (Node.Type)
+    // Main Switch | Switch Principal.
+    if (Node.Type == NodeType::METHOD)
+    {
+        OrbitLog::SyntaxLog::SyntaxError(
+            "Semantic", 
+            "Method Statement WithOut <PROGRAM> Node", 
+            "Methods ONLY  Can Stay In <GLOBAL-SCOPE>",
+            "Move <METHOD> Statement To A Valid Place",
+            Node.pos.line, Node.pos.collumn 
+        );
+        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+        return;
+    }
+    else switch (Node.Type)
     {
         // PROGRAM
         case NodeType::PROGRAM:
@@ -1509,6 +1648,10 @@ void SemanticAnalizer::LookUpNode(ASTNode& Node, SAState& State, SAResult& Res, 
         case NodeType::VAR_DECL:
             LookUpVarDecl
             (static_cast<VarDeclNode&>(Node), State, Res, Data, Memory, Owner);
+            break;
+        case NodeType::TYPEDEF_DECL:
+            LookUpTypeDefDecl
+            (static_cast<TypeDefDeclNode&>(Node), State, Res, Data, Memory, Owner);
             break;
 
         case NodeType::FN_DECL:
@@ -1686,34 +1829,18 @@ void SemanticAnalizer::LookUpLibraryDef(LibraryNode& Node, SAState& State, Parse
 
 // LookUp Method Definitions Nodes | Olha Um Nó de Definição de Metodo.]
 void SemanticAnalizer::LookUpMethod(MethodNode& Node, SAState& State, ParseResult& Res, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner)
-{
-    // Error Prev | Prevenção de Erros.
-    if (!State.CurrScope || State.CurrScope->Type != BodyTypes::PROGRAM)
-    {
-        OrbitLog::SyntaxLog::SyntaxError(
-            "Semantic", 
-            "Method Statement WithOut <PROGRAM> Node", 
-            "Method ONLY  Can Say In <GLOBAL-SCOPE>",
-            "Move <METHOD> Statement To A Valid Place",
-            Node.pos.line, Node.pos.collumn 
-        );
-        if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
-        return;
-    }
-
-    SARes.Method = Node.MethodType;
-}
+{ SARes.Method = Node.MethodType; }
 
 // LookUp Importation Nodes | Olha Um Nó de Importações.
 void SemanticAnalizer::LookUpImport(ImportNode& Node, SAState& State, ParseResult& Res, SAResult& SARes, RunTimeData& Data, Arena& Memory, Symbol* Owner)
 {
     // Error Prev | Prevenção de Erros.
-    if (!State.CurrScope || State.CurrScope->Type != BodyTypes::PROGRAM)
+    if (!State.CurrScope or State.CurrScope->Type != BodyTypes::PROGRAM)
     {
         OrbitLog::SyntaxLog::SyntaxError(
             "Semantic", 
             "Import Statement WithOut <PROGRAM> Node", 
-            "Imports ONLY  Can Say In <GLOBAL-SCOPE>",
+            "Imports ONLY  Can Stay In <GLOBAL-SCOPE>",
             "Move <IMPORT> Statement To A Valid Place",
             Node.pos.line, Node.pos.collumn 
         );
@@ -2517,34 +2644,152 @@ void SemanticAnalizer::LookUpTypeDefDecl(TypeDefDeclNode& Node, SAState& State, 
         return;
     }
 
+    // Alias | Apelido
+    bool TTD = Node.TypeToDefine;
+
     // ERROR PREV | PREVENÇÃO DE ERROS.
-    if (Node.TypeToDefine)
+    if (TTD)
         LookUpNode(*Node.TypeToDefine, State, Res, Data, Memory);
-    TypeInfo* ValTInfo = Node.TypeToDefine
-        ? GetExpressionType(Node.TypeToDefine, State, Res, Data, Memory)
-        : nullptr;
 
-    // Symbol | Simbolo.
-    Symbol* Sym = SAUtils::CreateSymbol(Node.Name, Node, State, Res, Memory);
-    if (SAUtils::InObjScope(State))
-        Sym->LinkedScope = SAUtils::InObjScope(State);
-
-    // Type / Value | Tipo / Valor.
-    if (!Node.TypeToDefine)
+    // Resolve Symbol | Resolve o Simbolo:
+    Symbol* Target=nullptr;
+    if (TTD and Node.TypeDefType == TypeDefTypes::USING and SAUtils::IsIValue(Node.TypeToDefine)) // Take Target Name | Pega o Nome Do Alvo:
     {
-        Sym->TInfo->Kind = TypeKind::_NULL;
-        Sym->TInfo->SubKind = SubTypeKind::NONE;
-        Sym->inited = false;
+        string TargetName = SAUtils::GetIValueName(Node.TypeToDefine);
+        auto [found, ok] = SAUtils::FindSymbol(
+            TargetName, nullptr, State, Data, false
+        );
+
+        if (ok and found)
+            Target = found;
     }
-    else
+
+    // SHARED | COMPARTILHADO:
+    TypeInfo* ValTInfo = nullptr;
+    if (Node.TypeDefType == TypeDefTypes::SHARED)
+        ValTInfo = Node.TypeToDefine
+            ? GetExpressionType(Node.TypeToDefine, State, Res, Data, Memory)
+            : nullptr;
+
+    // SHARED | COMPARTILHADO:
+    if (Node.TypeDefType == TypeDefTypes::SHARED)
     {
-        Sym->TInfo->Kind = ValTInfo->Kind;
-        Sym->TInfo->SubKind = ValTInfo->SubKind;
+        bool ok=false;
+        if (Target)
+        {
+            ok = (Target->Type == SymbolTypes::STRUCT
+               or Target->Type == SymbolTypes::CLASS
+               or Target->Type == SymbolTypes::STRUCT_INST
+               or Target->Type == SymbolTypes::CLASS_INST
+               or Target->Type == SymbolTypes::TYPEDEF
+               or Target->Type == SymbolTypes::ENUM);
+        } else if (ValTInfo) {
+            ok = (ValTInfo->Kind == TypeKind::STRUCT
+               or ValTInfo->Kind == TypeKind::CLASS
+               or ValTInfo->Kind == TypeKind::STRUCT_INST
+               or ValTInfo->Kind == TypeKind::CLASS_INST
+               or ValTInfo->Kind == TypeKind::NUMBER
+               or ValTInfo->Kind == TypeKind::STRING
+               or ValTInfo->Kind == TypeKind::BOOL
+               or ValTInfo->Kind == TypeKind::ARRAY
+               or ValTInfo->Kind == TypeKind::TABLE
+               or ValTInfo->Kind == TypeKind::_NULL
+               or ValTInfo->Kind == TypeKind::NONE);
+        }
+        if (!ok)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                "Invalid <SHARED> Target",
+                "'_typedef shared' ONLY Accepts Objects/Types",
+                "Use '_typedef using' For Other Symbols",
+                Node.pos.line, Node.pos.collumn
+            );
+            if (!Data.flags.debugMode) OrbitLog::SyntaxLog::ThrowLog(Data);
+            return;
+        }
+    }
 
-        if (ValTInfo->Father)
-            Sym->TInfo->Father = ValTInfo->Father;
+    // Symbol | Simbolo:
+    Symbol* Sym = SAUtils::CreateSymbol(Node.Name, Node, State, Res, Memory);
+    Sym->Type = SymbolTypes::TYPEDEF;
 
-        Sym->inited = true;
+    // Type / Value | Tipo / Valor
+    if (!TTD)
+    {
+        Sym->TInfo->Kind    = TypeKind::_NULL;
+        Sym->TInfo->SubKind = SubTypeKind::NONE;
+        Sym->inited         = false;
+
+        return;
+    }
+
+    // USING | USANDO:
+    if (Node.TypeDefType == TypeDefTypes::USING)
+    {
+        if (!Target)
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                "Invalid <USING> Target",
+                "'_typedef using' ONLY Accepts Existing Symbols",
+                "Use A Valid Symbol As The Target",
+                Node.pos.line, Node.pos.collumn
+            );
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return;
+        }
+
+        if (Sym->TypeLink != nullptr) // AlReady Using | Ja Usado.
+        {
+            OrbitLog::SyntaxLog::SyntaxError(
+                "Semantic",
+                "Using Already Defined",
+                "'_typedef using' Allows Only One Link",
+                "Use Another Name Or Remove Previous Using",
+                Node.pos.line, Node.pos.collumn
+            );
+            if (!Data.flags.debugMode)
+                OrbitLog::SyntaxLog::ThrowLog(Data);
+            return;
+        }
+
+        Sym->TypeLink = Target;
+        Sym->TInfo->Kind = Target->TInfo->Kind;
+        Sym->TInfo->SubKind = Target->TInfo->SubKind;
+        Sym->inited = Target->inited;
+
+        return;
+    }
+
+    if (!ValTInfo)
+    {
+        Sym->TInfo->Kind    = TypeKind::_NULL;
+        Sym->TInfo->SubKind = SubTypeKind::NONE;
+        Sym->inited         = false;
+
+        return;
+    }
+
+    Sym->TInfo->Kind    = ValTInfo->Kind;
+    Sym->TInfo->SubKind = ValTInfo->SubKind;
+    Sym->inited         = true;
+
+    Sym->isShared = true;
+    if (Target)
+    {
+        bool already = false;
+        for (Symbol* S : Sym->SharedLinks)
+        {
+            if (S == Target)
+            {
+                already = true;
+                break;
+            }
+        }
+        if (!already)
+            Sym->SharedLinks.push_back(Target);
     }
 }
 
@@ -3962,9 +4207,13 @@ void SemanticAnalizer::LookUpAssignment(AssignmentNode& Node, SAState& State, SA
     if (N == "UNKNOW")
         return;
 
-    Symbol* Sym = State.CurrScope
-        ? State.CurrScope->FindSym(N)
-        : nullptr;
+    Symbol* Sym = nullptr;
+    if (State.CurrScope)
+    {
+        auto [Found, ok] = SAUtils::FindSymbol(N, nullptr, State, Data, false);
+        if (ok)
+            Sym = Found;
+    }
 
     if (!Sym)
         return;
@@ -4066,10 +4315,14 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
         string N = SAUtils::GetIValueName(Node.Object);
         if (N == "UNKNOW")
             return;
-        if (Owner && Owner->LinkedScope)
+        if (Owner and Owner->LinkedScope)
             Sym = Owner->LinkedScope->FindSymLocal(N);
         else if (State.CurrScope)
-            Sym = State.CurrScope->FindSym(N);
+        {
+            auto [Found, ok] = SAUtils::FindSymbol(N, Owner, State, Data, false);
+            if (ok)
+                Sym = Found;
+        }
     }
 
     if (!Sym)
@@ -4228,6 +4481,24 @@ void SemanticAnalizer::LookUpMemberAccess(MemberAccessNode& Node, SAState& State
         
         default:
         {
+            if (Node.Member)
+            {
+                string MemberName = SAUtils::GetIValueName(Node.Member);
+                auto [MemberSym, found] = SAUtils::FindSymbol(MemberName, Sym, State, Data, true);
+                if (found and MemberSym)
+                {
+                    if (Node.Member)
+                    {
+                        Node.Member->SymbolId = MemberSym->Id;
+                        if (Res.Symbols.find(MemberSym->Id) == Res.Symbols.end())
+                            Res.Symbols[MemberSym->Id] = MemberSym;
+                    }
+                    Node.SymbolId = MemberSym->Id;
+                    MemberSym->read_count++;
+                    break;
+                }
+            }
+
             if (MoldSym && (MoldSym->Type == SymbolTypes::STRUCT || MoldSym->Type == SymbolTypes::CLASS) && MoldSym->LinkedScope)
             {
                 if (!Node.Member)
@@ -4649,12 +4920,17 @@ SAResult SemanticAnalizer::InitSA(ParseResult& PRes, RunTimeData& Data, Arena& M
 
     // LookUp | Olha
     bool haveExport=false;
+    int i=0;
     for (ASTNode* N : static_cast<ProgramNode*>(PRes.AST)->Node->Data)
     {
         if (N->Type == NodeType::METHOD)
-            LookUpMethod(static_cast<MethodNode&>(*N), State, PRes, Res, Data, Memory, nullptr);
-        else if (N->Type == NodeType::IMPORT)
+        {
+            LookUpMethod
+            (static_cast<MethodNode&>(*N), State, PRes, Res, Data, Memory, nullptr);
+            static_cast<ProgramNode*>(PRes.AST)->Node->Data[i] = nullptr;
+        } else if (N->Type == NodeType::IMPORT)
             haveExport=true;
+        i++;
     }
     if (!haveExport and Res.Method == MethodDefTypes::DUAL)
     {

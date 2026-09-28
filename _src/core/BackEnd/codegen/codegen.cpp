@@ -226,6 +226,8 @@ void CodeGenerator::CompileNode(ASTNode* Node, CodeGenState& State, ByteCode& BC
             CompileVarDecl(static_cast<VarDeclNode*>(Node), State, BC, SARes, Data, Memory);
             break;
 
+        case NodeType::TYPEDEF_DECL:
+            break;
         case NodeType::FN_DECL:
             CompileFnDecl(static_cast<FnDecl*>(Node), State, BC, SARes, Data, Memory);
             break;
@@ -348,6 +350,18 @@ void CodeGenerator::CompileIdentifier(IdentifierNode* Node, CodeGenState& State,
     {
         OrbitLog::Error("codegen.cpp", "Cannot Find: "+Node->Name+" in Symbols", true, 404);
         return;
+    }
+
+    if (Sym and Sym->Type == SymbolTypes::TYPEDEF)
+    {
+        Symbol* Curr = Sym;
+        for (int i = 0; i < 64; ++i)
+        {
+            if (Curr->Type != SymbolTypes::TYPEDEF or !Curr->TypeLink)
+                break;
+            Curr = Curr->TypeLink;
+        }
+        Sym = Curr;
     }
 
     CodeGenState* SymState = GetStateForSym(Sym, State);

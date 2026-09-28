@@ -112,24 +112,30 @@ struct TypeInfo
 // Symbol Repr | Representação dos Simbolos.
 struct Symbol
 {
+    // Pointers | Ponteiros:
     TypeInfo* TInfo;
     TypeInfo* InferType;
+    ASTNode* Owner   = nullptr;
     Scope* DeclaredScope;
     Scope* LinkedScope;
     Symbol* This     = nullptr;
     Symbol* Super    = nullptr;
     Symbol* TypeLink = nullptr;
-    ASTNode* Owner   = nullptr;
 
+    // Containers | Containers:
+    vec<Symbol*> SharedLinks{};
     vec<pair<string, TypeInfo*>> Objs;
 
-    string Name;
+    // Objects | Objetos: 
     CodePosition Pos;
+    string Name;
 
+    // Enums | Enumerações:
     SymbolTypes  Type  = SymbolTypes::UNK;
     MutableTypes Mut   = MutableTypes::MUT;
     FuncTypes    FType = FuncTypes::FUNCTION;
 
+    // Simple-Literals | Literais-Simples:
     ui32 read_count  = 0;
     ui32 write_count = 0;
     ui16 Id          = 0;
@@ -140,6 +146,7 @@ struct Symbol
     bool isStatic    = false;
     bool isMethod    = false;
     bool isExported  = false;
+    bool isShared    = false;
 };
 
 // Scope Repr | Representação de Escopos.

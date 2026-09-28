@@ -1,2 +1,8 @@
 
+_library Oi;
 _method Dual;
+
+var y = 10;
+_typedef using x = y;
+
+echo cout x;

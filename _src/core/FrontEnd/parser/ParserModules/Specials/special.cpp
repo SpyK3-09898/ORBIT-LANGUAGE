@@ -291,13 +291,15 @@ SpecialNode* SpecialParser::ParseSpecial(
 {
     Token* Entry = Inst.Tokens[0];
     string Lexeme = Entry->Lexeme(Data);
-    switch (Entry->Type) {
-     
+    switch (Entry->Type) 
+    { 
         case TokenType::KEYWORD:
-
-            if      (Lexeme == "_library")
+            if (Lexeme == "_library")
                 return SpecialUtils::ParseLibrary
                     (Inst, State, Res, Data, CntrlParser, DeclParser, ExprParser, Memory);
+            else if (Lexeme == "_method")
+                return SpecialUtils::ParseMethod
+                    (Inst, State, Res, Data, CntrlParser, DeclParser, ExprParser, Memory);     
             else if (Lexeme == "_import")
                 return SpecialUtils::ParseImports
                     (Inst, State, Res, Data, CntrlParser, DeclParser, ExprParser, Memory, false);
